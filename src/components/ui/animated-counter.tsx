@@ -1,54 +1,46 @@
-"use client";
-
 import { useEffect, useRef, useState } from "react";
-
-interface AnimatedCounterProps {
-  value: number;
-  duration?: number;
-  prefix?: string;
-  suffix?: string;
-  className?: string;
-}
 
 export function AnimatedCounter({
   value,
-  duration = 1000,
-  prefix = "",
   suffix = "",
-  className = "",
-}: AnimatedCounterProps) {
+  duration = 1200,
+}: {
+  value: number;
+  suffix?: string;
+  duration?: number;
+}) {
   const [count, setCount] = useState(0);
-  const countRef = useRef(0);
-  const startTimeRef = useRef<number | null>(null);
+  const ref = useRef<HTMLSpanElement>(null);
+  const started = useRef(false);
 
   useEffect(() => {
-    countRef.current = count;
-  }, [count]);
+    const el = ref.current;
+    if (!el) return;
 
-  useEffect(() => {
-    const animate = (timestamp: number) => {
-      if (!startTimeRef.current) {
-        startTimeRef.current = timestamp;
-      }
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && !started.current) {
+          started.current = true;
+          const start = performance.now();
+          const animate = (now: number) => {
+            const elapsed = now - start;
+            const progress = Math.min(elapsed / duration, 1);
+            const eased = 1 - Math.pow(1 - progress, 3);
+            setCount(Math.round(eased * value));
+            if (progress < 1) requestAnimationFrame(animate);
+          };
+          requestAnimationFrame(animate);
+        }
+      },
+      { threshold: 0.3 },
+    );
 
-      const progress = Math.min((timestamp - startTimeRef.current) / duration, 1);
-      const eased = 1 - Math.pow(1 - progress, 3);
-      const current = Math.round(countRef.current + (value - countRef.current) * eased);
-
-      setCount(current);
-
-      if (progress < 1) {
-        requestAnimationFrame(animate);
-      }
-    };
-
-    startTimeRef.current = null;
-    requestAnimationFrame(animate);
+    observer.observe(el);
+    return () => observer.disconnect();
   }, [value, duration]);
 
   return (
-    <span className={`tabular-nums ${className}`}>
-      {prefix}
+    <span ref={ref} className="tabular-nums">
       {count.toLocaleString("ar-DZ")}
       {suffix}
     </span>

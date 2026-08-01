@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   ShoppingBag,
@@ -9,6 +9,7 @@ import {
   Settings,
   ArrowLeft,
   Check,
+  RotateCcw,
 } from "lucide-react";
 
 const ONBOARDING_KEY = "sahl_dz_dashboard_onboarding";
@@ -66,7 +67,13 @@ const steps: OnboardingStep[] = [
   },
 ];
 
-export function DashboardOnboarding({ onComplete }: { onComplete: () => void }) {
+export function DashboardOnboarding({
+  onComplete,
+  onReset,
+}: {
+  onComplete: () => void;
+  onReset: () => void;
+}) {
   const [currentStep, setCurrentStep] = useState(0);
   const [showTip, setShowTip] = useState(false);
 
@@ -86,6 +93,11 @@ export function DashboardOnboarding({ onComplete }: { onComplete: () => void }) 
     } else {
       setShowTip(true);
     }
+  }
+
+  function handleReset() {
+    localStorage.removeItem(ONBOARDING_KEY);
+    onReset();
   }
 
   return (
@@ -129,7 +141,7 @@ export function DashboardOnboarding({ onComplete }: { onComplete: () => void }) 
             </div>
           )}
 
-          {/* Button */}
+          {/* Main Button */}
           <Button
             onClick={handleNext}
             className="w-full bg-[var(--primary)] text-[#1a1612] hover:bg-[var(--primary)]/90"
@@ -150,6 +162,17 @@ export function DashboardOnboarding({ onComplete }: { onComplete: () => void }) 
               "فهمت"
             )}
           </Button>
+
+          {/* Start Over - only on last step */}
+          {isLast && showTip && (
+            <button
+              onClick={handleReset}
+              className="w-full flex items-center justify-center gap-2 text-xs text-[var(--muted-foreground)] mt-3 hover:text-[var(--foreground)] transition-colors"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              البدء من جديد
+            </button>
+          )}
         </div>
 
         {/* Skip */}

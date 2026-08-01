@@ -46,12 +46,12 @@ export const Route = createFileRoute("/dashboard")({
 });
 
 // Lazy load page components
-const OrdersPage = lazy(() => import("./dashboard.orders"));
-const MenuPage = lazy(() => import("./dashboard.menu"));
-const TablesPage = lazy(() => import("./dashboard.tables"));
-const AnalyticsPage = lazy(() => import("./dashboard.analytics"));
-const ReviewsPage = lazy(() => import("./dashboard.reviews"));
-const SettingsPage = lazy(() => import("./dashboard.settings"));
+const OrdersPage = lazy(() => import("@/pages/orders"));
+const MenuPage = lazy(() => import("@/pages/menu"));
+const TablesPage = lazy(() => import("@/pages/tables"));
+const AnalyticsPage = lazy(() => import("@/pages/analytics"));
+const ReviewsPage = lazy(() => import("@/pages/reviews"));
+const SettingsPage = lazy(() => import("@/pages/settings"));
 
 type TabId = "orders" | "menu" | "tables" | "analytics" | "ops" | "reviews" | "settings";
 
@@ -101,7 +101,11 @@ function DashboardLayout() {
   const [isStaffOnly, setIsStaffOnly] = useState(false);
   const [sidebarExpanded, setSidebarExpanded] = useState(true);
   const [activeTab, setActiveTab] = useState<TabId>("orders");
-  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(() => {
+    // Initialize from localStorage — no flash on refresh
+    if (typeof window === "undefined") return false;
+    return !hasCompletedOnboarding();
+  });
   const [tourActive, setTourActive] = useState(false);
   const [tourStep, setTourStep] = useState(0);
   const [tourShowTip, setTourShowTip] = useState(false);
@@ -123,15 +127,24 @@ function DashboardLayout() {
     } else if (!hasCompletedOnboarding()) {
       setShowOnboarding(true);
     } else {
-      setTourActive(true);
-      setTourStep(tourParam === "1" && validTab ? TAB_STEP[tabParam] : 0);
+      // Onboarding done — no tour, just set the tab
+      setTourActive(false);
       setActiveTab(validTab ? tabParam : "orders");
     }
 
     (async () => {
       const { data: u } = await supabase.auth.getUser();
       if (!u.user) {
-        // Mock data for preview
+        // Preview mode — try localStorage first, then mock
+        const saved = localStorage.getItem("sahl_dz_restaurant");
+        if (saved) {
+          try {
+            const parsed = JSON.parse(saved);
+            setRestaurant({ name: parsed.name, logo_url: parsed.logo_url });
+            setRestaurantId(parsed.id);
+            return;
+          } catch { /* ignore */ }
+        }
         setRestaurant({ name: "مطعم السهل", logo_url: null });
         setRestaurantId("mock-restaurant-id");
         return;
@@ -185,16 +198,64 @@ function DashboardLayout() {
         if (first.restaurants) setRestaurant(first.restaurants);
         return;
       }
-      // No restaurant and no staff role — send to setup
-      navigate({ to: "/setup" });
+      // No restaurant and no staff role — check localStorage, then mock
+      const saved = localStorage.getItem("sahl_dz_restaurant");
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          setRestaurant({ name: parsed.name, logo_url: parsed.logo_url });
+          setRestaurantId(parsed.id);
+          return;
+        } catch { /* ignore */ }
+      }
+      setRestaurant({ name: "مطعم السهل", logo_url: null });
+      setRestaurantId("mock-restaurant-id");
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Re-read restaurant from localStorage when settings updates it
+  useEffect(() => {
+    const onStorage = () => {
+      const saved = localStorage.getItem("sahl_dz_restaurant");
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          setRestaurant({ name: parsed.name, logo_url: parsed.logo_url });
+          setRestaurantId(parsed.id);
+        } catch { /* ignore */ }
+      }
+    };
+    window.addEventListener("restaurant-updated", onStorage);
+    return () => window.removeEventListener("restaurant-updated", onStorage);
   }, []);
 
   // Called when onboarding finishes
   const handleOnboardingComplete = () => {
     setShowOnboarding(false);
-    setTourActive(true);
+    setTourActive(false);
+    setActiveTab("orders");
+    setTourStep(0);
+    // Re-read restaurant from localStorage
+    const saved = localStorage.getItem("sahl_dz_restaurant");
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        setRestaurant({ name: parsed.name, logo_url: parsed.logo_url });
+        setRestaurantId(parsed.id);
+      } catch { /* ignore */ }
+    }
+  };
+
+  // Called when user clicks "Start Over" in onboarding
+  const handleOnboardingReset = () => {
+    // Clear all stored data
+    localStorage.removeItem("sahl_dz_dashboard_onboarding");
+    localStorage.removeItem("sahl_dz_restaurant");
+    setRestaurant(null);
+    setRestaurantId(null);
+    setShowOnboarding(true);
+    setTourActive(false);
     setActiveTab("orders");
     setTourStep(0);
   };
@@ -300,7 +361,10 @@ function DashboardLayout() {
   // Show onboarding if needed
   if (showOnboarding) {
     return (
-      <DashboardOnboarding onComplete={handleOnboardingComplete} />
+      <DashboardOnboarding
+        onComplete={handleOnboardingComplete}
+        onReset={handleOnboardingReset}
+      />
     );
   }
 
