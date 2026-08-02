@@ -13,6 +13,7 @@ import {
   individualChefLogout,
 } from "@/lib/individual-chef.functions";
 import { supabase } from "@/integrations/supabase/client";
+import { decrementStockForOrder } from "@/lib/stock-consumption";
 import { isPreviewToken, PREVIEW_RESTAURANT } from "@/lib/preview-mode";
 
 export const Route = createFileRoute("/kitchen-screen")({
@@ -226,6 +227,7 @@ function Page() {
     setBusy(o.id);
     try {
       await iStartFn({ data: { token, orderId: o.id } });
+      void decrementStockForOrder(o.id);
       setOrders((prev) =>
         prev.map((x) => (x.id === o.id ? { ...x, status: "preparing", acknowledged: true } : x)),
       );

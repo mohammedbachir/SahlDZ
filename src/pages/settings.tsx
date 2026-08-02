@@ -31,7 +31,7 @@ import {
   toggleWaiter,
   deleteWaiter,
 } from "@/lib/waiter.functions";
-import { updateRestaurantSettings, updateMenuTheme, getSplashSettings, updateSplashSettings, createStaffAccount, deleteStaffAccount, updateStaffPassword, listStaffAccounts } from "@/lib/settings.functions";
+import { updateMenuTheme, getSplashSettings, updateSplashSettings, createStaffAccount, deleteStaffAccount, updateStaffPassword, listStaffAccounts } from "@/lib/settings.functions";
 import {
   getDeliveryStatus,
   enableDelivery,
@@ -558,7 +558,6 @@ function SettingsPage() {
         .from("restaurants")
         .select("id, name, logo_url, google_maps_review_url")
         .eq("owner_id", u.user.id)
-        .order("created_at", { ascending: true })
         .limit(1);
       const data = rows?.[0];
       if (error) {
@@ -1037,7 +1036,8 @@ function SettingsPage() {
     }
     setSaving(true);
     try {
-      let logoUpload: { name: string; type: string; base64: string } | null = null;
+      let logoUrl = r.logo_url;
+      let logoWarning = false;
       if (logoFile) {
         const base64 = await new Promise<string>((resolve, reject) => {
           const reader = new FileReader();
@@ -1048,34 +1048,38 @@ function SettingsPage() {
           reader.onerror = () => reject(reader.error);
           reader.readAsDataURL(logoFile);
         });
-        logoUpload = {
-          name: logoFile.name,
-          type: logoFile.type || "image/png",
-          base64,
-        };
+        const ext = (logoFile.name.split(".").pop() || "png").toLowerCase();
+        const path = `${r.id}/logo-${Date.now()}.${ext}`;
+        const dataUrl = `data:${logoFile.type || "image/png"};base64,${base64}`;
+        const up = await supabase.storage.from("restaurant-logos").upload(path, dataUrl);
+        if (up.error) {
+          logoWarning = true;
+        } else {
+          logoUrl = up.data?.url ?? logoUrl;
+        }
       }
-      const headers = await getServerAuthHeaders();
-      const result = await updateRestaurantSettings({
-        data: {
+      const { data: updated, error } = await supabase
+        .from("restaurants")
+        .update({
           name: name.trim(),
-          logo_url: r.logo_url,
-          logo_upload: logoUpload,
+          logo_url: logoUrl,
           google_maps_review_url: gUrl.trim() || null,
-        },
-        headers,
-      });
-      const newLogoUrl = result?.logo_url ?? r.logo_url;
-      const updatedR = {
+        })
+        .eq("id", r.id)
+        .select("id, name, logo_url, google_maps_review_url")
+        .single();
+      if (error) throw new Error(error.message || "فشل الحفظ");
+      const updatedR = updated ?? {
         ...r,
         name: name.trim(),
-        logo_url: newLogoUrl,
+        logo_url: logoUrl,
         google_maps_review_url: gUrl.trim() || null,
       };
       setR(updatedR);
       localStorage.setItem("sahl_dz_restaurant", JSON.stringify(updatedR));
       window.dispatchEvent(new Event("restaurant-updated"));
       setLogoFile(null);
-      toast.success("تم حفظ التغييرات بنجاح");
+      toast.success(logoWarning ? "تم حفظ التغييرات، لكن فشل رفع الشعار" : "تم حفظ التغييرات بنجاح");
     } catch (e) {
       toast.error((e as Error).message || "فشل الحفظ");
     } finally {
@@ -1162,6 +1166,7 @@ function SettingsPage() {
                     name: name.trim(),
                     owner_id: ownerId,
                     google_maps_review_url: gUrl || null,
+                    created_at: new Date().toISOString(),
                   })
                   .select("id, name, logo_url, google_maps_review_url")
                   .single();

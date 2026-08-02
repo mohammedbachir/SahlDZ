@@ -1,4 +1,4 @@
-import { createFileRoute, Link, redirect } from "@tanstack/react-router";
+import { createFileRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
   ShoppingBag,
@@ -15,16 +15,21 @@ import {
   Globe,
   Shield,
 } from "lucide-react";
-import { getAuthSessionWaitMs, getPostAuthRedirect, waitForAuthSession } from "@/lib/auth";
+import { freshCachedTarget, getPostAuthRedirect } from "@/lib/auth";
+import { supabase } from "@/integrations/supabase/client";
 import { AnimatedCounter } from "@/components/ui/animated-counter";
 import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/")({
   beforeLoad: async () => {
     if (typeof window === "undefined") return;
-    const session = await waitForAuthSession(getAuthSessionWaitMs());
-    if (session) {
-      const to = await getPostAuthRedirect(session.user.id);
+    const fast = freshCachedTarget();
+    if (fast) {
+      throw redirect({ to: fast });
+    }
+    const { data } = await supabase.auth.getSession();
+    if (data.session?.user?.id) {
+      const to = await getPostAuthRedirect(data.session.user.id);
       throw redirect({ to });
     }
   },
@@ -630,6 +635,26 @@ function Footer() {
    ============================================ */
 
 function LandingPage() {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    let cancelled = false;
+    const fast = freshCachedTarget();
+    if (fast) {
+      navigate({ to: fast });
+      return;
+    }
+    (async () => {
+      const { data } = await supabase.auth.getSession();
+      if (cancelled || !data.session?.user?.id) return;
+      const to = await getPostAuthRedirect(data.session.user.id);
+      if (!cancelled) navigate({ to });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [navigate]);
+
   return (
     <div className="min-h-screen" dir="rtl">
       <Navbar />

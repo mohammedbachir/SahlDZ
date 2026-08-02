@@ -33,6 +33,7 @@ export const Route = createFileRoute("/ops/recipes")({
 });
 
 type MenuItem = { id: string; name: string; price: number; category_id: string | null };
+type Category = { id: string; name: string };
 type Ingredient = { id: string; name: string; unit: string; cost_per_unit: number };
 type Recipe = {
   id: string;
@@ -49,10 +50,16 @@ function OpsRecipes() {
   useTranslation();
   const { restaurantId, loading: restaurantLoading } = useRestaurantId();
   const [items, setItems] = useState<MenuItem[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
+
+  const [creatingNew, setCreatingNew] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newPrice, setNewPrice] = useState("");
+  const [newCat, setNewCat] = useState("");
 
   const [open, setOpen] = useState(false);
   const [activeItem, setActiveItem] = useState<MenuItem | null>(null);
@@ -89,24 +96,33 @@ function OpsRecipes() {
   };
 
   const loadAll = async (rid: string) => {
-    const [m, i, r] = await Promise.all([
+    const [m, i, r, c] = await Promise.all([
       supabase
         .from("menu_items")
         .select("id,name,price,category_id")
-        .eq("restaurant_id", rid)
-        .order("name"),
+        .eq("restaurant_id", rid),
       supabase
         .from("ingredients")
         .select("id,name,unit,cost_per_unit")
-        .eq("restaurant_id", rid)
-        .order("name"),
+        .eq("restaurant_id", rid),
       supabase
         .from("menu_item_recipes")
         .select("id,menu_item_id,ingredient_id,quantity")
         .eq("restaurant_id", rid),
+      supabase
+        .from("categories")
+        .select("id,name")
+        .eq("restaurant_id", rid),
     ]);
-    setItems((m.data ?? []) as MenuItem[]);
-    setIngredients((i.data ?? []) as Ingredient[]);
+    const menuItems = (m.data ?? []) as MenuItem[];
+    menuItems.sort((a, b) => a.name.localeCompare(b.name, "ar"));
+    const ings = (i.data ?? []) as Ingredient[];
+    ings.sort((a, b) => a.name.localeCompare(b.name, "ar"));
+    const cats = (c.data ?? []) as Category[];
+    cats.sort((a, b) => a.name.localeCompare(b.name, "ar"));
+    setItems(menuItems);
+    setCategories(cats);
+    setIngredients(ings);
     setRecipes((r.data ?? []) as Recipe[]);
     setLoading(false);
   };
@@ -122,6 +138,11 @@ function OpsRecipes() {
         { id: "m4", name: "كباب لحم", price: 1100, category_id: "c1" },
         { id: "m5", name: "سلطة سيزر", price: 700, category_id: "c2" },
         { id: "m6", name: "فرينش فرايز", price: 450, category_id: "c2" },
+      ]);
+      setCategories([
+        { id: "c1", name: "أطباق رئيسية" },
+        { id: "c2", name: "مقبلات" },
+        { id: "c3", name: "مشروبات" },
       ]);
       setIngredients([
         { id: "ing1", name: "فرينة", unit: "كيلو", cost_per_unit: 80 },
@@ -165,6 +186,7 @@ function OpsRecipes() {
   }, [restaurantId, restaurantLoading]);
 
   const openItem = (it: MenuItem) => {
+    setCreatingNew(false);
     setActiveItem(it);
     const existing = recipesByItem.get(it.id) ?? [];
     setDraft(
@@ -175,8 +197,18 @@ function OpsRecipes() {
     setOpen(true);
   };
 
+  const openNewRecipe = () => {
+    setCreatingNew(true);
+    setActiveItem(null);
+    setNewName("");
+    setNewPrice("");
+    setNewCat(categories[0]?.id ?? "");
+    setDraft([{ ingredient_id: "", quantity: "" }]);
+    setOpen(true);
+  };
+
   const save = async () => {
-    if (!restaurantId || !activeItem) return;
+    if (!restaurantId) return;
     const clean = draft
       .map((d) => ({
         ingredient_id: d.ingredient_id,
@@ -185,6 +217,57 @@ function OpsRecipes() {
       .filter((d) => d.ingredient_id && d.quantity > 0);
 
     setSaving(true);
+
+    if (creatingNew) {
+      if (!newName.trim()) {
+        toast.error(tx("أدخل اسم الصنف"));
+        setSaving(false);
+        return;
+      }
+      if (clean.length === 0) {
+        toast.error(tx("أضف مكوّناً واحداً على الأقل"));
+        setSaving(false);
+        return;
+      }
+      const { data: created, error: itErr } = await supabase
+        .from("menu_items")
+        .insert({
+          restaurant_id: restaurantId,
+          name: newName.trim(),
+          price: Number(newPrice) || 0,
+          category_id: newCat || null,
+        })
+        .select("*")
+        .single();
+      if (itErr || !created) {
+        toast.error(itErr?.message ?? tx("فشل إنشاء الصنف"));
+        setSaving(false);
+        return;
+      }
+      const { error: insErr } = await supabase.from("menu_item_recipes").insert(
+        clean.map((c) => ({
+          restaurant_id: restaurantId,
+          menu_item_id: created.id,
+          ingredient_id: c.ingredient_id,
+          quantity: c.quantity,
+        })),
+      );
+      if (insErr) {
+        toast.error(tx("فشل حفظ الوصفة"));
+        setSaving(false);
+        return;
+      }
+      toast.success(tx("تمت إضافة الوصفة"));
+      setOpen(false);
+      setSaving(false);
+      await loadAll(restaurantId);
+      return;
+    }
+
+    if (!activeItem) {
+      setSaving(false);
+      return;
+    }
     const { error: delErr } = await supabase
       .from("menu_item_recipes")
       .delete()
@@ -264,14 +347,19 @@ function OpsRecipes() {
               {tx("اربط كل صنف بالمكونات المستهلكة. عند تأكيد الدفع يُنقص المخزون تلقائياً.")}
             </p>
           </div>
-          <div className="relative">
-            <Search className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--muted-foreground)]" />
-            <Input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder={tx("بحث صنف...")}
-              className="pr-8 w-48 h-8 text-xs"
-            />
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--muted-foreground)]" />
+              <Input
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder={tx("بحث صنف...")}
+                className="pr-8 w-48 h-8 text-xs"
+              />
+            </div>
+            <Button size="sm" className="h-8 text-xs gap-1.5" onClick={openNewRecipe}>
+              <Plus className="w-3.5 h-3.5" /> {tx("إضافة وصفة")}
+            </Button>
           </div>
         </div>
         {(orphanCount > 0 || selected.size > 0) && (
@@ -398,9 +486,36 @@ function OpsRecipes() {
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>وصفة: {activeItem?.name}</DialogTitle>
+            <DialogTitle>{creatingNew ? tx("إضافة وصفة جديدة") : `وصفة: ${activeItem?.name}`}</DialogTitle>
           </DialogHeader>
           <div className="space-y-2 max-h-[55vh] overflow-y-auto">
+            {creatingNew && (
+              <div className="grid grid-cols-3 gap-2 pb-1">
+                <div className="col-span-1">
+                  <Label className="text-xs">{tx("اسم الصنف")}</Label>
+                  <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder={tx("مثال: طاجين")} />
+                </div>
+                <div>
+                  <Label className="text-xs">{tx("السعر (دج)")}</Label>
+                  <Input type="number" value={newPrice} onChange={(e) => setNewPrice(e.target.value)} placeholder="0" />
+                </div>
+                <div>
+                  <Label className="text-xs">{tx("الفئة")}</Label>
+                  <Select value={newCat} onValueChange={setNewCat}>
+                    <SelectTrigger>
+                      <SelectValue placeholder={tx("بدون تصنيف")} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {categories.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
             {draft.map((row, idx) => {
               const ing = ingMap.get(row.ingredient_id);
               return (

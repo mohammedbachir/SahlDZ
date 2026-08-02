@@ -22,6 +22,8 @@ import { Route as SetupRouteImport } from './routes/setup'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as WaiterLoginRouteImport } from './routes/waiter-login'
 import { Route as WaiterScreenRouteImport } from './routes/waiter-screen'
+import { Route as AccountIndexRouteImport } from './routes/account/index'
+import { Route as AccountSettingsRouteImport } from './routes/account/settings'
 import { Route as DashboardAnalyticsRouteImport } from './routes/dashboard.analytics'
 import { Route as DashboardMenuRouteImport } from './routes/dashboard.menu'
 import { Route as DashboardOrdersRouteImport } from './routes/dashboard.orders'
@@ -39,6 +41,8 @@ import { Route as OpsReportsRouteImport } from './routes/ops.reports'
 import { Route as OpsStaffPerformanceRouteImport } from './routes/ops.staff-performance'
 import { Route as OpsSuppliersRouteImport } from './routes/ops.suppliers'
 import { Route as OpsWasteRouteImport } from './routes/ops.waste'
+import { Route as OpsEmployeesIndexRouteImport } from './routes/ops.employees.index'
+import { Route as OpsEmployeesEmployeeIdRouteImport } from './routes/ops.employees.$employeeId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -103,6 +107,16 @@ const WaiterLoginRoute = WaiterLoginRouteImport.update({
 const WaiterScreenRoute = WaiterScreenRouteImport.update({
   id: '/waiter-screen',
   path: '/waiter-screen',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AccountIndexRoute = AccountIndexRouteImport.update({
+  id: '/account/',
+  path: '/account/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AccountSettingsRoute = AccountSettingsRouteImport.update({
+  id: '/account/settings',
+  path: '/account/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DashboardAnalyticsRoute = DashboardAnalyticsRouteImport.update({
@@ -190,6 +204,16 @@ const OpsWasteRoute = OpsWasteRouteImport.update({
   path: '/waste',
   getParentRoute: () => OpsRoute,
 } as any)
+const OpsEmployeesIndexRoute = OpsEmployeesIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => OpsEmployeesRoute,
+} as any)
+const OpsEmployeesEmployeeIdRoute = OpsEmployeesEmployeeIdRouteImport.update({
+  id: '/$employeeId',
+  path: '/$employeeId',
+  getParentRoute: () => OpsEmployeesRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -205,6 +229,7 @@ export interface FileRoutesByFullPath {
   '/signup': typeof SignupRoute
   '/waiter-login': typeof WaiterLoginRoute
   '/waiter-screen': typeof WaiterScreenRoute
+  '/account/settings': typeof AccountSettingsRoute
   '/dashboard/analytics': typeof DashboardAnalyticsRoute
   '/dashboard/menu': typeof DashboardMenuRoute
   '/dashboard/orders': typeof DashboardOrdersRoute
@@ -212,7 +237,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/settings': typeof DashboardSettingsRoute
   '/dashboard/tables': typeof DashboardTablesRoute
   '/ops/complaints': typeof OpsComplaintsRoute
-  '/ops/employees': typeof OpsEmployeesRoute
+  '/ops/employees': typeof OpsEmployeesRouteWithChildren
   '/ops/expenses': typeof OpsExpensesRoute
   '/ops/inventory': typeof OpsInventoryRoute
   '/ops/inventory-count': typeof OpsInventoryCountRoute
@@ -221,7 +246,10 @@ export interface FileRoutesByFullPath {
   '/ops/staff-performance': typeof OpsStaffPerformanceRoute
   '/ops/suppliers': typeof OpsSuppliersRoute
   '/ops/waste': typeof OpsWasteRoute
+  '/account/': typeof AccountIndexRoute
   '/ops/': typeof OpsIndexRoute
+  '/ops/employees/$employeeId': typeof OpsEmployeesEmployeeIdRoute
+  '/ops/employees/': typeof OpsEmployeesIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -236,6 +264,7 @@ export interface FileRoutesByTo {
   '/signup': typeof SignupRoute
   '/waiter-login': typeof WaiterLoginRoute
   '/waiter-screen': typeof WaiterScreenRoute
+  '/account/settings': typeof AccountSettingsRoute
   '/dashboard/analytics': typeof DashboardAnalyticsRoute
   '/dashboard/menu': typeof DashboardMenuRoute
   '/dashboard/orders': typeof DashboardOrdersRoute
@@ -243,7 +272,6 @@ export interface FileRoutesByTo {
   '/dashboard/settings': typeof DashboardSettingsRoute
   '/dashboard/tables': typeof DashboardTablesRoute
   '/ops/complaints': typeof OpsComplaintsRoute
-  '/ops/employees': typeof OpsEmployeesRoute
   '/ops/expenses': typeof OpsExpensesRoute
   '/ops/inventory': typeof OpsInventoryRoute
   '/ops/inventory-count': typeof OpsInventoryCountRoute
@@ -252,7 +280,10 @@ export interface FileRoutesByTo {
   '/ops/staff-performance': typeof OpsStaffPerformanceRoute
   '/ops/suppliers': typeof OpsSuppliersRoute
   '/ops/waste': typeof OpsWasteRoute
+  '/account': typeof AccountIndexRoute
   '/ops': typeof OpsIndexRoute
+  '/ops/employees/$employeeId': typeof OpsEmployeesEmployeeIdRoute
+  '/ops/employees': typeof OpsEmployeesIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -269,6 +300,7 @@ export interface FileRoutesById {
   '/signup': typeof SignupRoute
   '/waiter-login': typeof WaiterLoginRoute
   '/waiter-screen': typeof WaiterScreenRoute
+  '/account/settings': typeof AccountSettingsRoute
   '/dashboard/analytics': typeof DashboardAnalyticsRoute
   '/dashboard/menu': typeof DashboardMenuRoute
   '/dashboard/orders': typeof DashboardOrdersRoute
@@ -276,7 +308,7 @@ export interface FileRoutesById {
   '/dashboard/settings': typeof DashboardSettingsRoute
   '/dashboard/tables': typeof DashboardTablesRoute
   '/ops/complaints': typeof OpsComplaintsRoute
-  '/ops/employees': typeof OpsEmployeesRoute
+  '/ops/employees': typeof OpsEmployeesRouteWithChildren
   '/ops/expenses': typeof OpsExpensesRoute
   '/ops/inventory': typeof OpsInventoryRoute
   '/ops/inventory-count': typeof OpsInventoryCountRoute
@@ -285,7 +317,10 @@ export interface FileRoutesById {
   '/ops/staff-performance': typeof OpsStaffPerformanceRoute
   '/ops/suppliers': typeof OpsSuppliersRoute
   '/ops/waste': typeof OpsWasteRoute
+  '/account/': typeof AccountIndexRoute
   '/ops/': typeof OpsIndexRoute
+  '/ops/employees/$employeeId': typeof OpsEmployeesEmployeeIdRoute
+  '/ops/employees/': typeof OpsEmployeesIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -303,6 +338,7 @@ export interface FileRouteTypes {
     | '/signup'
     | '/waiter-login'
     | '/waiter-screen'
+    | '/account/settings'
     | '/dashboard/analytics'
     | '/dashboard/menu'
     | '/dashboard/orders'
@@ -319,7 +355,10 @@ export interface FileRouteTypes {
     | '/ops/staff-performance'
     | '/ops/suppliers'
     | '/ops/waste'
+    | '/account/'
     | '/ops/'
+    | '/ops/employees/$employeeId'
+    | '/ops/employees/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -334,6 +373,7 @@ export interface FileRouteTypes {
     | '/signup'
     | '/waiter-login'
     | '/waiter-screen'
+    | '/account/settings'
     | '/dashboard/analytics'
     | '/dashboard/menu'
     | '/dashboard/orders'
@@ -341,7 +381,6 @@ export interface FileRouteTypes {
     | '/dashboard/settings'
     | '/dashboard/tables'
     | '/ops/complaints'
-    | '/ops/employees'
     | '/ops/expenses'
     | '/ops/inventory'
     | '/ops/inventory-count'
@@ -350,7 +389,10 @@ export interface FileRouteTypes {
     | '/ops/staff-performance'
     | '/ops/suppliers'
     | '/ops/waste'
+    | '/account'
     | '/ops'
+    | '/ops/employees/$employeeId'
+    | '/ops/employees'
   id:
     | '__root__'
     | '/'
@@ -366,6 +408,7 @@ export interface FileRouteTypes {
     | '/signup'
     | '/waiter-login'
     | '/waiter-screen'
+    | '/account/settings'
     | '/dashboard/analytics'
     | '/dashboard/menu'
     | '/dashboard/orders'
@@ -382,7 +425,10 @@ export interface FileRouteTypes {
     | '/ops/staff-performance'
     | '/ops/suppliers'
     | '/ops/waste'
+    | '/account/'
     | '/ops/'
+    | '/ops/employees/$employeeId'
+    | '/ops/employees/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -399,6 +445,8 @@ export interface RootRouteChildren {
   SignupRoute: typeof SignupRoute
   WaiterLoginRoute: typeof WaiterLoginRoute
   WaiterScreenRoute: typeof WaiterScreenRoute
+  AccountSettingsRoute: typeof AccountSettingsRoute
+  AccountIndexRoute: typeof AccountIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -492,6 +540,20 @@ declare module '@tanstack/react-router' {
       path: '/waiter-screen'
       fullPath: '/waiter-screen'
       preLoaderRoute: typeof WaiterScreenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/account/': {
+      id: '/account/'
+      path: '/account'
+      fullPath: '/account/'
+      preLoaderRoute: typeof AccountIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/account/settings': {
+      id: '/account/settings'
+      path: '/account/settings'
+      fullPath: '/account/settings'
+      preLoaderRoute: typeof AccountSettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/dashboard/analytics': {
@@ -613,6 +675,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OpsWasteRouteImport
       parentRoute: typeof OpsRoute
     }
+    '/ops/employees/': {
+      id: '/ops/employees/'
+      path: '/'
+      fullPath: '/ops/employees/'
+      preLoaderRoute: typeof OpsEmployeesIndexRouteImport
+      parentRoute: typeof OpsEmployeesRoute
+    }
+    '/ops/employees/$employeeId': {
+      id: '/ops/employees/$employeeId'
+      path: '/$employeeId'
+      fullPath: '/ops/employees/$employeeId'
+      preLoaderRoute: typeof OpsEmployeesEmployeeIdRouteImport
+      parentRoute: typeof OpsEmployeesRoute
+    }
   }
 }
 
@@ -638,9 +714,23 @@ const DashboardRouteWithChildren = DashboardRoute._addFileChildren(
   DashboardRouteChildren,
 )
 
+interface OpsEmployeesRouteChildren {
+  OpsEmployeesEmployeeIdRoute: typeof OpsEmployeesEmployeeIdRoute
+  OpsEmployeesIndexRoute: typeof OpsEmployeesIndexRoute
+}
+
+const OpsEmployeesRouteChildren: OpsEmployeesRouteChildren = {
+  OpsEmployeesEmployeeIdRoute: OpsEmployeesEmployeeIdRoute,
+  OpsEmployeesIndexRoute: OpsEmployeesIndexRoute,
+}
+
+const OpsEmployeesRouteWithChildren = OpsEmployeesRoute._addFileChildren(
+  OpsEmployeesRouteChildren,
+)
+
 interface OpsRouteChildren {
   OpsComplaintsRoute: typeof OpsComplaintsRoute
-  OpsEmployeesRoute: typeof OpsEmployeesRoute
+  OpsEmployeesRoute: typeof OpsEmployeesRouteWithChildren
   OpsExpensesRoute: typeof OpsExpensesRoute
   OpsInventoryRoute: typeof OpsInventoryRoute
   OpsInventoryCountRoute: typeof OpsInventoryCountRoute
@@ -654,7 +744,7 @@ interface OpsRouteChildren {
 
 const OpsRouteChildren: OpsRouteChildren = {
   OpsComplaintsRoute: OpsComplaintsRoute,
-  OpsEmployeesRoute: OpsEmployeesRoute,
+  OpsEmployeesRoute: OpsEmployeesRouteWithChildren,
   OpsExpensesRoute: OpsExpensesRoute,
   OpsInventoryRoute: OpsInventoryRoute,
   OpsInventoryCountRoute: OpsInventoryCountRoute,
@@ -682,6 +772,8 @@ const rootRouteChildren: RootRouteChildren = {
   SignupRoute: SignupRoute,
   WaiterLoginRoute: WaiterLoginRoute,
   WaiterScreenRoute: WaiterScreenRoute,
+  AccountSettingsRoute: AccountSettingsRoute,
+  AccountIndexRoute: AccountIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

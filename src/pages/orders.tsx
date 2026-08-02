@@ -24,6 +24,7 @@ import { useRestaurantId } from "@/lib/restaurant";
 import { Button } from "@/components/ui/button";
 import { formatDZD } from "@/lib/restaurant";
 import { useNewOrderNotifications } from "@/hooks/useNewOrderNotifications";
+import { decrementStockForOrder } from "@/lib/stock-consumption";
 import { useTranslation } from "react-i18next";
 
 type OrderStatus = "new" | "preparing" | "ready" | "paid";
@@ -254,6 +255,8 @@ export default function OrdersPage() {
     if (error) {
       setOrders(prev);
       toast.error(t("orders.updateFailed"));
+    } else if (next === "preparing") {
+      void decrementStockForOrder(o.id);
     }
   }
 

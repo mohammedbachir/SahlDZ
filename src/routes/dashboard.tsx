@@ -181,8 +181,8 @@ function DashboardLayout() {
         .eq("owner_id", u.user.id)
         .maybeSingle();
       if (data) {
-        setRestaurant({ name: data.name, logo_url: data.logo_url });
-        setRestaurantId(data.id);
+        // Owners use operations management, not the operational dashboard
+        navigate({ to: "/ops", replace: true });
         return;
       }
       // If user has no owned restaurant, check if they're staff somewhere

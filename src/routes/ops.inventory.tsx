@@ -83,6 +83,13 @@ const WASTE_REASONS: { value: string; label: string }[] = [
   { value: "other", label: tx("أخرى") },
 ];
 
+const UNIT_OPTIONS: string[] = ["كغ", "غ", "لتر", "مل", "حبة", "عبوة", "علبة", "زجاجة"];
+
+const unitOptions = (extra?: string): string[] => {
+  if (!extra || UNIT_OPTIONS.includes(extra)) return UNIT_OPTIONS;
+  return [...UNIT_OPTIONS, extra];
+};
+
 function OpsInventory() {
   useTranslation();
   const { restaurantId, loading: restaurantLoading } = useRestaurantId();
@@ -163,10 +170,11 @@ function OpsInventory() {
     const { data, error } = await supabase
       .from("ingredients")
       .select("*")
-      .eq("restaurant_id", rid)
-      .order("name");
+      .eq("restaurant_id", rid);
     if (error) toast.error(tx("فشل تحميل المكونات"));
-    setItems((data ?? []) as Ingredient[]);
+    const list = (data ?? []) as Ingredient[];
+    list.sort((a, b) => a.name.localeCompare(b.name, "ar"));
+    setItems(list);
     setLoading(false);
   };
 
@@ -180,7 +188,10 @@ function OpsInventory() {
   }, [restaurantId, restaurantLoading]);
 
   const submitAdd = async () => {
-    if (!restaurantId) return;
+    if (!restaurantId) {
+      toast.error(tx("تعذر العثور على المطعم — تأكد من تسجيل الدخول"));
+      return;
+    }
     if (!form.name.trim() || !form.unit.trim()) {
       toast.error(tx("الاسم والوحدة مطلوبان"));
       return;
@@ -276,7 +287,7 @@ function OpsInventory() {
       .from("suppliers")
       .select("id")
       .eq("restaurant_id", restaurantId)
-      .ilike("name", supplierName)
+      .eq("name", supplierName)
       .maybeSingle();
 
     if (findErr) throw findErr;
@@ -308,13 +319,13 @@ function OpsInventory() {
     ]);
     if (poRes.error) throw poRes.error;
     if (txRes.error) throw txRes.error;
-    const purchasesFromOrders = (poRes.data ?? []).reduce((sum, row) => sum + Number(row.total || 0), 0);
-    const previousDebtRows = (txRes.data ?? []).reduce((sum, row) => {
+    const purchasesFromOrders = (poRes.data ?? []).reduce((sum: number, row: any) => sum + Number(row.total || 0), 0);
+    const previousDebtRows = (txRes.data ?? []).reduce((sum: number, row: any) => {
       return row.type === "purchase" && row.notes?.includes(tx("الدين السابق"))
         ? sum + Number(row.amount || 0)
         : sum;
     }, 0);
-    const credits = (txRes.data ?? []).reduce((sum, row) => {
+    const credits = (txRes.data ?? []).reduce((sum: number, row: any) => {
       const amount = Number(row.amount || 0);
       return row.type === "payment" || row.type === "advance" || row.type === "return"
         ? sum + amount
@@ -351,7 +362,7 @@ function OpsInventory() {
           .from("ingredients")
           .select("id, current_stock, cost_per_unit")
           .eq("restaurant_id", restaurantId)
-          .ilike("name", name)
+          .eq("name", name)
           .maybeSingle();
 
         let ingredientId: string | null = existing?.id ?? null;
@@ -738,7 +749,18 @@ function OpsInventory() {
             </div>
             <div>
               <Label>{tx("الوحدة")}</Label>
-              <Input value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} placeholder={tx("كغ / لتر / حبة")} />
+              <Select value={form.unit} onValueChange={(v) => setForm({ ...form, unit: v })}>
+                <SelectTrigger>
+                  <SelectValue placeholder={tx("اختر الوحدة")} />
+                </SelectTrigger>
+                <SelectContent>
+                  {unitOptions().map((u) => (
+                    <SelectItem key={u} value={u}>
+                      {u}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               <div>
@@ -839,7 +861,18 @@ function OpsInventory() {
             </div>
             <div>
               <Label>{tx("الوحدة")}</Label>
-              <Input value={editForm.unit} onChange={(e) => setEditForm({ ...editForm, unit: e.target.value })} />
+              <Select value={editForm.unit} onValueChange={(v) => setEditForm({ ...editForm, unit: v })}>
+                <SelectTrigger>
+                  <SelectValue placeholder={tx("اختر الوحدة")} />
+                </SelectTrigger>
+                <SelectContent>
+                  {unitOptions(editForm.unit).map((u) => (
+                    <SelectItem key={u} value={u}>
+                      {u}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div>

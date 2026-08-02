@@ -13,6 +13,7 @@ import {
   TrendingUp,
   MessageSquareWarning,
   ClipboardCheck,
+  Settings,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { requireAuth } from "@/lib/auth";
@@ -159,16 +160,32 @@ function OpsLayout() {
               </Link>
             );
           })}
+
+          {userRole === "admin" && (
+            <div className="pt-2 mt-2 border-t border-[var(--border)]">
+              <Link
+                to="/account/settings"
+                className={`group flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors lg:justify-start justify-center ${
+                  pathname === "/account/settings"
+                    ? "bg-[var(--primary)]/10 text-[var(--primary)] font-semibold"
+                    : "text-[var(--muted-foreground)] hover:bg-[var(--muted)] hover:text-[var(--foreground)]"
+                }`}
+              >
+                <Settings className="w-[18px] h-[18px] shrink-0" />
+                <span className="hidden lg:inline">{tx("إعدادات المطعم")}</span>
+              </Link>
+            </div>
+          )}
         </nav>
 
         <div className="p-2 border-t border-[var(--border)] space-y-0.5">
           {userRole === "admin" && (
             <Link
-              to="/dashboard"
+              to="/account"
               className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-[var(--muted-foreground)] hover:bg-[var(--muted)] hover:text-[var(--foreground)] transition-colors lg:justify-start justify-center"
             >
               <ArrowRight className="w-[18px] h-[18px] shrink-0" />
-              <span className="hidden lg:inline">{tx("لوحة التحكم")}</span>
+              <span className="hidden lg:inline">{tx("حساب المالك")}</span>
             </Link>
           )}
           <button
@@ -194,10 +211,10 @@ function OpsLayout() {
           </div>
           {userRole === "admin" && (
             <Link
-              to="/dashboard"
+              to="/account"
               className="md:hidden text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
             >
-              {tx("لوحة التحكم")}
+              {tx("حساب المالك")}
             </Link>
           )}
         </header>

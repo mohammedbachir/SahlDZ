@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { Plus, Printer, Lock } from "lucide-react";
+import { Plus, Printer, Lock, Minus, Check } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurantId, formatDZD } from "@/lib/restaurant";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { tx } from "@/lib/ops-tx";
@@ -47,9 +46,10 @@ function OpsInventoryCount() {
     const { data } = await supabase
       .from("inventory_counts")
       .select("*")
-      .eq("restaurant_id", restaurantId)
-      .order("count_date", { ascending: false });
-    setCounts((data as CountRow[]) ?? []);
+      .eq("restaurant_id", restaurantId);
+    const rows = (data as CountRow[]) ?? [];
+    rows.sort((a, b) => String(b.count_date).localeCompare(String(a.count_date)));
+    setCounts(rows);
   }
   useEffect(() => {
     if (!restaurantId) {
@@ -139,7 +139,7 @@ function OpsInventoryCount() {
       .eq("restaurant_id", restaurantId);
     if (ings && ings.length > 0) {
       await supabase.from("inventory_count_items").insert(
-        ings.map((i) => ({
+        ings.map((i: any) => ({
           count_id: c.id,
           ingredient_id: i.id,
           expected_qty: Number(i.current_stock) || 0,
@@ -154,14 +154,24 @@ function OpsInventoryCount() {
     toast.success(tx("تم بدء جرد جديد"));
   }
 
-  async function updateCount(itemId: string, counted: number) {
+  async function saveCountedQty(itemId: string, counted: number) {
+    if (!restaurantId) return;
     const item = items.find((i) => i.id === itemId);
     const ing = ingredients.find((g) => g.id === item?.ingredient_id);
     if (!item || !ing) return;
-    const variance = counted - item.expected_qty;
+    const safe = Math.max(0, counted);
+    const variance = safe - Number(item.expected_qty);
     const variance_value = variance * Number(ing.cost_per_unit || 0);
-    setItems((prev) => prev.map((i) => i.id === itemId ? { ...i, counted_qty: counted, variance, variance_value } : i));
-    await supabase.from("inventory_count_items").update({ counted_qty: counted, variance, variance_value }).eq("id", itemId);
+    const prev = { ...item };
+    setItems((prevItems) => prevItems.map((i) => i.id === itemId ? { ...i, counted_qty: safe, variance, variance_value } : i));
+    const { error } = await supabase
+      .from("inventory_count_items")
+      .update({ counted_qty: safe, variance, variance_value })
+      .eq("id", itemId);
+    if (error) {
+      toast.error(tx("فشل حفظ الكمية"));
+      setItems((prevItems) => prevItems.map((i) => i.id === itemId ? { ...prev, id: i.id } : i));
+    }
   }
 
   async function closeCount() {
@@ -220,17 +230,40 @@ function OpsInventoryCount() {
                       <td className="p-2">{ing?.name ?? "—"}</td>
                       <td className="p-2 text-[var(--muted-foreground)]">{ing?.unit}</td>
                       <td className="p-2">{Number(it.expected_qty).toFixed(2)}</td>
-                      <td className="p-2 w-28">
+                      <td className="p-2 w-44">
                         {isClosed ? (
                           Number(it.counted_qty).toFixed(2)
                         ) : (
-                          <Input
-                            type="number"
-                            step="0.01"
-                            value={it.counted_qty}
-                            onChange={(e) => updateCount(it.id, Number(e.target.value))}
-                            className="h-7 text-xs"
-                          />
+                          <div className="flex items-center gap-1" dir="rtl">
+                            <Button
+                              size="icon"
+                              variant="outline"
+                              className="h-7 w-7"
+                              onClick={() => saveCountedQty(it.id, Number(it.counted_qty) + 1)}
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                            </Button>
+                            <span className="w-14 text-center tabular-nums text-sm font-medium">
+                              {Number(it.counted_qty).toFixed(2)}
+                            </span>
+                            <Button
+                              size="icon"
+                              variant="outline"
+                              className="h-7 w-7"
+                              onClick={() => saveCountedQty(it.id, Math.max(0, Number(it.counted_qty) - 1))}
+                            >
+                              <Minus className="w-3.5 h-3.5" />
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-7 w-7"
+                              title={tx("تطابق مع المتوقع")}
+                              onClick={() => saveCountedQty(it.id, Number(it.expected_qty))}
+                            >
+                              <Check className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
                         )}
                       </td>
                       <td className={`p-2 ${it.variance < 0 ? "text-[var(--destructive)]" : it.variance > 0 ? "text-emerald-600" : ""}`}>

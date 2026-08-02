@@ -7,6 +7,7 @@ import {
   deleteDoc,
   query,
   where,
+  documentId,
   orderBy as fsOrderBy,
   limit as fsLimit,
   getDoc,
@@ -17,6 +18,8 @@ import {
   signInWithEmailAndPassword,
   signOut as fbSignOut,
   onAuthStateChanged,
+  setPersistence,
+  browserLocalPersistence,
   type User,
 } from "firebase/auth";
 import {
@@ -29,6 +32,7 @@ import {
   getFirebaseDb,
   getFirebaseStorage,
 } from "./config";
+import { cacheSession, clearSessionCache } from "@/lib/session-cache";
 
 const NO_BACKEND_MSG =
   "Firebase غير مهيأ. أضف VITE_FIREBASE_API_KEY و VITE_FIREBASE_PROJECT_ID للتشغيل الكامل. (وضع المعاينة لا يحتاج خادماً)";
@@ -157,6 +161,14 @@ function firestoreQueryChain(table: string, builder: any): any {
     select: () => chain,
     insert: (data: any) => {
       const doInsert = async () => {
+        if (Array.isArray(data)) {
+          const docs: any[] = [];
+          for (const item of data) {
+            const docRef = await addDoc(collection(db, table), item);
+            docs.push({ id: docRef.id, ...item });
+          }
+          return docs;
+        }
         const docRef = await addDoc(collection(db, table), data);
         const snap = await getDoc(docRef);
         return { id: snap.id, ...snap.data() };
@@ -359,7 +371,10 @@ function buildQuery(
 ) {
   const constraints: QueryConstraint[] = [];
   for (const f of filters) {
-    constraints.push(where(f.field, f.op as any, f.value));
+    // "id" maps to the Firestore document ID, which is not a stored field.
+    constraints.push(
+      where(f.field === "id" ? documentId() : f.field, f.op as any, f.value),
+    );
   }
   if (orderBy) {
     constraints.push(fsOrderBy(orderBy.field, orderBy.direction));
@@ -402,32 +417,56 @@ function storageChain(bucket: string) {
 function authWrapper() {
   const auth = getFirebaseAuth();
 
-  return {
-    getSession: async () => {
-      if (!auth) return { data: { session: null }, error: null };
-      return new Promise((resolve) => {
-        const unsub = onAuthStateChanged(auth, (user) => {
-          unsub();
-          resolve({
-            data: {
-              session: user ? { user: { id: user.uid, email: user.email } } : null,
-            },
-            error: null,
-          });
-        });
-        // Timeout fallback
-        setTimeout(() => {
-          resolve({ data: { session: null }, error: null });
-        }, 3000);
-      });
-    },
-    getUser: async () => {
-      if (!auth) return { data: { user: null }, error: null };
-      const user = auth.currentUser;
+  async function getSession() {
+    if (!auth) return { data: { session: null }, error: null };
+    if (typeof window === "undefined") {
+      return { data: { session: null }, error: null };
+    }
+    const current = auth.currentUser;
+    if (current) {
       return {
-        data: { user: user ? { id: user.uid, email: user.email } : null },
+        data: { session: { user: { id: current.uid, email: current.email } } },
         error: null,
       };
+    }
+    return new Promise<{ data: { session: { user: { id: string; email: string | null } } | null }; error: null }>(
+      (resolve) => {
+        let settled = false;
+        const finish = (user: User | null) => {
+          if (settled) return;
+          settled = true;
+          resolve({
+            data: { session: user ? { user: { id: user.uid, email: user.email } } : null },
+            error: null,
+          });
+        };
+        const unsub = onAuthStateChanged(auth, (user) => {
+          unsub();
+          finish(user);
+        });
+        // Timeout fallback
+        setTimeout(() => finish(null), 3000);
+      }
+    );
+  }
+
+  return {
+    getSession,
+    getUser: async () => {
+      if (!auth) return { data: { user: null }, error: null };
+      if (typeof window === "undefined") {
+        return { data: { user: null }, error: null };
+      }
+      if (auth.currentUser) {
+        return {
+          data: { user: { id: auth.currentUser.uid, email: auth.currentUser.email } },
+          error: null,
+        };
+      }
+      // Firebase restores the persisted session asynchronously, so wait for it
+      // before deciding the user is logged out.
+      const { data } = await getSession();
+      return { data: { user: data.session?.user ?? null }, error: null };
     },
     signInWithPassword: async ({
       email,
@@ -436,17 +475,20 @@ function authWrapper() {
       email: string;
       password: string;
     }) => {
-      if (!auth) return { data: { user: null }, error: { message: NO_BACKEND_MSG } };
+      if (!auth) return { data: { user: null, session: null }, error: { message: NO_BACKEND_MSG } };
       try {
+        if (typeof window !== "undefined") {
+          await setPersistence(auth, browserLocalPersistence);
+        }
         const cred = await signInWithEmailAndPassword(auth, email, password);
+        const user = { id: cred.user.uid, email: cred.user.email };
+        cacheSession(user.id);
         return {
-          data: {
-            user: { id: cred.user.uid, email: cred.user.email },
-          },
+          data: { user, session: { user } },
           error: null,
         };
       } catch (e: any) {
-        return { data: { user: null }, error: { message: e.message } };
+        return { data: { user: null, session: null }, error: { message: e.message } };
       }
     },
     signUp: async ({
@@ -456,23 +498,27 @@ function authWrapper() {
       email: string;
       password: string;
     }) => {
-      if (!auth) return { data: { user: null }, error: { message: NO_BACKEND_MSG } };
+      if (!auth) return { data: { user: null, session: null }, error: { message: NO_BACKEND_MSG } };
       try {
+        if (typeof window !== "undefined") {
+          await setPersistence(auth, browserLocalPersistence);
+        }
         const { createUserWithEmailAndPassword } = await import("firebase/auth");
         const cred = await createUserWithEmailAndPassword(auth, email, password);
+        const user = { id: cred.user.uid, email: cred.user.email };
+        cacheSession(user.id);
         return {
-          data: {
-            user: { id: cred.user.uid, email: cred.user.email },
-          },
+          data: { user, session: { user } },
           error: null,
         };
       } catch (e: any) {
-        return { data: { user: null }, error: { message: e.message } };
+        return { data: { user: null, session: null }, error: { message: e.message } };
       }
     },
     signOut: async () => {
       if (!auth) return { error: null };
       try {
+        clearSessionCache();
         await fbSignOut(auth);
         return { error: null };
       } catch (e: any) {
