@@ -8,11 +8,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-const LANGS = [
-  { code: "ar", label: "العربية" },
-  { code: "fr", label: "Français" },
-  { code: "en", label: "English" },
-];
+const LANGS = [{ code: "ar", label: "العربية" }];
 
 export function LanguageSwitcher() {
   const { i18n } = useTranslation();
@@ -21,7 +17,12 @@ export function LanguageSwitcher() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" className="rounded-xl" aria-label="Language">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="rounded-xl"
+          aria-label="Language"
+        >
           <Languages className="h-5 w-5" />
         </Button>
       </DropdownMenuTrigger>

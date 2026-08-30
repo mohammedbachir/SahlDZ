@@ -1,109 +1,43 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
-import { ChefHat, ArrowRight, Loader2, ArrowLeft, User } from "lucide-react";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
+import { ChefHat, Loader2, User } from "lucide-react";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
 import { useServerFn } from "@tanstack/react-start";
 import { getPublicChefList, verifyIndividualChefPin } from "@/lib/individual-chef.functions";
 import { PREVIEW_RESTAURANT, previewExpiry } from "@/lib/preview-mode";
-import { useTranslation } from "react-i18next";
+import { verifyActivationCode } from "@/lib/activation";
+import { getFirebaseDb } from "@/integrations/firebase/config";
+import { requireDesktop, useDesktopOnly } from "@/lib/auth";
+import { RestaurantCodeStep } from "@/components/restaurant-code-step";
+import {
+  LoginLogo,
+  RestaurantPill,
+  StaffAccountButton,
+  StaffAvatar,
+  PinBackButton,
+  BackHomeLink,
+  StaffPinInput,
+} from "@/components/staff-login-ui";
+import { tx } from "@/lib/ops-tx";
+
+const HAS_BACKEND = typeof window !== "undefined" && !!getFirebaseDb();
 
 export const Route = createFileRoute("/kitchen-login")({
+  beforeLoad: requireDesktop,
   validateSearch: (s) => ({
-    // `r` is the legacy shared-login param — accept it as an alias so old
-    // printed/saved kitchen links keep working.
     rid: typeof s.rid === "string" && s.rid ? s.rid : typeof s.r === "string" ? s.r : "",
   }),
   component: Page,
 });
 
-function PinInput({
-  onSubmit,
-  submitting,
-  disabled,
-  length = 4,
-}: {
-  onSubmit: (pin: string) => void;
-  submitting: boolean;
-  disabled?: boolean;
-  length?: number;
-}) {
-  const [digits, setDigits] = useState<string[]>(Array(length).fill(""));
-  const inputs = useRef<Array<HTMLInputElement | null>>([]);
-
-  useEffect(() => {
-    inputs.current[0]?.focus();
-  }, []);
-
-  function setDigit(i: number, v: string) {
-    const clean = v.replace(/\D/g, "");
-    if (clean.length > 1) {
-      const chars = clean.slice(0, length - i).split("");
-      setDigits((prev) => {
-        const next = [...prev];
-        chars.forEach((ch, offset) => { next[i + offset] = ch; });
-        return next;
-      });
-      inputs.current[Math.min(i + chars.length, length - 1)]?.focus();
-      return;
-    }
-    setDigits((prev) => { const next = [...prev]; next[i] = clean; return next; });
-    if (clean && i < length - 1) inputs.current[i + 1]?.focus();
-  }
-
-  function onKeyDown(i: number, e: React.KeyboardEvent<HTMLInputElement>) {
-    if (e.key === "Backspace" && !digits[i] && i > 0) inputs.current[i - 1]?.focus();
-    if (e.key === "Enter") {
-      const pin = inputs.current.map((el) => el?.value ?? "").join("");
-      if (pin.length >= 4) onSubmit(pin);
-    }
-  }
-
-  function handleSubmit() {
-    const pin = inputs.current.map((el) => el?.value ?? "").join("");
-    onSubmit(pin);
-  }
-
-  return (
-    <div className="space-y-4">
-      <div className="flex justify-center gap-2" dir="ltr">
-        {Array.from({ length }).map((_, i) => (
-          <input
-            key={i}
-            ref={(el) => { inputs.current[i] = el; }}
-            inputMode="numeric"
-            pattern="[0-9]*"
-            maxLength={1}
-            value={digits[i]}
-            onChange={(e) => setDigit(i, e.target.value)}
-            onPaste={(e) => { e.preventDefault(); setDigit(i, e.clipboardData.getData("text")); }}
-            onKeyDown={(e) => onKeyDown(i, e)}
-            disabled={submitting || disabled}
-            className="w-11 h-13 text-center text-2xl font-bold rounded-lg border border-[var(--border)] focus:border-[var(--primary)] outline-none transition-colors bg-[var(--background)]"
-          />
-        ))}
-      </div>
-      <Button
-        type="button"
-        onClick={handleSubmit}
-        disabled={submitting || disabled}
-        className="w-full h-10 text-sm font-bold"
-      >
-        {submitting && <Loader2 className="w-4 h-4 animate-spin ms-2" />}
-        دخول
-      </Button>
-    </div>
-  );
-}
-
 function Page() {
-  const { t } = useTranslation();
-  const { rid: restaurantId } = Route.useSearch();
-
+  const { rid: searchRid } = Route.useSearch();
   const navigate = useNavigate();
+  useDesktopOnly();
   const fetchChefList = useServerFn(getPublicChefList);
   const verifyIndividual = useServerFn(verifyIndividualChefPin);
 
+  const [restaurantId, setRestaurantId] = useState<string | null>(searchRid || null);
   const [restaurantName, setRestaurantName] = useState("");
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [enabled, setEnabled] = useState<boolean | null>(null);
@@ -112,31 +46,65 @@ function Page() {
   type ChefItem = { id: string; name: string };
   const [chefs, setChefs] = useState<ChefItem[]>([]);
   const [selectedChef, setSelectedChef] = useState<ChefItem | null>(null);
-  const [loadingList, setLoadingList] = useState(false);
-  const previewMode = !restaurantId;
+  const [loadingList, setLoadingList] = useState(true);
+  const previewMode = !restaurantId && !HAS_BACKEND;
 
   useEffect(() => {
-    if (previewMode) {
-      setRestaurantName(PREVIEW_RESTAURANT.name);
-      setLogoUrl(null);
-      setChefs([{ id: "mock-c1", name: "الشيف يوسف" }]);
-      setEnabled(true);
-      setLoadingList(false);
-      return;
+    setRestaurantId(searchRid || null);
+    if (!searchRid) setLoadingList(false);
+  }, [searchRid]);
+
+  // Preview mode: seed a mock chef account so the flow is fully exporable
+  useEffect(() => {
+    if (!previewMode) return;
+    setChefs([{ id: "mock-chef1", name: "الشيف يوسف" }]);
+    setEnabled(true);
+    setRestaurantName(PREVIEW_RESTAURANT.name);
+    setLoadingList(false);
+  }, [previewMode]);
+
+  async function handleCode(code: string): Promise<boolean> {
+    if (submitting) return false;
+    setSubmitting(true);
+    try {
+      const v = await verifyActivationCode(code);
+      if (!v.valid || !v.restaurantId) {
+        toast.error("كود المطعم غير صحيح");
+        return false;
+      }
+      setRestaurantId(v.restaurantId);
+      setRestaurantName(v.restaurantName || "");
+      return true;
+    } catch {
+      toast.error("تعذر التحقق من الكود");
+      return false;
+    } finally {
+      setSubmitting(false);
     }
+  }
+
+  useEffect(() => {
+    if (!restaurantId) return;
     setLoadingList(true);
     fetchChefList({ data: { restaurantId } })
       .then((res) => {
-        if (!res.found) { toast.error(t("common.restaurantNotFound")); setEnabled(false); return; }
+        if (!res.found) { toast.error(tx("common.restaurantNotFound")); setEnabled(false); return; }
         setRestaurantName(res.name);
         setLogoUrl(res.logo_url);
         setChefs(res.chefs);
         setEnabled(res.chefs.length > 0);
       })
-      .catch(() => { toast.error(t("common.restaurantNotFound")); setEnabled(false); })
+      .catch(() => { toast.error(tx("common.restaurantNotFound")); setEnabled(false); })
       .finally(() => setLoadingList(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [restaurantId]);
+  }, [restaurantId, fetchChefList]);
+
+  if (loadingList && !previewMode) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[var(--background)]">
+        <Loader2 className="w-8 h-8 animate-spin text-[var(--primary)]" />
+      </div>
+    );
+  }
 
   async function submitIndividual(pin: string) {
     if (!selectedChef) return;
@@ -148,7 +116,7 @@ function Page() {
       sessionStorage.setItem("individual_chef_name", selectedChef.name);
       sessionStorage.setItem("individual_chef_id", selectedChef.id);
       sessionStorage.setItem("individual_chef_restaurant", JSON.stringify(PREVIEW_RESTAURANT));
-      toast.success(`أهلاً ${selectedChef.name} (معاينة)`);
+      toast.success(tx("kitchen.previewWelcome").replace("{{name}}", selectedChef.name));
       setSubmitting(false);
       navigate({ to: "/kitchen-screen" });
       return;
@@ -160,10 +128,10 @@ function Page() {
       sessionStorage.setItem("individual_chef_name", res.chefName);
       sessionStorage.setItem("individual_chef_id", res.chefId);
       sessionStorage.setItem("individual_chef_restaurant", JSON.stringify(res.restaurant));
-      toast.success(`أهلاً ${res.chefName}`);
+      toast.success(tx("kitchen.welcome").replace("{{name}}", res.chefName));
       navigate({ to: "/kitchen-screen" });
     } catch (e) {
-      toast.error((e as Error).message || t("common.wrongPin"));
+      toast.error((e as Error).message || tx("common.wrongPin"));
     } finally {
       setSubmitting(false);
     }
@@ -171,36 +139,36 @@ function Page() {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-[var(--background)] px-4">
-      <div className="w-full max-w-sm bg-[var(--card)] border border-[var(--border)] rounded-xl p-6 space-y-5">
-        <div className="flex flex-col items-center text-center">
+      <div className="w-full max-w-sm bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-xl shadow-black/[0.04] p-7 space-y-6">
+        <div className="flex flex-col items-center text-center space-y-3">
           {logoUrl ? (
-            <img src={logoUrl} alt="" className="w-16 h-16 rounded-lg object-cover mb-3" />
+            <img
+              src={logoUrl}
+              alt=""
+              className="w-16 h-16 rounded-2xl object-cover ring-2 ring-[var(--primary)]/25 shadow-lg shadow-[var(--primary)]/15"
+            />
           ) : (
-            <div className="w-16 h-16 rounded-lg bg-[var(--primary)] flex items-center justify-center mb-3">
-              <ChefHat className="w-8 h-8 text-[var(--primary-foreground)]" />
-            </div>
+            <LoginLogo icon={ChefHat} />
           )}
-          <h1 className="text-lg font-bold text-[var(--foreground)]">دخول المطبخ</h1>
-          {restaurantName && <p className="text-xs text-[var(--muted-foreground)] mt-1">{restaurantName}</p>}
+          <h1 className="text-lg font-bold text-[var(--foreground)]">{tx("kitchen.loginTitle")}</h1>
+          {restaurantName && <RestaurantPill name={restaurantName} />}
           {previewMode && (
-            <span className="text-[10px] font-bold text-[var(--primary)] bg-[var(--primary)]/10 rounded-md px-2 py-0.5 mt-2">
-              وضع معاينة — بدون اتصال
+            <span className="text-[10px] font-bold text-[var(--primary)] bg-[var(--primary)]/10 rounded-md px-2 py-0.5">
+              {tx("kitchen.previewModeBadge")}
             </span>
           )}
         </div>
 
-        {loadingList && (
-          <div className="flex justify-center py-4">
-            <Loader2 className="w-5 h-5 animate-spin text-[var(--muted-foreground)]" />
-          </div>
+        {!loadingList && HAS_BACKEND && !restaurantId && (
+          <RestaurantCodeStep onResolve={handleCode} />
         )}
 
         {!loadingList && enabled === false && (
           <div className="rounded-lg bg-[var(--destructive)]/10 text-[var(--destructive)] text-sm p-3 text-center leading-6">
             {!restaurantId ? (
-              <>الرابط غير صحيح. استخدم رابط شاشة المطبخ من صفحة الإعدادات.</>
+              <>{tx("kitchen.invalidLink")}</>
             ) : (
-              <>لا توجد حسابات طهاة — أضفها من لوحة التحكم (الإعدادات ← المطبخ).</>
+              <>{tx("kitchen.noChefAccounts")}</>
             )}
           </div>
         )}
@@ -208,47 +176,43 @@ function Page() {
         {!loadingList && enabled && (
           <>
             {!selectedChef ? (
-              <div className="space-y-2">
-                <p className="text-xs text-[var(--muted-foreground)] text-center">اختر حسابك</p>
+              <div className="space-y-3">
+                <p className="text-xs text-[var(--muted-foreground)] text-center">
+                  {tx("kitchen.chooseAccount")}
+                </p>
                 <div className="space-y-2">
                   {chefs.map((chef) => (
-                    <button
+                    <StaffAccountButton
                       key={chef.id}
+                      icon={ChefHat}
+                      label={chef.name}
                       onClick={() => setSelectedChef(chef)}
-                      className="w-full flex items-center gap-3 rounded-lg border border-[var(--border)] hover:border-[var(--primary)]/50 px-3 py-2.5 transition-colors text-right"
-                    >
-                      <div className="w-9 h-9 rounded-lg bg-[var(--muted)] flex items-center justify-center shrink-0">
-                        <User className="w-4 h-4 text-[var(--muted-foreground)]" />
-                      </div>
-                      <span className="font-medium text-sm text-[var(--foreground)]">{chef.name}</span>
-                    </button>
+                    />
                   ))}
                 </div>
               </div>
             ) : (
-              <div className="space-y-4">
-                <div className="flex items-center gap-2">
-                  <button onClick={() => setSelectedChef(null)} className="text-[var(--muted-foreground)] hover:text-[var(--foreground)]">
-                    <ArrowLeft className="w-4 h-4" />
-                  </button>
-                  <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-md bg-[var(--muted)] flex items-center justify-center">
-                      <User className="w-3.5 h-3.5 text-[var(--muted-foreground)]" />
-                    </div>
-                    <span className="font-medium text-sm">{selectedChef.name}</span>
+              <div className="space-y-5">
+                <div className="flex items-center gap-3">
+                  <PinBackButton onClick={() => setSelectedChef(null)} />
+                  <div className="flex items-center gap-2.5">
+                    <StaffAvatar icon={ChefHat} sm />
+                    <span className="font-semibold text-sm text-[var(--foreground)]">
+                      {selectedChef.name}
+                    </span>
                   </div>
                 </div>
-                <p className="text-xs text-[var(--muted-foreground)] text-center">أدخل رمز PIN</p>
-                <PinInput onSubmit={submitIndividual} submitting={submitting} length={6} />
+                <p className="text-xs text-[var(--muted-foreground)] text-center">
+                  {tx("kitchen.enterPin")}
+                </p>
+                <StaffPinInput onSubmit={submitIndividual} submitting={submitting} length={6} />
               </div>
             )}
           </>
         )}
 
         <div className="text-center">
-          <Link to="/" className="text-xs text-[var(--muted-foreground)] hover:text-[var(--primary)]">
-            {t("common.backHome")}
-          </Link>
+          <BackHomeLink label={tx("common.backToHome")} />
         </div>
       </div>
     </div>

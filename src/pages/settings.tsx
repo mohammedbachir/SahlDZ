@@ -1096,7 +1096,7 @@ function SettingsPage() {
         .from("orders")
         .select("id")
         .eq("restaurant_id", r.id);
-      const orderIds = (orderRows ?? []).map((o) => o.id);
+      const orderIds = (orderRows ?? []).map((o: any) => o.id);
       if (orderIds.length) {
         await supabase.from("order_items").delete().in("order_id", orderIds);
       }

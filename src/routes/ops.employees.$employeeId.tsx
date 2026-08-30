@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { tx } from "@/lib/ops-tx";
+import { GLOBAL_ROLES } from "@/lib/staff-core";
 import { useTranslation } from "react-i18next";
 
 export const Route = createFileRoute("/ops/employees/$employeeId")({
@@ -27,8 +28,6 @@ type StaffMember = {
   freeze_reason: string | null;
   created_at?: string;
 };
-
-const GLOBAL_ROLES = ["كاشير", "نادل", "مطبخ", "استقبال"];
 
 function EmployeeInfo() {
   useTranslation();

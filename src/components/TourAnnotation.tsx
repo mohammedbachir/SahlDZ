@@ -99,8 +99,12 @@ export function TourAnnotation({ target, label, text }: TourAnnotationProps) {
           borderRight: side === "left" ? undefined : "3px solid var(--primary)",
         }}
       >
-        <div className="text-xs font-bold text-[var(--primary)] mb-1">{label}</div>
-        <p className="text-[11px] text-[var(--foreground)] leading-relaxed">{text}</p>
+        <div className="text-xs font-bold text-[var(--primary)] mb-1">
+          {label}
+        </div>
+        <p className="text-[11px] text-[var(--foreground)] leading-relaxed">
+          {text}
+        </p>
       </div>
     </div>
   );

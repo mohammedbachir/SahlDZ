@@ -14,6 +14,7 @@ import {
   MessageSquareWarning,
   ClipboardCheck,
   Settings,
+  Calculator,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { requireAuth } from "@/lib/auth";
@@ -25,6 +26,7 @@ import { useTranslation } from "react-i18next";
 
 
 export const Route = createFileRoute("/ops")({
+  beforeLoad: requireAuth,
   component: OpsLayout,
 });
 
@@ -41,6 +43,7 @@ type NavItem = {
     | "/ops/staff-performance"
     | "/ops/complaints"
     | "/ops/inventory-count"
+    | "/ops/accounting"
     ;
   label: string;
   icon: typeof LayoutDashboard;
@@ -60,6 +63,7 @@ const ALL_NAV: NavItem[] = [
   { to: "/ops/waste", label: tx("سجل الهدر"), icon: Trash2, roles: ["admin", "operations_manager", "production_manager"] },
   { to: "/ops/complaints", label: tx("الشكاوى"), icon: MessageSquareWarning, roles: ["admin", "operations_manager"] },
   { to: "/ops/reports", label: tx("التقارير"), icon: BarChart3, roles: ["admin", "operations_manager", "hr_manager"] },
+  { to: "/ops/accounting", label: tx("المحاسبة"), icon: Calculator, roles: ["admin", "operations_manager"] },
 ];
 
 const ROLE_LABELS: Record<string, string> = {
@@ -100,7 +104,11 @@ function OpsLayout() {
         .select("role")
         .eq("user_id", user.id)
         .maybeSingle();
-      const role = data?.role ?? "admin";
+      // Restaurant owners have no `user_roles` row in production → default
+      // them to the full "admin" access. Unknown roles (e.g. stale seed data
+      // like "owner") also land on admin rather than an empty sidebar.
+      let role = data?.role ?? "admin";
+      if (!ROLE_LABELS[role]) role = "admin";
       setUserRole(role);
       // If this role can't access the overview page and the user landed there, redirect
       if ((pathname === "/ops" || pathname === "/ops/") && REDIRECT_FROM_OVERVIEW[role]) {
@@ -118,6 +126,8 @@ function OpsLayout() {
     exact ? pathname === to : pathname === to || pathname.startsWith(to + "/");
 
   const handleLogout = async () => {
+    localStorage.removeItem("sahl_dz_preview_role");
+    localStorage.removeItem("sahl_dz_auth_cache");
     await supabase.auth.signOut();
     navigate({ to: "/login" });
   };

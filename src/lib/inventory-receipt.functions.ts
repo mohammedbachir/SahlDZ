@@ -10,9 +10,7 @@ export type ReceiptItem = {
 
 export const analyzeReceipt = createServerFn({ method: "POST" })
   .validator((d: { imageBase64: string; mimeType: string }) => d)
-  .handler(
-    async (): Promise<{ items: ReceiptItem[]; rawText: string }> => ({
-      items: [],
-      rawText: "",
-    }),
-  );
+  .handler(async (): Promise<{ items: ReceiptItem[]; rawText: string }> => ({
+    items: [],
+    rawText: "",
+  }));

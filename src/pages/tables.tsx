@@ -61,19 +61,6 @@ export default function TablesPage() {
 
   useEffect(() => {
     if (!restaurantId) {
-      // Mock data for preview
-      setTables([
-        { id: "t1", table_number: 1, qr_token: "mock-token-1", restaurant_id: "mock" },
-        { id: "t2", table_number: 2, qr_token: "mock-token-2", restaurant_id: "mock" },
-        { id: "t3", table_number: 3, qr_token: "mock-token-3", restaurant_id: "mock" },
-        { id: "t4", table_number: 4, qr_token: "mock-token-4", restaurant_id: "mock" },
-        { id: "t5", table_number: 5, qr_token: "mock-token-5", restaurant_id: "mock" },
-        { id: "t6", table_number: 6, qr_token: "mock-token-6", restaurant_id: "mock" },
-        { id: "t7", table_number: 7, qr_token: "mock-token-7", restaurant_id: "mock" },
-        { id: "t8", table_number: 8, qr_token: "mock-token-8", restaurant_id: "mock" },
-        { id: "t9", table_number: 9, qr_token: "mock-token-9", restaurant_id: "mock" },
-        { id: "t10", table_number: 10, qr_token: "mock-token-10", restaurant_id: "mock" },
-      ]);
       setLoading(false);
       return;
     }

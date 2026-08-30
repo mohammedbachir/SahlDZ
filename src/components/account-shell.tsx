@@ -2,6 +2,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState, type ReactNode } from "react";
 import { LayoutDashboard, LogOut } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { tx } from "@/lib/ops-tx";
 
 type Restaurant = { name: string; logo_url: string | null };
 
@@ -44,12 +45,17 @@ export function AccountShell({
   }, []);
 
   const handleLogout = async () => {
+    localStorage.removeItem("sahl_dz_preview_role");
+    localStorage.removeItem("sahl_dz_auth_cache");
     await supabase.auth.signOut();
     navigate({ to: "/login" });
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-[var(--background)]" dir="rtl">
+    <div
+      className="min-h-screen flex flex-col bg-[var(--background)]"
+      dir="rtl"
+    >
       {/* Header */}
       <header className="h-14 md:h-16 bg-[var(--card)] border-b border-[var(--border)] flex items-center justify-between px-4 md:px-6 sticky top-0 z-30">
         <div className="flex items-center gap-3 min-w-0">
@@ -61,14 +67,18 @@ export function AccountShell({
                 className="w-full h-full object-cover"
               />
             ) : (
-              <span>{restaurant?.name?.[0] ?? "م"}</span>
+              <span>
+                {restaurant?.name?.[0] ?? tx("account.fallbackInitial")}
+              </span>
             )}
           </div>
           <div className="leading-tight min-w-0">
             <div className="font-bold text-sm truncate text-[var(--foreground)]">
-              {restaurant?.name ?? "حساب المالك"}
+              {restaurant?.name ?? tx("account.ownerAccount")}
             </div>
-            <div className="text-[11px] text-[var(--muted-foreground)]">حساب المالك</div>
+            <div className="text-[11px] text-[var(--muted-foreground)]">
+              {tx("account.ownerAccount")}
+            </div>
           </div>
         </div>
 
@@ -78,15 +88,17 @@ export function AccountShell({
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--primary)]/10 text-[var(--primary)] hover:bg-[var(--primary)]/20 transition-colors"
           >
             <LayoutDashboard className="w-4 h-4" />
-            <span className="hidden sm:inline">إدارة العمليات</span>
-            <span className="sm:hidden">العمليات</span>
+            <span className="hidden sm:inline">
+              {tx("account.operationsManagement")}
+            </span>
+            <span className="sm:hidden">{tx("account.operationsShort")}</span>
           </Link>
           <button
             onClick={handleLogout}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-[var(--muted-foreground)] hover:bg-[var(--muted)] hover:text-[var(--foreground)] transition-colors"
           >
             <LogOut className="w-4 h-4" />
-            <span className="hidden sm:inline">تسجيل الخروج</span>
+            <span className="hidden sm:inline">{tx("account.logout")}</span>
           </button>
         </div>
       </header>

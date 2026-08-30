@@ -11,6 +11,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { tx } from "@/lib/ops-tx";
+import { GLOBAL_ROLES, generateUniqueSerial, generateUniquePin } from "@/lib/staff-core";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -55,42 +56,6 @@ type StaffMember = {
 };
 
 type CustomRole = { id: string; name: string };
-
-const GLOBAL_ROLES = ["كاشير", "نادل", "مطبخ", "استقبال"];
-
-const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-
-const randomSerial = () => {
-  let letters = "";
-  for (let i = 0; i < 4; i++) letters += LETTERS[Math.floor(Math.random() * 26)];
-  const digits = String(Math.floor(100000 + Math.random() * 900000));
-  return `${letters}-${digits}`;
-};
-
-const randomPin = () => {
-  const len = Math.random() < 0.5 ? 4 : 6;
-  const min = len === 4 ? 1000 : 100000;
-  const max = len === 4 ? 9999 : 999999;
-  return String(min + Math.floor(Math.random() * (max - min + 1)));
-};
-
-async function generateUniqueSerial(): Promise<string> {
-  for (let i = 0; i < 30; i++) {
-    const s = randomSerial();
-    const { data } = await supabase.from("staff").select("id").eq("serial", s);
-    if ((data?.length ?? 0) === 0) return s;
-  }
-  return randomSerial();
-}
-
-async function generateUniquePin(): Promise<string> {
-  for (let i = 0; i < 30; i++) {
-    const pin = randomPin();
-    const { data } = await supabase.from("staff").select("id").eq("pin", pin);
-    if ((data?.length ?? 0) === 0) return pin;
-  }
-  return randomPin();
-}
 
 function OpsEmployees() {
   useTranslation();

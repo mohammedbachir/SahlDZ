@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { Check, ArrowLeft, Lightbulb } from "lucide-react";
 import { TourAnnotation } from "@/components/TourAnnotation";
+import { tx } from "@/lib/ops-tx";
 
 const OPS_PATHS = ["/ops", "/ops/inventory", "/ops/recipes"] as const;
 type OpsPath = (typeof OPS_PATHS)[number];
@@ -100,7 +101,10 @@ export function OpsTour() {
   const [showTip, setShowTip] = useState(false);
   const isLast = stepIndex === opsTourSteps.length - 1;
   const progress = ((stepIndex + 1) / opsTourSteps.length) * 100;
-  const visibleAnnotations = current.annotations.slice(0, showTip ? current.annotations.length : 1);
+  const visibleAnnotations = current.annotations.slice(
+    0,
+    showTip ? current.annotations.length : 1,
+  );
 
   useEffect(() => {
     setShowTip(false);
@@ -132,7 +136,12 @@ export function OpsTour() {
     <>
       {/* Content annotations using Floating UI */}
       {visibleAnnotations.map((ann, i) => (
-        <TourAnnotation key={i} target={ann.target} label={ann.label} text={ann.text} />
+        <TourAnnotation
+          key={i}
+          target={ann.target}
+          label={ann.label}
+          text={ann.text}
+        />
       ))}
 
       {/* Arrow coachmark pointing to the ops sidebar item */}
@@ -188,7 +197,9 @@ export function OpsTour() {
           {/* Text */}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-0.5">
-              <span className="text-xs font-bold text-[var(--primary)]">{current.title}</span>
+              <span className="text-xs font-bold text-[var(--primary)]">
+                {current.title}
+              </span>
               <span className="text-[10px] text-[var(--muted-foreground)]">
                 {stepIndex + 1} / {opsTourSteps.length}
               </span>
@@ -213,7 +224,7 @@ export function OpsTour() {
               onClick={handleSkip}
               className="text-[10px] text-[var(--muted-foreground)] hover:text-[var(--foreground)] whitespace-nowrap transition-colors"
             >
-              تخطي
+              {tx("tour.ops.skip")}
             </button>
             <Button
               size="sm"
@@ -221,15 +232,15 @@ export function OpsTour() {
               className="bg-[var(--primary)] text-[#1a1612] hover:bg-[var(--primary)]/90 h-7 text-xs font-bold whitespace-nowrap"
             >
               {!showTip ? (
-                "فهمت"
+                tx("tour.ops.understood")
               ) : isLast ? (
                 <>
-                  أنهينا
+                  {tx("tour.ops.finished")}
                   <Check className="w-3.5 h-3.5 mr-1" />
                 </>
               ) : (
                 <>
-                  التالي
+                  {tx("tour.ops.next")}
                   <ArrowLeft className="w-3.5 h-3.5 mr-1" />
                 </>
               )}

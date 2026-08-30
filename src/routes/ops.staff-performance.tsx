@@ -1,17 +1,206 @@
+import { useEffect, useState, useMemo } from "react";
 import { createFileRoute } from "@tanstack/react-router";
+import { TrendingUp, Users, UtensilsCrossed, Trash2, Loader2, Filter } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useRestaurantId, formatDZD } from "@/lib/restaurant";
 import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from "@/components/ui/table";
+import { tx } from "@/lib/ops-tx";
+
 
 export const Route = createFileRoute("/ops/staff-performance")({
   component: OpsStaffPerformance,
 });
 
+type StaffPerf = {
+  id: string;
+  name: string;
+  role: string;
+  orders_served: number;
+  waste_logged: number;
+  waste_cost: number;
+};
+
+const ROLE_COLORS: Record<string, string> = {
+  "نادل": "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
+  "مطبخ": "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300",
+  "كاشير": "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
+  "استقبال": "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300",
+};
+
+function startOfMonth() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+}
+
+function today() {
+  return new Date().toISOString().slice(0, 10);
+}
+
 function OpsStaffPerformance() {
+  const { restaurantId } = useRestaurantId();
+
+
+  const [staff, setStaff] = useState<StaffPerf[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [from, setFrom] = useState(startOfMonth());
+  const [to, setTo] = useState(today());
+
+  useEffect(() => {
+    if (restaurantId === undefined) return;
+    if (!restaurantId) {
+      setLoading(false);
+      return;
+    }
+    let cancel = false;
+    (async () => {
+      setLoading(true);
+
+      // 1. Get all staff
+      const { data: staffRows } = await supabase
+        .from("staff")
+        .select("*")
+        .eq("restaurant_id", restaurantId);
+      if (cancel) return;
+
+      // 2. Get orders served per staff (served_by field)
+      const { data: orders } = await supabase
+        .from("orders")
+        .select("served_by")
+        .eq("restaurant_id", restaurantId)
+        .eq("status", "paid")
+        .gte("created_at", from + "T00:00:00")
+        .lte("created_at", to + "T23:59:59");
+
+      const servedCounts = new Map<string, number>();
+      for (const o of orders ?? []) {
+        const sb = (o as any).served_by;
+        if (sb) servedCounts.set(sb, (servedCounts.get(sb) ?? 0) + 1);
+      }
+
+      // 3. Get waste logged per staff (logged_by field)
+      const { data: wasteRows } = await supabase
+        .from("waste_logs")
+        .select("logged_by,cost")
+        .eq("restaurant_id", restaurantId)
+        .gte("created_at", from + "T00:00:00")
+        .lte("created_at", to + "T23:59:59");
+
+      const wasteByStaff = new Map<string, { count: number; cost: number }>();
+      for (const w of wasteRows ?? []) {
+        const lb = (w as any).logged_by;
+        if (lb) {
+          const prev = wasteByStaff.get(lb) ?? { count: 0, cost: 0 };
+          prev.count++;
+          prev.cost += Number((w as any).cost ?? 0);
+          wasteByStaff.set(lb, prev);
+        }
+      }
+
+      const result: StaffPerf[] = (staffRows ?? []).map((s: any) => {
+        const name = s.name as string;
+        const waste = wasteByStaff.get(name) ?? { count: 0, cost: 0 };
+        return {
+          id: s.id,
+          name,
+          role: s.role ?? "",
+          orders_served: servedCounts.get(s.id) ?? 0,
+          waste_logged: waste.count,
+          waste_cost: waste.cost,
+        };
+      });
+
+      result.sort((a, b) => b.orders_served - a.orders_served);
+      setStaff(result);
+      setLoading(false);
+    })();
+    return () => { cancel = true; };
+  }, [restaurantId, from, to]);
+
   return (
-    <Card className="p-8 text-center">
-      <h2 className="text-lg font-bold text-amber-700">أداء الموظفين</h2>
-      <p className="mt-2 text-sm text-muted-foreground">
-        هذه الصفحة غير مرفوعة في هذه النسخة من المشروع (وضع المعاينة).
-      </p>
-    </Card>
+    <div className="p-2 space-y-4" dir="rtl">
+      <div className="flex items-center gap-2">
+        <TrendingUp className="w-5 h-5 text-[var(--primary)]" />
+        <h1 className="text-lg font-bold">{tx("أداء الموظفين")}</h1>
+      </div>
+
+      {/* Date Range */}
+      <Card className="p-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <Filter className="w-4 h-4 text-[var(--muted-foreground)]" />
+          <span className="text-xs font-medium">{tx("من")}</span>
+          <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="h-8 w-32 text-xs" />
+          <span className="text-xs font-medium">{tx("إلى")}</span>
+          <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="h-8 w-32 text-xs" />
+        </div>
+      </Card>
+
+      {/* Summary Cards */}
+      <div className="grid gap-3 grid-cols-3">
+        <Card className="p-3 text-center">
+          <Users className="w-4 h-4 mx-auto text-[var(--primary)] mb-1" />
+          <div className="text-xs text-[var(--muted-foreground)]">{tx("عدد الموظفين")}</div>
+          <div className="text-lg font-bold">{staff.length}</div>
+        </Card>
+        <Card className="p-3 text-center">
+          <UtensilsCrossed className="w-4 h-4 mx-auto text-blue-500 mb-1" />
+          <div className="text-xs text-[var(--muted-foreground)]">{tx("إجمالي الطلبات المُقدّمة")}</div>
+          <div className="text-lg font-bold">{staff.reduce((s, st) => s + st.orders_served, 0)}</div>
+        </Card>
+        <Card className="p-3 text-center">
+          <Trash2 className="w-4 h-4 mx-auto text-red-500 mb-1" />
+          <div className="text-xs text-[var(--muted-foreground)]">{tx("الهدر المسجّل")}</div>
+          <div className="text-lg font-bold">{staff.reduce((s, st) => s + st.waste_logged, 0)}</div>
+        </Card>
+      </div>
+
+      {/* Table */}
+      <Card>
+        {loading ? (
+          <div className="p-8 flex items-center justify-center">
+            <Loader2 className="w-5 h-5 animate-spin text-[var(--muted-foreground)]" />
+          </div>
+        ) : staff.length === 0 ? (
+          <div className="p-8 text-center text-sm text-[var(--muted-foreground)]">
+            {tx("لا يوجد موظفين")}
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="text-xs">{tx("الموظف")}</TableHead>
+                  <TableHead className="text-xs">{tx("الدور")}</TableHead>
+                  <TableHead className="text-xs text-left">{tx("طلبات مُقدّمة")}</TableHead>
+                  <TableHead className="text-xs text-left">{tx("هدر مسجّل")}</TableHead>
+                  <TableHead className="text-xs text-left">{tx("تكلفة الهدر")}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {staff.map((s) => (
+                  <TableRow key={s.id}>
+                    <TableCell className="text-sm font-medium">{s.name}</TableCell>
+                    <TableCell>
+                      <Badge variant="secondary" className={`text-[10px] ${ROLE_COLORS[s.role] ?? ""}`}>
+                        {s.role}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-xs font-bold text-left tabular-nums">{s.orders_served}</TableCell>
+                    <TableCell className="text-xs text-left tabular-nums">{s.waste_logged}</TableCell>
+                    <TableCell className="text-xs text-left tabular-nums text-red-600">
+                      {s.waste_cost > 0 ? formatDZD(s.waste_cost) : "—"}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </Card>
+    </div>
   );
 }

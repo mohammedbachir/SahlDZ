@@ -1,1 +1,366 @@
-{"nodes": [{"id": "claude", "label": "CLAUDE.md", "file_type": "document", "source_file": "CLAUDE.md", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null}, {"id": "claude_sahldz_resto_hub", "label": "SahlDZ/Resto Hub", "file_type": "concept", "source_file": "CLAUDE.md", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null, "rationale": "Arabic RTL restaurant-management web app whose design work (onboarding tours + backend-free preview mode) is layered onto the existing restaurant-management application."}, {"id": "claude_tech_stack", "label": "React 19 / TanStack Start / Vite / Tailwind / Radix Stack", "file_type": "concept", "source_file": "CLAUDE.md", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null}, {"id": "claude_file_based_routing", "label": "File-Based Routing", "file_type": "rationale", "source_file": "CLAUDE.md", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null, "rationale": "Route tree is generated from file routes; routeTree.gen.ts must never be edited by hand and must be regenerated through the TanStack/Vite dev workflow."}, {"id": "claude_generated_routing", "label": "Generated Route Tree", "file_type": "concept", "source_file": "CLAUDE.md", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null}, {"id": "claude_dashboard_ops_surfaces", "label": "Dashboard and Operations Surfaces", "file_type": "concept", "source_file": "CLAUDE.md", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null}, {"id": "claude_auth_guards", "label": "Auth Guards and Post-Auth Routing", "file_type": "concept", "source_file": "CLAUDE.md", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null}, {"id": "claude_supabase_firebase_adapter", "label": "Supabase-Compatible Firebase Adapter", "file_type": "concept", "source_file": "CLAUDE.md", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null, "rationale": "Backend boundary keeps existing application code importing 'supabase' while the name re-exports a Supabase-compatible adapter implemented over Firebase, avoiding a rewrite; behavior can therefore differ from real Supabase."}, {"id": "claude_domain_functions", "label": "Domain Operations Modules", "file_type": "concept", "source_file": "CLAUDE.md", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null}, {"id": "claude_preview_mode", "label": "Backend-Free Preview Mode", "file_type": "concept", "source_file": "CLAUDE.md", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null, "rationale": "App runs without a configured backend: Firebase init is optional (VITE_FIREBASE_* envs), and when absent the adapter returns preview-safe stubs; role-login/screen routes must keep real Firebase-backed behavior distinct from demo behavior."}, {"id": "claude_arabic_i18n", "label": "Arabic RTL i18n", "file_type": "concept", "source_file": "CLAUDE.md", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null, "rationale": "Primary interface language is Arabic; i18next/react-i18next is initialized with Arabic as both active and fallback language, with switching handled by UI."}], "edges": [{"source": "claude", "target": "readme_readme", "relation": "cites", "confidence": "EXTRACTED", "confidence_score": 1.0, "source_file": "CLAUDE.md", "source_location": null, "weight": 1.0}, {"source": "claude_sahldz_resto_hub", "target": "claude_tech_stack", "relation": "conceptually_related_to", "confidence": "EXTRACTED", "confidence_score": 1.0, "source_file": "CLAUDE.md", "source_location": null, "weight": 1.0}, {"source": "claude_sahldz_resto_hub", "target": "claude_preview_mode", "relation": "conceptually_related_to", "confidence": "EXTRACTED", "confidence_score": 1.0, "source_file": "CLAUDE.md", "source_location": null, "weight": 1.0}, {"source": "claude_sahldz_resto_hub", "target": "claude_arabic_i18n", "relation": "conceptually_related_to", "confidence": "EXTRACTED", "confidence_score": 1.0, "source_file": "CLAUDE.md", "source_location": null, "weight": 1.0}, {"source": "claude_supabase_firebase_adapter", "target": "claude_preview_mode", "relation": "conceptually_related_to", "confidence": "EXTRACTED", "confidence_score": 1.0, "source_file": "CLAUDE.md", "source_location": null, "weight": 1.0}, {"source": "claude_dashboard_ops_surfaces", "target": "claude_auth_guards", "relation": "conceptually_related_to", "confidence": "EXTRACTED", "confidence_score": 1.0, "source_file": "CLAUDE.md", "source_location": null, "weight": 1.0}, {"source": "claude_file_based_routing", "target": "claude_generated_routing", "relation": "conceptually_related_to", "confidence": "EXTRACTED", "confidence_score": 1.0, "source_file": "CLAUDE.md", "source_location": null, "weight": 1.0}, {"source": "claude_supabase_firebase_adapter", "target": "docs_website_issues_supabase_compat_naming", "relation": "conceptually_related_to", "confidence": "INFERRED", "confidence_score": 0.95, "source_file": "CLAUDE.md", "source_location": null, "weight": 1.0}, {"source": "claude_supabase_firebase_adapter", "target": "docs_website_issues_firebase_adapter_query_semantics", "relation": "conceptually_related_to", "confidence": "INFERRED", "confidence_score": 0.95, "source_file": "CLAUDE.md", "source_location": null, "weight": 1.0}, {"source": "claude_domain_functions", "target": "docs_website_issues_stub_server_functions", "relation": "conceptually_related_to", "confidence": "INFERRED", "confidence_score": 0.95, "source_file": "CLAUDE.md", "source_location": null, "weight": 1.0}, {"source": "claude_preview_mode", "target": "docs_website_issues_authenticated_preview_fallback", "relation": "conceptually_related_to", "confidence": "INFERRED", "confidence_score": 0.85, "source_file": "CLAUDE.md", "source_location": null, "weight": 1.0}, {"source": "claude_preview_mode", "target": "docs_website_issues_static_preview_tokens", "relation": "conceptually_related_to", "confidence": "INFERRED", "confidence_score": 0.75, "source_file": "CLAUDE.md", "source_location": null, "weight": 1.0}, {"source": "claude_arabic_i18n", "target": "docs_website_issues_i18n_incomplete", "relation": "conceptually_related_to", "confidence": "INFERRED", "confidence_score": 0.85, "source_file": "CLAUDE.md", "source_location": null, "weight": 1.0}, {"source": "claude_auth_guards", "target": "docs_website_issues_setup_not_implemented", "relation": "conceptually_related_to", "confidence": "INFERRED", "confidence_score": 0.85, "source_file": "CLAUDE.md", "source_location": null, "weight": 1.0}, {"source": "claude_domain_functions", "target": "docs_website_issues_role_function_placeholders", "relation": "conceptually_related_to", "confidence": "INFERRED", "confidence_score": 0.85, "source_file": "CLAUDE.md", "source_location": null, "weight": 1.0}, {"source": "claude_supabase_firebase_adapter", "target": "docs_website_solutions_adapter_redesign", "relation": "conceptually_related_to", "confidence": "INFERRED", "confidence_score": 0.85, "source_file": "CLAUDE.md", "source_location": null, "weight": 1.0}, {"source": "claude_preview_mode", "target": "docs_website_solutions_preview_separation", "relation": "conceptually_related_to", "confidence": "INFERRED", "confidence_score": 0.85, "source_file": "CLAUDE.md", "source_location": null, "weight": 1.0}, {"source": "claude_arabic_i18n", "target": "docs_website_solutions_i18n_completion", "relation": "conceptually_related_to", "confidence": "INFERRED", "confidence_score": 0.85, "source_file": "CLAUDE.md", "source_location": null, "weight": 1.0}, {"source": "claude_domain_functions", "target": "docs_website_solutions_real_server_functions", "relation": "conceptually_related_to", "confidence": "INFERRED", "confidence_score": 0.85, "source_file": "CLAUDE.md", "source_location": null, "weight": 1.0}, {"source": "claude_domain_functions", "target": "docs_website_solutions_role_functions_completion", "relation": "conceptually_related_to", "confidence": "INFERRED", "confidence_score": 0.85, "source_file": "CLAUDE.md", "source_location": null, "weight": 1.0}], "hyperedges": [{"id": "preview_mode_architecture", "label": "Backend-Free Preview Mode Architecture and Risks", "nodes": ["claude_preview_mode", "readme_preview_mode", "docs_website_issues_authenticated_preview_fallback", "docs_website_issues_static_preview_tokens", "docs_website_solutions_preview_separation", "docs_website_solutions_preview_token_security"], "relation": "participate_in", "confidence": "INFERRED", "confidence_score": 0.85, "source_file": "CLAUDE.md"}, {"id": "backend_adapter_boundary", "label": "Supabase-Compatible Firebase Adapter Boundary", "nodes": ["claude_supabase_firebase_adapter", "docs_website_issues_supabase_compat_naming", "docs_website_issues_firebase_adapter_query_semantics", "docs_website_issues_any_usage", "docs_website_solutions_adapter_redesign", "docs_website_solutions_backend_decision"], "relation": "participate_in", "confidence": "INFERRED", "confidence_score": 0.85, "source_file": "CLAUDE.md"}]}
+{
+  "nodes": [
+    {
+      "id": "claude",
+      "label": "CLAUDE.md",
+      "file_type": "document",
+      "source_file": "CLAUDE.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "claude_sahldz_resto_hub",
+      "label": "SahlDZ/Resto Hub",
+      "file_type": "concept",
+      "source_file": "CLAUDE.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "rationale": "Arabic RTL restaurant-management web app whose design work (onboarding tours + backend-free preview mode) is layered onto the existing restaurant-management application."
+    },
+    {
+      "id": "claude_tech_stack",
+      "label": "React 19 / TanStack Start / Vite / Tailwind / Radix Stack",
+      "file_type": "concept",
+      "source_file": "CLAUDE.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "claude_file_based_routing",
+      "label": "File-Based Routing",
+      "file_type": "rationale",
+      "source_file": "CLAUDE.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "rationale": "Route tree is generated from file routes; routeTree.gen.ts must never be edited by hand and must be regenerated through the TanStack/Vite dev workflow."
+    },
+    {
+      "id": "claude_generated_routing",
+      "label": "Generated Route Tree",
+      "file_type": "concept",
+      "source_file": "CLAUDE.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "claude_dashboard_ops_surfaces",
+      "label": "Dashboard and Operations Surfaces",
+      "file_type": "concept",
+      "source_file": "CLAUDE.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "claude_auth_guards",
+      "label": "Auth Guards and Post-Auth Routing",
+      "file_type": "concept",
+      "source_file": "CLAUDE.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "claude_supabase_firebase_adapter",
+      "label": "Supabase-Compatible Firebase Adapter",
+      "file_type": "concept",
+      "source_file": "CLAUDE.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "rationale": "Backend boundary keeps existing application code importing 'supabase' while the name re-exports a Supabase-compatible adapter implemented over Firebase, avoiding a rewrite; behavior can therefore differ from real Supabase."
+    },
+    {
+      "id": "claude_domain_functions",
+      "label": "Domain Operations Modules",
+      "file_type": "concept",
+      "source_file": "CLAUDE.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "claude_preview_mode",
+      "label": "Backend-Free Preview Mode",
+      "file_type": "concept",
+      "source_file": "CLAUDE.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "rationale": "App runs without a configured backend: Firebase init is optional (VITE_FIREBASE_* envs), and when absent the adapter returns preview-safe stubs; role-login/screen routes must keep real Firebase-backed behavior distinct from demo behavior."
+    },
+    {
+      "id": "claude_arabic_i18n",
+      "label": "Arabic RTL i18n",
+      "file_type": "concept",
+      "source_file": "CLAUDE.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "rationale": "Primary interface language is Arabic; i18next/react-i18next is initialized with Arabic as both active and fallback language, with switching handled by UI."
+    }
+  ],
+  "edges": [
+    {
+      "source": "claude",
+      "target": "readme_readme",
+      "relation": "cites",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "CLAUDE.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "claude_sahldz_resto_hub",
+      "target": "claude_tech_stack",
+      "relation": "conceptually_related_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "CLAUDE.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "claude_sahldz_resto_hub",
+      "target": "claude_preview_mode",
+      "relation": "conceptually_related_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "CLAUDE.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "claude_sahldz_resto_hub",
+      "target": "claude_arabic_i18n",
+      "relation": "conceptually_related_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "CLAUDE.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "claude_supabase_firebase_adapter",
+      "target": "claude_preview_mode",
+      "relation": "conceptually_related_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "CLAUDE.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "claude_dashboard_ops_surfaces",
+      "target": "claude_auth_guards",
+      "relation": "conceptually_related_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "CLAUDE.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "claude_file_based_routing",
+      "target": "claude_generated_routing",
+      "relation": "conceptually_related_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "CLAUDE.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "claude_supabase_firebase_adapter",
+      "target": "docs_website_issues_supabase_compat_naming",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "CLAUDE.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "claude_supabase_firebase_adapter",
+      "target": "docs_website_issues_firebase_adapter_query_semantics",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "CLAUDE.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "claude_domain_functions",
+      "target": "docs_website_issues_stub_server_functions",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "CLAUDE.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "claude_preview_mode",
+      "target": "docs_website_issues_authenticated_preview_fallback",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "CLAUDE.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "claude_preview_mode",
+      "target": "docs_website_issues_static_preview_tokens",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.75,
+      "source_file": "CLAUDE.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "claude_arabic_i18n",
+      "target": "docs_website_issues_i18n_incomplete",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "CLAUDE.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "claude_auth_guards",
+      "target": "docs_website_issues_setup_not_implemented",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "CLAUDE.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "claude_domain_functions",
+      "target": "docs_website_issues_role_function_placeholders",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "CLAUDE.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "claude_supabase_firebase_adapter",
+      "target": "docs_website_solutions_adapter_redesign",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "CLAUDE.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "claude_preview_mode",
+      "target": "docs_website_solutions_preview_separation",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "CLAUDE.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "claude_arabic_i18n",
+      "target": "docs_website_solutions_i18n_completion",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "CLAUDE.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "claude_domain_functions",
+      "target": "docs_website_solutions_real_server_functions",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "CLAUDE.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "claude_domain_functions",
+      "target": "docs_website_solutions_role_functions_completion",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "CLAUDE.md",
+      "source_location": null,
+      "weight": 1.0
+    }
+  ],
+  "hyperedges": [
+    {
+      "id": "preview_mode_architecture",
+      "label": "Backend-Free Preview Mode Architecture and Risks",
+      "nodes": [
+        "claude_preview_mode",
+        "readme_preview_mode",
+        "docs_website_issues_authenticated_preview_fallback",
+        "docs_website_issues_static_preview_tokens",
+        "docs_website_solutions_preview_separation",
+        "docs_website_solutions_preview_token_security"
+      ],
+      "relation": "participate_in",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "CLAUDE.md"
+    },
+    {
+      "id": "backend_adapter_boundary",
+      "label": "Supabase-Compatible Firebase Adapter Boundary",
+      "nodes": [
+        "claude_supabase_firebase_adapter",
+        "docs_website_issues_supabase_compat_naming",
+        "docs_website_issues_firebase_adapter_query_semantics",
+        "docs_website_issues_any_usage",
+        "docs_website_solutions_adapter_redesign",
+        "docs_website_solutions_backend_decision"
+      ],
+      "relation": "participate_in",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "CLAUDE.md"
+    }
+  ]
+}

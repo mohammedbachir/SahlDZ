@@ -28,6 +28,8 @@ import {
 import { formatDZD } from "@/lib/restaurant";
 import { supabase } from "@/integrations/supabase/client";
 import { isPreviewToken, PREVIEW_RESTAURANT } from "@/lib/preview-mode";
+import { tx } from "@/lib/ops-tx";
+
 
 export const Route = createFileRoute("/cashier")({
   component: Page,
@@ -107,7 +109,7 @@ function Page() {
       const r = await zFn({ data: { token } });
       setZReport(r);
     } catch (e) {
-      toast.error((e as Error).message || "تعذّر جلب تقرير اليوم");
+      toast.error((e as Error).message || tx("cashierScreen.closeDayFailed"));
     } finally {
       setZLoading(false);
     }
@@ -174,17 +176,33 @@ function Page() {
     };
   }, [token, restaurant, refresh]);
 
+  // Heartbeat: re-check session expiry every 60s
+  useEffect(() => {
+    if (!token || isPreviewToken(token)) return;
+    const id = setInterval(() => {
+      const exp = sessionStorage.getItem("cashier_expires");
+      if (!exp || new Date(exp) < new Date()) {
+        sessionStorage.removeItem("cashier_token");
+        sessionStorage.removeItem("cashier_expires");
+        const r = sessionStorage.getItem("cashier_restaurant");
+        const rid = r ? (JSON.parse(r) as Restaurant).id : "";
+        navigate({ to: "/cashier-login", search: { r: rid } });
+      }
+    }, 60_000);
+    return () => clearInterval(id);
+  }, [token]);
+
   async function onSearch() {
     const num = Number(searchTable);
     if (!num || num < 1 || !token) {
-      toast.error("رقم طاولة غير صالح");
+      toast.error(tx("cashierScreen.invalidTableNumber"));
       return;
     }
     setSearching(true);
     try {
       const res = await lookupFn({ data: { token, tableNumber: num } });
       if (!res.orders.length) {
-        toast.error(`لا يوجد طلب نشط لطاولة ${num}`);
+        toast.error(`${tx("cashierScreen.noActiveOrderForTable")} ${num}`);
       } else {
         // Try to scroll to a matching ready order on screen
         const match = res.orders.find((o) => document.getElementById(`order-${o.id}`));
@@ -196,12 +214,12 @@ function Page() {
             setTimeout(() => el.classList.remove("ring-4", "ring-primary"), 2500);
           }
         } else {
-          toast(`طاولة ${num}: ${res.orders.length} طلب قيد التحضير`);
+          toast(`${tx("cashierScreen.tableLabel")} ${num}: ${res.orders.length} ${tx("cashierScreen.tablePreparing")}`);
         }
       }
       setSearchTable("");
     } catch (e) {
-      toast.error((e as Error).message || "فشل البحث");
+      toast.error((e as Error).message || tx("cashierScreen.searchFailed"));
     } finally {
       setSearching(false);
     }
@@ -217,7 +235,7 @@ function Page() {
       setReadyOrders((prev) => prev.filter((o) => o.id !== order.id));
       setTimeout(() => setSuccess(null), 1800);
     } catch (e) {
-      toast.error((e as Error).message || "فشل الدفع");
+      toast.error((e as Error).message || tx("cashierScreen.paymentFailed"));
     } finally {
       setPaying(null);
     }
@@ -226,7 +244,7 @@ function Page() {
   function printReceipt(order: ReadyOrder) {
     const w = window.open("", "_blank", "width=380,height=600");
     if (!w) {
-      toast.error("الرجاء السماح بالنوافذ المنبثقة للطباعة");
+      toast.error(tx("cashierScreen.allowPopups"));
       return;
     }
     const date = new Date(order.created_at);
@@ -238,7 +256,7 @@ function Page() {
         <tr>
           <td style="padding:4px 0;">${escapeHtml(it.name)}</td>
           <td style="text-align:center; padding:4px 0;">×${it.qty}</td>
-          <td style="text-align:left; padding:4px 0;">${(it.price * it.qty).toLocaleString("en-US")} دج</td>
+          <td style="text-align:left; padding:4px 0;">${(it.price * it.qty).toLocaleString("en-US")} ${tx("cashierScreen.receiptCurrency")}</td>
         </tr>`
       )
       .join("");
@@ -246,7 +264,7 @@ function Page() {
 <html dir="rtl" lang="ar">
 <head>
 <meta charset="utf-8" />
-<title>إيصال - ${orderNo}</title>
+<title>${tx("cashierScreen.receiptTitle")} - ${orderNo}</title>
 <style>
   @page { size: 80mm auto; margin: 4mm; }
   body { font-family: 'Cairo', system-ui, sans-serif; width: 72mm; margin: 0 auto; color: #000; }
@@ -262,32 +280,32 @@ function Page() {
 <body>
   <div class="center">
     <div class="name">${escapeHtml(restaurant?.name ?? "")}</div>
-    <div class="muted">إيصال دفع</div>
+    <div class="muted">${tx("cashierScreen.receiptPaymentSlip")}</div>
   </div>
   <hr />
   <div class="muted">
-    <div>رقم الطلب: <b>${orderNo}</b></div>
-    ${order.table_number != null ? `<div>الطاولة: <b>${order.table_number}</b></div>` : ""}
-    <div>التاريخ: ${dateStr}</div>
+    <div>${tx("cashierScreen.receiptOrderNumber")} <b>${orderNo}</b></div>
+    ${order.table_number != null ? `<div>${tx("cashierScreen.receiptTable")} <b>${order.table_number}</b></div>` : ""}
+    <div>${tx("cashierScreen.receiptDate")} ${dateStr}</div>
   </div>
   <hr />
   <table>
     <thead>
       <tr style="border-bottom:1px solid #000;">
-        <th style="text-align:right; padding:4px 0;">الصنف</th>
-        <th style="text-align:center; padding:4px 0;">الكمية</th>
-        <th style="text-align:left; padding:4px 0;">السعر</th>
+        <th style="text-align:right; padding:4px 0;">${tx("cashierScreen.receiptItem")}</th>
+        <th style="text-align:center; padding:4px 0;">${tx("cashierScreen.receiptQuantity")}</th>
+        <th style="text-align:left; padding:4px 0;">${tx("cashierScreen.receiptPrice")}</th>
       </tr>
     </thead>
     <tbody>${itemsHtml}</tbody>
   </table>
   <hr />
   <div class="total">
-    <span>المجموع</span>
-    <span>${order.total.toLocaleString("en-US")} دج</span>
+    <span>${tx("cashierScreen.receiptTotal")}</span>
+    <span>${order.total.toLocaleString("en-US")} ${tx("cashierScreen.receiptCurrency")}</span>
   </div>
   <hr />
-  <div class="center thanks">شكراً لزيارتكم 🙏</div>
+  <div class="center thanks">${tx("cashierScreen.receiptThanks")}</div>
   <script>
     window.onload = function() {
       window.focus();
@@ -337,14 +355,14 @@ function Page() {
             />
           ) : (
             <div className="w-9 h-9 rounded-lg bg-[var(--primary)] flex items-center justify-center text-[var(--primary-foreground)] font-bold text-sm shrink-0">
-              {restaurant.name?.[0] ?? "م"}
+              {restaurant.name?.[0] ?? tx("cashierScreen.defaultInitial")}
             </div>
           )}
           <div className="leading-tight min-w-0">
             <div className="font-bold text-sm truncate text-[var(--foreground)]">{restaurant.name}</div>
             <div className="text-[11px] text-[var(--muted-foreground)] flex items-center gap-1">
               <Calculator className="w-3 h-3" />
-              الكاشير
+              {tx("cashierScreen.cashierLabel")}
             </div>
           </div>
         </div>
@@ -359,7 +377,7 @@ function Page() {
               value={searchTable}
               onChange={(e) => setSearchTable(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && onSearch()}
-              placeholder="رقم الطاولة"
+              placeholder={tx("cashierScreen.tableNumberPlaceholder")}
               className="h-9 ps-3 pe-8 text-sm"
             />
           </div>
@@ -369,7 +387,7 @@ function Page() {
             size="sm"
             className="h-9"
           >
-            {searching ? <Loader2 className="w-4 h-4 animate-spin" /> : "بحث"}
+            {searching ? <Loader2 className="w-4 h-4 animate-spin" /> : tx("cashierScreen.search")}
           </Button>
         </div>
 
@@ -381,12 +399,12 @@ function Page() {
           className="gap-1.5 shrink-0"
         >
           {zLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileBarChart className="w-4 h-4" />}
-          <span className="hidden sm:inline">إغلاق اليوم</span>
+          <span className="hidden sm:inline">{tx("cashierScreen.closeDay")}</span>
         </Button>
 
         <Button variant="outline" size="sm" onClick={onLogout} className="gap-1.5 shrink-0">
           <LogOut className="w-4 h-4" />
-          <span className="hidden sm:inline">خروج</span>
+          <span className="hidden sm:inline">{tx("cashierScreen.logout")}</span>
         </Button>
       </header>
 
@@ -402,7 +420,7 @@ function Page() {
             <div className="flex items-center justify-between">
               <h2 className="font-bold text-sm flex items-center gap-2">
                 <FileBarChart className="w-4 h-4 text-[var(--primary)]" />
-                إغلاق اليوم — {zReport.dayKey}
+                {tx("cashierScreen.zReportTitle")} — {zReport.dayKey}
               </h2>
               <button onClick={() => setZReport(null)} className="text-[var(--muted-foreground)] hover:text-[var(--foreground)]">
                 <X className="w-4 h-4" />
@@ -413,32 +431,32 @@ function Page() {
               <div className="text-2xl font-extrabold text-[var(--primary)] tabular-nums">
                 {formatDZD(zReport.totalRevenue)}
               </div>
-              <div className="text-xs text-[var(--muted-foreground)] mt-1">إجمالي مبيعات اليوم</div>
+              <div className="text-xs text-[var(--muted-foreground)] mt-1">{tx("cashierScreen.dailySalesTotal")}</div>
             </div>
 
             <div className="grid grid-cols-2 gap-2 text-center">
               <div className="rounded-lg border border-[var(--border)] p-2.5">
                 <div className="font-bold text-sm tabular-nums">{zReport.totalOrders}</div>
-                <div className="text-[11px] text-[var(--muted-foreground)]">طلب مدفوع</div>
+                <div className="text-[11px] text-[var(--muted-foreground)]">{tx("cashierScreen.paidOrders")}</div>
               </div>
               <div className="rounded-lg border border-[var(--border)] p-2.5">
                 <div className="font-bold text-sm tabular-nums">{formatDZD(zReport.avgTicket)}</div>
-                <div className="text-[11px] text-[var(--muted-foreground)]">متوسط الفاتورة</div>
+                <div className="text-[11px] text-[var(--muted-foreground)]">{tx("cashierScreen.averageTicket")}</div>
               </div>
             </div>
 
             <div className="space-y-1.5 text-xs">
               {(
                 [
-                  ["dine_in", "في الصالة"],
-                  ["takeaway", "سفري"],
-                  ["delivery", "توصيل"],
+                  ["dine_in", tx("cashierScreen.dineIn")],
+                  ["takeaway", tx("cashierScreen.takeaway")],
+                  ["delivery", tx("cashierScreen.delivery")],
                 ] as const
               ).map(([k, label]) => (
                 <div key={k} className="flex items-center justify-between border-b border-[var(--border)] pb-1.5 last:border-0">
                   <span className="text-[var(--muted-foreground)]">{label}</span>
                   <span className="tabular-nums">
-                    {zReport.byType[k].count} طلب · {formatDZD(zReport.byType[k].revenue)}
+                    {zReport.byType[k].count} {tx("cashierScreen.orderLabel")} · {formatDZD(zReport.byType[k].revenue)}
                   </span>
                 </div>
               ))}
@@ -446,17 +464,17 @@ function Page() {
 
             {zReport.unpaidCount > 0 && (
               <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-900/20 dark:border-amber-800 dark:text-amber-300">
-                {zReport.unpaidCount} طلب مفتوح بقيمة {formatDZD(zReport.unpaidTotal)}
+                {zReport.unpaidCount} {tx("cashierScreen.unpaidOrders")} {formatDZD(zReport.unpaidTotal)}
               </div>
             )}
 
             <div className="flex gap-2">
               <Button className="flex-1 gap-1.5 h-9 text-xs" onClick={() => printZReport(zReport, restaurant.name)}>
                 <Printer className="w-4 h-4" />
-                طباعة
+                {tx("cashierScreen.print")}
               </Button>
               <Button variant="outline" className="flex-1 h-9 text-xs" onClick={() => setZReport(null)}>
-                إغلاق
+                {tx("cashierScreen.close")}
               </Button>
             </div>
           </div>
@@ -468,7 +486,7 @@ function Page() {
           <div className="flex items-center justify-between mb-4">
             <h1 className="text-lg font-bold flex items-center gap-2">
               <Receipt className="w-4 h-4 text-[var(--primary)]" />
-              الطلبات الجاهزة للدفع
+              {tx("cashierScreen.readyOrdersForPayment")}
               <span className="text-sm font-normal text-[var(--muted-foreground)]">
                 ({readyOrders.length})
               </span>
@@ -480,9 +498,9 @@ function Page() {
               <div className="mx-auto w-14 h-14 rounded-lg bg-[var(--muted)] flex items-center justify-center mb-3">
                 <Receipt className="w-7 h-7 text-[var(--muted-foreground)]" />
               </div>
-              <p className="text-sm font-medium text-[var(--foreground)]">لا توجد طلبات جاهزة</p>
+              <p className="text-sm font-medium text-[var(--foreground)]">{tx("cashierScreen.noReadyOrders")}</p>
               <p className="text-xs text-[var(--muted-foreground)] mt-1">
-                ستظهر الطلبات تلقائياً عند جاهزيتها
+                {tx("cashierScreen.ordersWillAppear")}
               </p>
             </div>
           ) : (
@@ -505,7 +523,7 @@ function Page() {
                           <>
                             <span className="text-2xl font-bold text-primary">🥡</span>
                             <span className="text-xs text-muted-foreground">
-                              {o.customer_name ?? "تيك أواي"}
+                              {o.customer_name ?? tx("cashierScreen.takeawayFallback")}
                               {o.customer_phone ? ` · ${o.customer_phone}` : ""}
                             </span>
                           </>
@@ -514,12 +532,12 @@ function Page() {
                             <span className="text-2xl font-bold text-primary">
                               #{o.table_number ?? "—"}
                             </span>
-                            <span className="text-xs text-muted-foreground">طاولة</span>
+                            <span className="text-xs text-muted-foreground">{tx("cashierScreen.tableLabel")}</span>
                           </>
                         )}
                       </div>
                       <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-primary/10">
-                        <span className="text-[10px] text-muted-foreground">طلب</span>
+                        <span className="text-[10px] text-muted-foreground">{tx("cashierScreen.orderLabel")}</span>
                         <span className="text-base font-bold text-primary font-mono">
                           {fmtOrderNo(o.daily_number)}
                         </span>
@@ -540,7 +558,7 @@ function Page() {
                     </ul>
 
                     <div className="flex items-center justify-between pt-2 border-t">
-                      <span className="text-sm">المجموع:</span>
+                      <span className="text-sm">{tx("cashierScreen.totalLabel")}</span>
                       <span className="text-xl font-bold text-primary">
                         {formatDZD(o.total)}
                       </span>
@@ -556,7 +574,7 @@ function Page() {
                       ) : (
                         <CheckCircle2 className="w-5 h-5 ms-2" />
                       )}
-                      تم الدفع
+                      {tx("cashierScreen.paymentSuccess")}
                     </Button>
                     <Button
                       onClick={() => printReceipt(o)}
@@ -564,7 +582,7 @@ function Page() {
                       className="w-full h-10 text-sm"
                     >
                       <Printer className="w-4 h-4 ms-2" />
-                      طباعة الإيصال
+                      {tx("cashierScreen.printReceipt")}
                     </Button>
                   </motion.div>
                 ))}
@@ -592,9 +610,9 @@ function Page() {
               <div className="mx-auto w-20 h-20 rounded-full bg-green-100 flex items-center justify-center">
                 <CheckCircle2 className="w-12 h-12 text-green-600" />
               </div>
-              <h2 className="text-2xl font-bold text-green-700">تم الدفع ✓</h2>
+              <h2 className="text-2xl font-bold text-green-700">{tx("cashierScreen.paymentSuccess")}</h2>
               <p className="text-lg">
-                {success.table != null && <>طاولة {success.table} - </>}
+                {success.table != null && <>{tx("cashierScreen.tableLabel")} {success.table} - </>}
                 {formatDZD(success.amount)}
               </p>
               {lastPaid && (
@@ -603,7 +621,7 @@ function Page() {
                   className="w-full h-11 mt-2"
                 >
                   <Printer className="w-4 h-4 ms-2" />
-                  طباعة الإيصال للعميل
+                  {tx("cashierScreen.printReceiptForCustomer")}
                 </Button>
               )}
             </motion.div>
@@ -619,9 +637,9 @@ function printZReport(z: ZReport, restaurantName: string) {
   if (!w) return;
   const typeRows = (
     [
-      ["في الصالة", z.byType.dine_in],
-      ["سفري", z.byType.takeaway],
-      ["توصيل", z.byType.delivery],
+      [tx("cashierScreen.dineIn"), z.byType.dine_in],
+      [tx("cashierScreen.takeaway"), z.byType.takeaway],
+      [tx("cashierScreen.delivery"), z.byType.delivery],
     ] as const
   )
     .map(
@@ -629,7 +647,7 @@ function printZReport(z: ZReport, restaurantName: string) {
       <tr>
         <td style="padding:4px 0;">${label}</td>
         <td style="text-align:center; padding:4px 0;">${v.count}</td>
-        <td style="text-align:left; padding:4px 0;">${v.revenue.toLocaleString("en-US")} دج</td>
+        <td style="text-align:left; padding:4px 0;">${v.revenue.toLocaleString("en-US")} ${tx("cashierScreen.receiptCurrency")}</td>
       </tr>`,
     )
     .join("");
@@ -637,7 +655,7 @@ function printZReport(z: ZReport, restaurantName: string) {
 <html dir="rtl" lang="ar">
 <head>
 <meta charset="utf-8" />
-<title>إغلاق اليوم - ${z.dayKey}</title>
+<title>${tx("cashierScreen.zReportTitle")} - ${z.dayKey}</title>
 <style>
   @page { size: 80mm auto; margin: 4mm; }
   body { font-family: 'Cairo', system-ui, sans-serif; width: 72mm; margin: 0 auto; color: #000; }
@@ -653,27 +671,27 @@ function printZReport(z: ZReport, restaurantName: string) {
 <body>
   <div class="center">
     <div class="name">${escapeHtml(restaurantName)}</div>
-    <div class="muted">تقرير إغلاق اليوم (Z)</div>
-    <div class="muted">${z.dayKey} — طبع ${new Date().toLocaleTimeString("ar-DZ", { hour: "2-digit", minute: "2-digit" })}</div>
+    <div class="muted">${tx("cashierScreen.zReportSubtitle")}</div>
+    <div class="muted">${z.dayKey} — ${tx("cashierScreen.zReportPrinted")} ${new Date().toLocaleTimeString("ar-DZ", { hour: "2-digit", minute: "2-digit" })}</div>
   </div>
   <hr />
-  <div class="total"><span>إجمالي المبيعات</span><span>${z.totalRevenue.toLocaleString("en-US")} دج</span></div>
-  <div class="row"><span>عدد الطلبات المدفوعة</span><span>${z.totalOrders}</span></div>
-  <div class="row"><span>متوسط الفاتورة</span><span>${z.avgTicket.toLocaleString("en-US")} دج</span></div>
+  <div class="total"><span>${tx("cashierScreen.zReportSalesTotal")}</span><span>${z.totalRevenue.toLocaleString("en-US")} ${tx("cashierScreen.receiptCurrency")}</span></div>
+  <div class="row"><span>${tx("cashierScreen.zReportPaidCount")}</span><span>${z.totalOrders}</span></div>
+  <div class="row"><span>${tx("cashierScreen.zReportAverageTicket")}</span><span>${z.avgTicket.toLocaleString("en-US")} ${tx("cashierScreen.receiptCurrency")}</span></div>
   <hr />
   <table>
     <thead>
       <tr style="border-bottom:1px solid #000;">
-        <th style="text-align:right; padding:4px 0;">النوع</th>
-        <th style="text-align:center; padding:4px 0;">طلبات</th>
-        <th style="text-align:left; padding:4px 0;">المبلغ</th>
+        <th style="text-align:right; padding:4px 0;">${tx("cashierScreen.zReportType")}</th>
+        <th style="text-align:center; padding:4px 0;">${tx("cashierScreen.zReportOrders")}</th>
+        <th style="text-align:left; padding:4px 0;">${tx("cashierScreen.zReportAmount")}</th>
       </tr>
     </thead>
     <tbody>${typeRows}</tbody>
   </table>
   ${
     z.unpaidCount > 0
-      ? `<hr /><div class="row"><span>⚠️ طلبات مفتوحة غير مدفوعة</span><span>${z.unpaidCount} · ${z.unpaidTotal.toLocaleString("en-US")} دج</span></div>`
+      ? `<hr /><div class="row"><span>⚠️ ${tx("cashierScreen.zReportUnpaid")}</span><span>${z.unpaidCount} · ${z.unpaidTotal.toLocaleString("en-US")} ${tx("cashierScreen.receiptCurrency")}</span></div>`
       : ""
   }
   <hr />

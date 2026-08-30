@@ -112,8 +112,8 @@ export default function OrdersPage() {
       setLoading(false);
       return;
     }
-    const ids = (orderRows ?? []).map((o) => o.id);
-    const tableIds = (orderRows ?? []).map((o) => o.table_id).filter(Boolean) as string[];
+    const ids = (orderRows ?? []).map((o: any) => o.id);
+    const tableIds = (orderRows ?? []).map((o: any) => o.table_id).filter(Boolean) as string[];
     const [itemsRes, tablesRes] = await Promise.all([
       ids.length
         ? supabase.from("order_items").select("*").in("order_id", ids)
@@ -133,7 +133,7 @@ export default function OrdersPage() {
       tableMap.set(t.id, t.table_number);
     }
     setOrders(
-      (orderRows ?? []).map((o) => ({
+      (orderRows ?? []).map((o: any) => ({
         ...(o as Order),
         total: Number(o.total),
         items: itemsByOrder.get(o.id) ?? [],
@@ -167,17 +167,6 @@ export default function OrdersPage() {
 
   useEffect(() => {
     if (!restaurantId) {
-      // Mock data for preview
-      setOrders([
-        { id: "1", restaurant_id: "mock", table_id: "t1", status: "new", total: 2500, acknowledged: false, created_at: new Date(Date.now() - 5 * 60000).toISOString(), table_number: 5, items: [{ id: "i1", name_snapshot: "شاورما لحم", quantity: 2, price_snapshot: 800 }, { id: "i2", name_snapshot: "فرينش فرايز", quantity: 1, price_snapshot: 450 }], order_type: "dine_in" },
-        { id: "2", restaurant_id: "mock", table_id: "t2", status: "new", total: 1800, acknowledged: false, created_at: new Date(Date.now() - 12 * 60000).toISOString(), table_number: 12, items: [{ id: "i3", name_snapshot: "برغر دجاج", quantity: 1, price_snapshot: 900 }, { id: "i4", name_snapshot: "عصير برتقال", quantity: 2, price_snapshot: 200 }], order_type: "dine_in" },
-        { id: "3", restaurant_id: "mock", table_id: null, status: "new", total: 3200, acknowledged: false, created_at: new Date(Date.now() - 3 * 60000).toISOString(), table_number: null, items: [{ id: "i5", name_snapshot: "بيتزا مارغريتا", quantity: 1, price_snapshot: 1200 }, { id: "i6", name_snapshot: "سلطة سيزر", quantity: 1, price_snapshot: 700 }], order_type: "delivery", customer_name: "أحمد بن علي", customer_phone: "0555123456", customer_address: "شارع الاستقلال، الجزائر" },
-        { id: "4", restaurant_id: "mock", table_id: "t3", status: "preparing", total: 4500, acknowledged: true, created_at: new Date(Date.now() - 20 * 60000).toISOString(), table_number: 3, items: [{ id: "i7", name_snapshot: "كباب لحم", quantity: 2, price_snapshot: 1100 }, { id: "i8", name_snapshot: "أرز بالزعفران", quantity: 2, price_snapshot: 400 }], order_type: "dine_in" },
-        { id: "5", restaurant_id: "mock", table_id: "t7", status: "preparing", total: 1500, acknowledged: true, created_at: new Date(Date.now() - 35 * 60000).toISOString(), table_number: 7, items: [{ id: "i9", name_snapshot: "مقبلات مشكلة", quantity: 1, price_snapshot: 800 }, { id: "i10", name_snapshot: "شاي بالنعناع", quantity: 2, price_snapshot: 150 }], order_type: "dine_in" },
-        { id: "6", restaurant_id: "mock", table_id: null, status: "ready", total: 2800, acknowledged: true, created_at: new Date(Date.now() - 45 * 60000).toISOString(), table_number: null, items: [{ id: "i11", name_snapshot: "سندويش تركي", quantity: 2, price_snapshot: 650 }, { id: "i12", name_snapshot: "عصير ليمون", quantity: 2, price_snapshot: 250 }], order_type: "takeaway", customer_name: "فاطمة الزهراء" },
-        { id: "7", restaurant_id: "mock", table_id: "t1", status: "paid", total: 3500, acknowledged: true, created_at: new Date(Date.now() - 90 * 60000).toISOString(), table_number: 1, items: [{ id: "i13", name_snapshot: "ستيك لحم", quantity: 1, price_snapshot: 2200 }, { id: "i14", name_snapshot: "خضار مشوية", quantity: 1, price_snapshot: 500 }], order_type: "dine_in" },
-        { id: "8", restaurant_id: "mock", table_id: null, status: "paid", total: 1900, acknowledged: true, created_at: new Date(Date.now() - 120 * 60000).toISOString(), table_number: null, items: [{ id: "i15", name_snapshot: "شاورما دجاج", quantity: 3, price_snapshot: 500 }], order_type: "delivery", customer_name: "محمد أمين", customer_phone: "0666789012", customer_address: "حي السلام، وهران" },
-      ]);
       setLoading(false);
       return;
     }
@@ -192,7 +181,7 @@ export default function OrdersPage() {
           table: "orders",
           filter: `restaurant_id=eq.${restaurantId}`,
         },
-        async (payload) => {
+        async (payload: any) => {
           if (payload.eventType === "INSERT") {
             const fresh = await fetchSingleOrder(restaurantId, (payload.new as Order).id);
             if (fresh) {

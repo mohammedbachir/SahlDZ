@@ -15,6 +15,8 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { decrementStockForOrder } from "@/lib/stock-consumption";
 import { isPreviewToken, PREVIEW_RESTAURANT } from "@/lib/preview-mode";
+import { tx } from "@/lib/ops-tx";
+
 
 export const Route = createFileRoute("/kitchen-screen")({
   component: Page,
@@ -92,10 +94,10 @@ const MOCK_KITCHEN_ORDERS: Order[] = [
 
 function timeAgo(iso: string) {
   const sec = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
-  if (sec < 60) return `${sec}ث`;
+  if (sec < 60) return `${sec}${tx("kitchen.secondsShort")}`;
   const m = Math.floor(sec / 60);
-  if (m < 60) return `${m} د`;
-  return `${Math.floor(m / 60)} س`;
+  if (m < 60) return `${m} ${tx("kitchen.minutesShort")}`;
+  return `${Math.floor(m / 60)} ${tx("kitchen.hoursShort")}`;
 }
 
 function Page() {
@@ -180,6 +182,24 @@ function Page() {
       clearInterval(poll);
     };
   }, [token, restaurant, refresh]);
+
+  // Heartbeat: re-check session expiry every 60s
+  useEffect(() => {
+    if (!token || isPreviewToken(token)) return;
+    const id = setInterval(() => {
+      const exp = sessionStorage.getItem("individual_chef_expires");
+      if (!exp || new Date(exp) < new Date()) {
+        const r = sessionStorage.getItem("individual_chef_restaurant");
+        const rid = r ? (JSON.parse(r) as Restaurant).id : "";
+        sessionStorage.removeItem("individual_chef_token");
+        sessionStorage.removeItem("individual_chef_expires");
+        sessionStorage.removeItem("individual_chef_name");
+        sessionStorage.removeItem("individual_chef_id");
+        navigate({ to: "/kitchen-login", search: { rid } });
+      }
+    }, 60_000);
+    return () => clearInterval(id);
+  }, [token]);
 
   // Audio beep loop while there are unacknowledged new orders
   const audioCtxRef = useRef<AudioContext | null>(null);
@@ -287,7 +307,7 @@ function Page() {
             <img src={restaurant.logo_url} alt={restaurant.name} className="w-9 h-9 rounded-lg object-cover" />
           ) : (
             <div className="w-9 h-9 rounded-lg bg-[var(--primary)] flex items-center justify-center text-[var(--primary-foreground)] font-bold text-sm">
-              {restaurant.name?.[0] ?? "م"}
+              {restaurant.name?.[0] ?? tx("kitchen.defaultInitial")}
             </div>
           )}
           <div className="leading-tight min-w-0">
@@ -309,11 +329,11 @@ function Page() {
             className="gap-1.5 h-8"
           >
             {soundOn ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
-            <span className="hidden sm:inline">{soundOn ? "صوت" : "صامت"}</span>
+            <span className="hidden sm:inline">{soundOn ? tx("kitchen.soundOn") : tx("kitchen.soundOff")}</span>
           </Button>
           <Button variant="outline" size="sm" onClick={onLogout} className="gap-1.5 h-8">
             <LogOut className="w-4 h-4" />
-            <span className="hidden sm:inline">خروج</span>
+            <span className="hidden sm:inline">{tx("kitchen.logout")}</span>
           </Button>
         </div>
       </header>
@@ -323,7 +343,7 @@ function Page() {
           {/* New orders */}
           <section className="bg-[var(--card)] border border-[var(--border)] rounded-xl p-3 md:p-4">
             <div className="flex items-center gap-2 mb-3">
-              <h2 className="text-lg font-bold text-[var(--foreground)]">طلبات جديدة</h2>
+              <h2 className="text-lg font-bold text-[var(--foreground)]">{tx("kitchen.newOrders")}</h2>
               <span className="bg-[var(--destructive)] text-[var(--destructive-foreground)] rounded-md px-2 py-0.5 text-xs font-bold">
                 {newOrders.length}
               </span>
@@ -344,15 +364,15 @@ function Page() {
                         {o.order_type === "delivery" ? (
                           <span className="bg-blue-100 text-blue-800 rounded px-2 py-0.5 text-sm font-bold flex items-center gap-1 dark:bg-blue-900/30 dark:text-blue-300">
                             <Bike className="w-4 h-4" />
-                            توصيل
+                            {tx("kitchen.delivery")}
                           </span>
                         ) : o.order_type === "takeaway" ? (
                           <span className="bg-emerald-100 text-emerald-800 rounded px-2 py-0.5 text-sm font-bold dark:bg-emerald-900/30 dark:text-emerald-300">
-                            سفري
+                            {tx("kitchen.takeaway")}
                           </span>
                         ) : (
                           <span className="bg-[var(--primary)]/10 text-[var(--primary)] rounded px-2 py-0.5 text-sm font-bold">
-                            طاولة {o.table_number ?? "—"}
+                            {tx("kitchen.table")} {o.table_number ?? "—"}
                           </span>
                         )}
                         {o.daily_number != null && (
@@ -392,7 +412,7 @@ function Page() {
                     </ul>
                     {o.notes && (
                       <div className="rounded-lg bg-yellow-50 border border-yellow-200 p-2 text-xs dark:bg-yellow-900/20 dark:border-yellow-800">
-                        <div className="font-bold text-yellow-800 dark:text-yellow-300 mb-0.5">ملاحظة</div>
+                        <div className="font-bold text-yellow-800 dark:text-yellow-300 mb-0.5">{tx("kitchen.note")}</div>
                         <div className="text-yellow-900 dark:text-yellow-200 whitespace-pre-wrap break-words">{o.notes}</div>
                       </div>
                     )}
@@ -404,14 +424,14 @@ function Page() {
                       {busy === o.id ? (
                         <Loader2 className="w-4 h-4 animate-spin ms-2" />
                       ) : (
-                        "بدء التحضير"
+                        tx("kitchen.startPreparing")
                       )}
                     </Button>
                   </motion.div>
                 ))}
               </AnimatePresence>
               {newOrders.length === 0 && (
-                <div className="text-center text-muted-foreground py-8">لا توجد طلبات جديدة</div>
+                <div className="text-center text-muted-foreground py-8">{tx("kitchen.noNewOrders")}</div>
               )}
             </div>
           </section>
@@ -419,7 +439,7 @@ function Page() {
           {/* Preparing */}
           <section className="bg-[var(--card)] border border-[var(--border)] rounded-xl p-3 md:p-4">
             <div className="flex items-center gap-2 mb-3">
-              <h2 className="text-lg font-bold text-[var(--foreground)]">قيد التحضير</h2>
+              <h2 className="text-lg font-bold text-[var(--foreground)]">{tx("kitchen.preparing")}</h2>
               <span className="bg-orange-100 text-orange-800 rounded-md px-2 py-0.5 text-xs font-bold dark:bg-orange-900/30 dark:text-orange-300">
                 {prepOrders.length}
               </span>
@@ -440,15 +460,15 @@ function Page() {
                         {o.order_type === "delivery" ? (
                           <span className="bg-blue-100 text-blue-800 rounded px-2 py-0.5 text-sm font-bold flex items-center gap-1 dark:bg-blue-900/30 dark:text-blue-300">
                             <Bike className="w-4 h-4" />
-                            توصيل
+                            {tx("kitchen.delivery")}
                           </span>
                         ) : o.order_type === "takeaway" ? (
                           <span className="bg-emerald-100 text-emerald-800 rounded px-2 py-0.5 text-sm font-bold dark:bg-emerald-900/30 dark:text-emerald-300">
-                            سفري
+                            {tx("kitchen.takeaway")}
                           </span>
                         ) : (
                           <span className="bg-orange-100 text-orange-800 rounded px-2 py-0.5 text-sm font-bold dark:bg-orange-900/30 dark:text-orange-300">
-                            طاولة {o.table_number ?? "—"}
+                            {tx("kitchen.table")} {o.table_number ?? "—"}
                           </span>
                         )}
                         {o.daily_number != null && (
@@ -488,7 +508,7 @@ function Page() {
                     </ul>
                     {o.notes && (
                       <div className="rounded-lg bg-yellow-50 border border-yellow-200 p-2 text-xs dark:bg-yellow-900/20 dark:border-yellow-800">
-                        <div className="font-bold text-yellow-800 dark:text-yellow-300 mb-0.5">ملاحظة</div>
+                        <div className="font-bold text-yellow-800 dark:text-yellow-300 mb-0.5">{tx("kitchen.note")}</div>
                         <div className="text-yellow-900 dark:text-yellow-200 whitespace-pre-wrap break-words">{o.notes}</div>
                       </div>
                     )}
@@ -500,14 +520,14 @@ function Page() {
                       {busy === o.id ? (
                         <Loader2 className="w-4 h-4 animate-spin ms-2" />
                       ) : (
-                        "جاهز"
+                        tx("kitchen.ready")
                       )}
                     </Button>
                   </motion.div>
                 ))}
               </AnimatePresence>
               {prepOrders.length === 0 && (
-                <div className="text-center text-muted-foreground py-8">لا يوجد قيد التحضير</div>
+                <div className="text-center text-muted-foreground py-8">{tx("kitchen.nonePreparing")}</div>
               )}
             </div>
           </section>

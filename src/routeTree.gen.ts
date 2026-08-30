@@ -10,13 +10,16 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ActivateRouteImport } from './routes/activate'
 import { Route as CashierRouteImport } from './routes/cashier'
 import { Route as CashierLoginRouteImport } from './routes/cashier-login'
 import { Route as DashboardRouteImport } from './routes/dashboard'
+import { Route as DownloadRouteImport } from './routes/download'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as KitchenLoginRouteImport } from './routes/kitchen-login'
 import { Route as KitchenScreenRouteImport } from './routes/kitchen-screen'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as MobileRouteImport } from './routes/mobile'
 import { Route as OpsRouteImport } from './routes/ops'
 import { Route as SetupRouteImport } from './routes/setup'
 import { Route as SignupRouteImport } from './routes/signup'
@@ -25,12 +28,22 @@ import { Route as WaiterScreenRouteImport } from './routes/waiter-screen'
 import { Route as AccountIndexRouteImport } from './routes/account/index'
 import { Route as AccountSettingsRouteImport } from './routes/account/settings'
 import { Route as DashboardAnalyticsRouteImport } from './routes/dashboard.analytics'
+import { Route as DashboardDownloadRouteImport } from './routes/dashboard.download'
 import { Route as DashboardMenuRouteImport } from './routes/dashboard.menu'
 import { Route as DashboardOrdersRouteImport } from './routes/dashboard.orders'
 import { Route as DashboardReviewsRouteImport } from './routes/dashboard.reviews'
 import { Route as DashboardSettingsRouteImport } from './routes/dashboard.settings'
 import { Route as DashboardTablesRouteImport } from './routes/dashboard.tables'
+import { Route as InternalManagersRouteImport } from './routes/internal.managers'
+import { Route as MobileIndexRouteImport } from './routes/mobile.index'
+import { Route as MobileDailySummaryRouteImport } from './routes/mobile.daily-summary'
+import { Route as MobileLoginRouteImport } from './routes/mobile.login'
+import { Route as MobileNotificationsRouteImport } from './routes/mobile.notifications'
+import { Route as MobileReportsRouteImport } from './routes/mobile.reports'
+import { Route as MobileSettingsRouteImport } from './routes/mobile.settings'
+import { Route as MobileWeeklyReportRouteImport } from './routes/mobile.weekly-report'
 import { Route as OpsIndexRouteImport } from './routes/ops.index'
+import { Route as OpsAccountingRouteImport } from './routes/ops.accounting'
 import { Route as OpsComplaintsRouteImport } from './routes/ops.complaints'
 import { Route as OpsEmployeesRouteImport } from './routes/ops.employees'
 import { Route as OpsExpensesRouteImport } from './routes/ops.expenses'
@@ -49,6 +62,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ActivateRoute = ActivateRouteImport.update({
+  id: '/activate',
+  path: '/activate',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CashierRoute = CashierRouteImport.update({
   id: '/cashier',
   path: '/cashier',
@@ -62,6 +80,11 @@ const CashierLoginRoute = CashierLoginRouteImport.update({
 const DashboardRoute = DashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DownloadRoute = DownloadRouteImport.update({
+  id: '/download',
+  path: '/download',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
@@ -82,6 +105,11 @@ const KitchenScreenRoute = KitchenScreenRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MobileRoute = MobileRouteImport.update({
+  id: '/mobile',
+  path: '/mobile',
   getParentRoute: () => rootRouteImport,
 } as any)
 const OpsRoute = OpsRouteImport.update({
@@ -124,6 +152,11 @@ const DashboardAnalyticsRoute = DashboardAnalyticsRouteImport.update({
   path: '/analytics',
   getParentRoute: () => DashboardRoute,
 } as any)
+const DashboardDownloadRoute = DashboardDownloadRouteImport.update({
+  id: '/download',
+  path: '/download',
+  getParentRoute: () => DashboardRoute,
+} as any)
 const DashboardMenuRoute = DashboardMenuRouteImport.update({
   id: '/menu',
   path: '/menu',
@@ -149,9 +182,54 @@ const DashboardTablesRoute = DashboardTablesRouteImport.update({
   path: '/tables',
   getParentRoute: () => DashboardRoute,
 } as any)
+const InternalManagersRoute = InternalManagersRouteImport.update({
+  id: '/internal/managers',
+  path: '/internal/managers',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MobileIndexRoute = MobileIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => MobileRoute,
+} as any)
+const MobileDailySummaryRoute = MobileDailySummaryRouteImport.update({
+  id: '/daily-summary',
+  path: '/daily-summary',
+  getParentRoute: () => MobileRoute,
+} as any)
+const MobileLoginRoute = MobileLoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => MobileRoute,
+} as any)
+const MobileNotificationsRoute = MobileNotificationsRouteImport.update({
+  id: '/notifications',
+  path: '/notifications',
+  getParentRoute: () => MobileRoute,
+} as any)
+const MobileReportsRoute = MobileReportsRouteImport.update({
+  id: '/reports',
+  path: '/reports',
+  getParentRoute: () => MobileRoute,
+} as any)
+const MobileSettingsRoute = MobileSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => MobileRoute,
+} as any)
+const MobileWeeklyReportRoute = MobileWeeklyReportRouteImport.update({
+  id: '/weekly-report',
+  path: '/weekly-report',
+  getParentRoute: () => MobileRoute,
+} as any)
 const OpsIndexRoute = OpsIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => OpsRoute,
+} as any)
+const OpsAccountingRoute = OpsAccountingRouteImport.update({
+  id: '/accounting',
+  path: '/accounting',
   getParentRoute: () => OpsRoute,
 } as any)
 const OpsComplaintsRoute = OpsComplaintsRouteImport.update({
@@ -217,13 +295,16 @@ const OpsEmployeesEmployeeIdRoute = OpsEmployeesEmployeeIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/activate': typeof ActivateRoute
   '/cashier': typeof CashierRoute
   '/cashier-login': typeof CashierLoginRoute
   '/dashboard': typeof DashboardRouteWithChildren
+  '/download': typeof DownloadRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/kitchen-login': typeof KitchenLoginRoute
   '/kitchen-screen': typeof KitchenScreenRoute
   '/login': typeof LoginRoute
+  '/mobile': typeof MobileRouteWithChildren
   '/ops': typeof OpsRouteWithChildren
   '/setup': typeof SetupRoute
   '/signup': typeof SignupRoute
@@ -231,11 +312,20 @@ export interface FileRoutesByFullPath {
   '/waiter-screen': typeof WaiterScreenRoute
   '/account/settings': typeof AccountSettingsRoute
   '/dashboard/analytics': typeof DashboardAnalyticsRoute
+  '/dashboard/download': typeof DashboardDownloadRoute
   '/dashboard/menu': typeof DashboardMenuRoute
   '/dashboard/orders': typeof DashboardOrdersRoute
   '/dashboard/reviews': typeof DashboardReviewsRoute
   '/dashboard/settings': typeof DashboardSettingsRoute
   '/dashboard/tables': typeof DashboardTablesRoute
+  '/internal/managers': typeof InternalManagersRoute
+  '/mobile/daily-summary': typeof MobileDailySummaryRoute
+  '/mobile/login': typeof MobileLoginRoute
+  '/mobile/notifications': typeof MobileNotificationsRoute
+  '/mobile/reports': typeof MobileReportsRoute
+  '/mobile/settings': typeof MobileSettingsRoute
+  '/mobile/weekly-report': typeof MobileWeeklyReportRoute
+  '/ops/accounting': typeof OpsAccountingRoute
   '/ops/complaints': typeof OpsComplaintsRoute
   '/ops/employees': typeof OpsEmployeesRouteWithChildren
   '/ops/expenses': typeof OpsExpensesRoute
@@ -247,15 +337,18 @@ export interface FileRoutesByFullPath {
   '/ops/suppliers': typeof OpsSuppliersRoute
   '/ops/waste': typeof OpsWasteRoute
   '/account/': typeof AccountIndexRoute
+  '/mobile/': typeof MobileIndexRoute
   '/ops/': typeof OpsIndexRoute
   '/ops/employees/$employeeId': typeof OpsEmployeesEmployeeIdRoute
   '/ops/employees/': typeof OpsEmployeesIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/activate': typeof ActivateRoute
   '/cashier': typeof CashierRoute
   '/cashier-login': typeof CashierLoginRoute
   '/dashboard': typeof DashboardRouteWithChildren
+  '/download': typeof DownloadRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/kitchen-login': typeof KitchenLoginRoute
   '/kitchen-screen': typeof KitchenScreenRoute
@@ -266,11 +359,20 @@ export interface FileRoutesByTo {
   '/waiter-screen': typeof WaiterScreenRoute
   '/account/settings': typeof AccountSettingsRoute
   '/dashboard/analytics': typeof DashboardAnalyticsRoute
+  '/dashboard/download': typeof DashboardDownloadRoute
   '/dashboard/menu': typeof DashboardMenuRoute
   '/dashboard/orders': typeof DashboardOrdersRoute
   '/dashboard/reviews': typeof DashboardReviewsRoute
   '/dashboard/settings': typeof DashboardSettingsRoute
   '/dashboard/tables': typeof DashboardTablesRoute
+  '/internal/managers': typeof InternalManagersRoute
+  '/mobile/daily-summary': typeof MobileDailySummaryRoute
+  '/mobile/login': typeof MobileLoginRoute
+  '/mobile/notifications': typeof MobileNotificationsRoute
+  '/mobile/reports': typeof MobileReportsRoute
+  '/mobile/settings': typeof MobileSettingsRoute
+  '/mobile/weekly-report': typeof MobileWeeklyReportRoute
+  '/ops/accounting': typeof OpsAccountingRoute
   '/ops/complaints': typeof OpsComplaintsRoute
   '/ops/expenses': typeof OpsExpensesRoute
   '/ops/inventory': typeof OpsInventoryRoute
@@ -281,6 +383,7 @@ export interface FileRoutesByTo {
   '/ops/suppliers': typeof OpsSuppliersRoute
   '/ops/waste': typeof OpsWasteRoute
   '/account': typeof AccountIndexRoute
+  '/mobile': typeof MobileIndexRoute
   '/ops': typeof OpsIndexRoute
   '/ops/employees/$employeeId': typeof OpsEmployeesEmployeeIdRoute
   '/ops/employees': typeof OpsEmployeesIndexRoute
@@ -288,13 +391,16 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/activate': typeof ActivateRoute
   '/cashier': typeof CashierRoute
   '/cashier-login': typeof CashierLoginRoute
   '/dashboard': typeof DashboardRouteWithChildren
+  '/download': typeof DownloadRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/kitchen-login': typeof KitchenLoginRoute
   '/kitchen-screen': typeof KitchenScreenRoute
   '/login': typeof LoginRoute
+  '/mobile': typeof MobileRouteWithChildren
   '/ops': typeof OpsRouteWithChildren
   '/setup': typeof SetupRoute
   '/signup': typeof SignupRoute
@@ -302,11 +408,20 @@ export interface FileRoutesById {
   '/waiter-screen': typeof WaiterScreenRoute
   '/account/settings': typeof AccountSettingsRoute
   '/dashboard/analytics': typeof DashboardAnalyticsRoute
+  '/dashboard/download': typeof DashboardDownloadRoute
   '/dashboard/menu': typeof DashboardMenuRoute
   '/dashboard/orders': typeof DashboardOrdersRoute
   '/dashboard/reviews': typeof DashboardReviewsRoute
   '/dashboard/settings': typeof DashboardSettingsRoute
   '/dashboard/tables': typeof DashboardTablesRoute
+  '/internal/managers': typeof InternalManagersRoute
+  '/mobile/daily-summary': typeof MobileDailySummaryRoute
+  '/mobile/login': typeof MobileLoginRoute
+  '/mobile/notifications': typeof MobileNotificationsRoute
+  '/mobile/reports': typeof MobileReportsRoute
+  '/mobile/settings': typeof MobileSettingsRoute
+  '/mobile/weekly-report': typeof MobileWeeklyReportRoute
+  '/ops/accounting': typeof OpsAccountingRoute
   '/ops/complaints': typeof OpsComplaintsRoute
   '/ops/employees': typeof OpsEmployeesRouteWithChildren
   '/ops/expenses': typeof OpsExpensesRoute
@@ -318,6 +433,7 @@ export interface FileRoutesById {
   '/ops/suppliers': typeof OpsSuppliersRoute
   '/ops/waste': typeof OpsWasteRoute
   '/account/': typeof AccountIndexRoute
+  '/mobile/': typeof MobileIndexRoute
   '/ops/': typeof OpsIndexRoute
   '/ops/employees/$employeeId': typeof OpsEmployeesEmployeeIdRoute
   '/ops/employees/': typeof OpsEmployeesIndexRoute
@@ -326,13 +442,16 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/activate'
     | '/cashier'
     | '/cashier-login'
     | '/dashboard'
+    | '/download'
     | '/forgot-password'
     | '/kitchen-login'
     | '/kitchen-screen'
     | '/login'
+    | '/mobile'
     | '/ops'
     | '/setup'
     | '/signup'
@@ -340,11 +459,20 @@ export interface FileRouteTypes {
     | '/waiter-screen'
     | '/account/settings'
     | '/dashboard/analytics'
+    | '/dashboard/download'
     | '/dashboard/menu'
     | '/dashboard/orders'
     | '/dashboard/reviews'
     | '/dashboard/settings'
     | '/dashboard/tables'
+    | '/internal/managers'
+    | '/mobile/daily-summary'
+    | '/mobile/login'
+    | '/mobile/notifications'
+    | '/mobile/reports'
+    | '/mobile/settings'
+    | '/mobile/weekly-report'
+    | '/ops/accounting'
     | '/ops/complaints'
     | '/ops/employees'
     | '/ops/expenses'
@@ -356,15 +484,18 @@ export interface FileRouteTypes {
     | '/ops/suppliers'
     | '/ops/waste'
     | '/account/'
+    | '/mobile/'
     | '/ops/'
     | '/ops/employees/$employeeId'
     | '/ops/employees/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/activate'
     | '/cashier'
     | '/cashier-login'
     | '/dashboard'
+    | '/download'
     | '/forgot-password'
     | '/kitchen-login'
     | '/kitchen-screen'
@@ -375,11 +506,20 @@ export interface FileRouteTypes {
     | '/waiter-screen'
     | '/account/settings'
     | '/dashboard/analytics'
+    | '/dashboard/download'
     | '/dashboard/menu'
     | '/dashboard/orders'
     | '/dashboard/reviews'
     | '/dashboard/settings'
     | '/dashboard/tables'
+    | '/internal/managers'
+    | '/mobile/daily-summary'
+    | '/mobile/login'
+    | '/mobile/notifications'
+    | '/mobile/reports'
+    | '/mobile/settings'
+    | '/mobile/weekly-report'
+    | '/ops/accounting'
     | '/ops/complaints'
     | '/ops/expenses'
     | '/ops/inventory'
@@ -390,19 +530,23 @@ export interface FileRouteTypes {
     | '/ops/suppliers'
     | '/ops/waste'
     | '/account'
+    | '/mobile'
     | '/ops'
     | '/ops/employees/$employeeId'
     | '/ops/employees'
   id:
     | '__root__'
     | '/'
+    | '/activate'
     | '/cashier'
     | '/cashier-login'
     | '/dashboard'
+    | '/download'
     | '/forgot-password'
     | '/kitchen-login'
     | '/kitchen-screen'
     | '/login'
+    | '/mobile'
     | '/ops'
     | '/setup'
     | '/signup'
@@ -410,11 +554,20 @@ export interface FileRouteTypes {
     | '/waiter-screen'
     | '/account/settings'
     | '/dashboard/analytics'
+    | '/dashboard/download'
     | '/dashboard/menu'
     | '/dashboard/orders'
     | '/dashboard/reviews'
     | '/dashboard/settings'
     | '/dashboard/tables'
+    | '/internal/managers'
+    | '/mobile/daily-summary'
+    | '/mobile/login'
+    | '/mobile/notifications'
+    | '/mobile/reports'
+    | '/mobile/settings'
+    | '/mobile/weekly-report'
+    | '/ops/accounting'
     | '/ops/complaints'
     | '/ops/employees'
     | '/ops/expenses'
@@ -426,6 +579,7 @@ export interface FileRouteTypes {
     | '/ops/suppliers'
     | '/ops/waste'
     | '/account/'
+    | '/mobile/'
     | '/ops/'
     | '/ops/employees/$employeeId'
     | '/ops/employees/'
@@ -433,19 +587,23 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ActivateRoute: typeof ActivateRoute
   CashierRoute: typeof CashierRoute
   CashierLoginRoute: typeof CashierLoginRoute
   DashboardRoute: typeof DashboardRouteWithChildren
+  DownloadRoute: typeof DownloadRoute
   ForgotPasswordRoute: typeof ForgotPasswordRoute
   KitchenLoginRoute: typeof KitchenLoginRoute
   KitchenScreenRoute: typeof KitchenScreenRoute
   LoginRoute: typeof LoginRoute
+  MobileRoute: typeof MobileRouteWithChildren
   OpsRoute: typeof OpsRouteWithChildren
   SetupRoute: typeof SetupRoute
   SignupRoute: typeof SignupRoute
   WaiterLoginRoute: typeof WaiterLoginRoute
   WaiterScreenRoute: typeof WaiterScreenRoute
   AccountSettingsRoute: typeof AccountSettingsRoute
+  InternalManagersRoute: typeof InternalManagersRoute
   AccountIndexRoute: typeof AccountIndexRoute
 }
 
@@ -456,6 +614,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/activate': {
+      id: '/activate'
+      path: '/activate'
+      fullPath: '/activate'
+      preLoaderRoute: typeof ActivateRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/cashier': {
@@ -477,6 +642,13 @@ declare module '@tanstack/react-router' {
       path: '/dashboard'
       fullPath: '/dashboard'
       preLoaderRoute: typeof DashboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/download': {
+      id: '/download'
+      path: '/download'
+      fullPath: '/download'
+      preLoaderRoute: typeof DownloadRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/forgot-password': {
@@ -505,6 +677,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/mobile': {
+      id: '/mobile'
+      path: '/mobile'
+      fullPath: '/mobile'
+      preLoaderRoute: typeof MobileRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/ops': {
@@ -563,6 +742,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardAnalyticsRouteImport
       parentRoute: typeof DashboardRoute
     }
+    '/dashboard/download': {
+      id: '/dashboard/download'
+      path: '/download'
+      fullPath: '/dashboard/download'
+      preLoaderRoute: typeof DashboardDownloadRouteImport
+      parentRoute: typeof DashboardRoute
+    }
     '/dashboard/menu': {
       id: '/dashboard/menu'
       path: '/menu'
@@ -598,11 +784,74 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardTablesRouteImport
       parentRoute: typeof DashboardRoute
     }
+    '/internal/managers': {
+      id: '/internal/managers'
+      path: '/internal/managers'
+      fullPath: '/internal/managers'
+      preLoaderRoute: typeof InternalManagersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/mobile/': {
+      id: '/mobile/'
+      path: '/'
+      fullPath: '/mobile/'
+      preLoaderRoute: typeof MobileIndexRouteImport
+      parentRoute: typeof MobileRoute
+    }
+    '/mobile/daily-summary': {
+      id: '/mobile/daily-summary'
+      path: '/daily-summary'
+      fullPath: '/mobile/daily-summary'
+      preLoaderRoute: typeof MobileDailySummaryRouteImport
+      parentRoute: typeof MobileRoute
+    }
+    '/mobile/login': {
+      id: '/mobile/login'
+      path: '/login'
+      fullPath: '/mobile/login'
+      preLoaderRoute: typeof MobileLoginRouteImport
+      parentRoute: typeof MobileRoute
+    }
+    '/mobile/notifications': {
+      id: '/mobile/notifications'
+      path: '/notifications'
+      fullPath: '/mobile/notifications'
+      preLoaderRoute: typeof MobileNotificationsRouteImport
+      parentRoute: typeof MobileRoute
+    }
+    '/mobile/reports': {
+      id: '/mobile/reports'
+      path: '/reports'
+      fullPath: '/mobile/reports'
+      preLoaderRoute: typeof MobileReportsRouteImport
+      parentRoute: typeof MobileRoute
+    }
+    '/mobile/settings': {
+      id: '/mobile/settings'
+      path: '/settings'
+      fullPath: '/mobile/settings'
+      preLoaderRoute: typeof MobileSettingsRouteImport
+      parentRoute: typeof MobileRoute
+    }
+    '/mobile/weekly-report': {
+      id: '/mobile/weekly-report'
+      path: '/weekly-report'
+      fullPath: '/mobile/weekly-report'
+      preLoaderRoute: typeof MobileWeeklyReportRouteImport
+      parentRoute: typeof MobileRoute
+    }
     '/ops/': {
       id: '/ops/'
       path: '/'
       fullPath: '/ops/'
       preLoaderRoute: typeof OpsIndexRouteImport
+      parentRoute: typeof OpsRoute
+    }
+    '/ops/accounting': {
+      id: '/ops/accounting'
+      path: '/accounting'
+      fullPath: '/ops/accounting'
+      preLoaderRoute: typeof OpsAccountingRouteImport
       parentRoute: typeof OpsRoute
     }
     '/ops/complaints': {
@@ -694,6 +943,7 @@ declare module '@tanstack/react-router' {
 
 interface DashboardRouteChildren {
   DashboardAnalyticsRoute: typeof DashboardAnalyticsRoute
+  DashboardDownloadRoute: typeof DashboardDownloadRoute
   DashboardMenuRoute: typeof DashboardMenuRoute
   DashboardOrdersRoute: typeof DashboardOrdersRoute
   DashboardReviewsRoute: typeof DashboardReviewsRoute
@@ -703,6 +953,7 @@ interface DashboardRouteChildren {
 
 const DashboardRouteChildren: DashboardRouteChildren = {
   DashboardAnalyticsRoute: DashboardAnalyticsRoute,
+  DashboardDownloadRoute: DashboardDownloadRoute,
   DashboardMenuRoute: DashboardMenuRoute,
   DashboardOrdersRoute: DashboardOrdersRoute,
   DashboardReviewsRoute: DashboardReviewsRoute,
@@ -713,6 +964,29 @@ const DashboardRouteChildren: DashboardRouteChildren = {
 const DashboardRouteWithChildren = DashboardRoute._addFileChildren(
   DashboardRouteChildren,
 )
+
+interface MobileRouteChildren {
+  MobileDailySummaryRoute: typeof MobileDailySummaryRoute
+  MobileLoginRoute: typeof MobileLoginRoute
+  MobileNotificationsRoute: typeof MobileNotificationsRoute
+  MobileReportsRoute: typeof MobileReportsRoute
+  MobileSettingsRoute: typeof MobileSettingsRoute
+  MobileWeeklyReportRoute: typeof MobileWeeklyReportRoute
+  MobileIndexRoute: typeof MobileIndexRoute
+}
+
+const MobileRouteChildren: MobileRouteChildren = {
+  MobileDailySummaryRoute: MobileDailySummaryRoute,
+  MobileLoginRoute: MobileLoginRoute,
+  MobileNotificationsRoute: MobileNotificationsRoute,
+  MobileReportsRoute: MobileReportsRoute,
+  MobileSettingsRoute: MobileSettingsRoute,
+  MobileWeeklyReportRoute: MobileWeeklyReportRoute,
+  MobileIndexRoute: MobileIndexRoute,
+}
+
+const MobileRouteWithChildren =
+  MobileRoute._addFileChildren(MobileRouteChildren)
 
 interface OpsEmployeesRouteChildren {
   OpsEmployeesEmployeeIdRoute: typeof OpsEmployeesEmployeeIdRoute
@@ -729,6 +1003,7 @@ const OpsEmployeesRouteWithChildren = OpsEmployeesRoute._addFileChildren(
 )
 
 interface OpsRouteChildren {
+  OpsAccountingRoute: typeof OpsAccountingRoute
   OpsComplaintsRoute: typeof OpsComplaintsRoute
   OpsEmployeesRoute: typeof OpsEmployeesRouteWithChildren
   OpsExpensesRoute: typeof OpsExpensesRoute
@@ -743,6 +1018,7 @@ interface OpsRouteChildren {
 }
 
 const OpsRouteChildren: OpsRouteChildren = {
+  OpsAccountingRoute: OpsAccountingRoute,
   OpsComplaintsRoute: OpsComplaintsRoute,
   OpsEmployeesRoute: OpsEmployeesRouteWithChildren,
   OpsExpensesRoute: OpsExpensesRoute,
@@ -760,19 +1036,23 @@ const OpsRouteWithChildren = OpsRoute._addFileChildren(OpsRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ActivateRoute: ActivateRoute,
   CashierRoute: CashierRoute,
   CashierLoginRoute: CashierLoginRoute,
   DashboardRoute: DashboardRouteWithChildren,
+  DownloadRoute: DownloadRoute,
   ForgotPasswordRoute: ForgotPasswordRoute,
   KitchenLoginRoute: KitchenLoginRoute,
   KitchenScreenRoute: KitchenScreenRoute,
   LoginRoute: LoginRoute,
+  MobileRoute: MobileRouteWithChildren,
   OpsRoute: OpsRouteWithChildren,
   SetupRoute: SetupRoute,
   SignupRoute: SignupRoute,
   WaiterLoginRoute: WaiterLoginRoute,
   WaiterScreenRoute: WaiterScreenRoute,
   AccountSettingsRoute: AccountSettingsRoute,
+  InternalManagersRoute: InternalManagersRoute,
   AccountIndexRoute: AccountIndexRoute,
 }
 export const routeTree = rootRouteImport

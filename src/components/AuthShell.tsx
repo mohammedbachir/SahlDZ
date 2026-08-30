@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
+import { tx } from "@/lib/ops-tx";
 
 function Logo({ size = 40 }: { size?: number }) {
   return (
@@ -34,7 +35,9 @@ export function AuthShell({
           className="flex items-center justify-center gap-2 mb-6 hover:opacity-80 transition-opacity"
         >
           <Logo size={36} />
-          <span className="font-bold text-lg text-[var(--foreground)]">Sahl DZ</span>
+          <span className="font-bold text-lg text-[var(--foreground)]">
+            Sahl DZ
+          </span>
         </Link>
 
         {/* Card */}
@@ -58,13 +61,13 @@ export function AuthShell({
 
         {/* Bottom text */}
         <p className="text-center text-[11px] text-[var(--muted-foreground)] mt-4">
-          بالدخول، أنت توافق على{" "}
+          {tx("common.byLoggingInYouAgree")}{" "}
           <a href="#" className="text-[var(--primary)] hover:underline">
-            شروط الاستخدام
+            {tx("common.termsOfUse")}
           </a>{" "}
-          و{" "}
+          {tx("common.and")}{" "}
           <a href="#" className="text-[var(--primary)] hover:underline">
-            سياسة الخصوصية
+            {tx("common.privacyPolicy")}
           </a>
         </p>
       </div>

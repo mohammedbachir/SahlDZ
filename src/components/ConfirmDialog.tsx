@@ -35,12 +35,16 @@ export function ConfirmDialog({
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>{title}</AlertDialogTitle>
-          {description ? <AlertDialogDescription>{description}</AlertDialogDescription> : null}
+          {description ? (
+            <AlertDialogDescription>{description}</AlertDialogDescription>
+          ) : null}
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>{cancelLabel}</AlertDialogCancel>
           <AlertDialogAction
-            className={destructive ? "bg-red-600 text-white hover:bg-red-700" : undefined}
+            className={
+              destructive ? "bg-red-600 text-white hover:bg-red-700" : undefined
+            }
             onClick={() => onConfirm()}
           >
             {confirmLabel}

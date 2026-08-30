@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { tx } from "@/lib/ops-tx";
 import {
   ShoppingBag,
   Menu,
@@ -26,44 +27,50 @@ const steps: OnboardingStep[] = [
   {
     id: "orders",
     icon: ShoppingBag,
-    title: "إدارة الطلبات",
-    description: "هنا تشوف كل طلبات المطعم لحظياً. الطلبات الجديدة، قيد التحضير، والجاهزة. تقدر تغير حالة كل طلب بضغطة واحدة.",
-    tip: "ابدأ من هنا كل يوم — هذي أهم شاشة عندك",
+    title: tx("tour.dashboard.ordersTitle"),
+    description:
+      "هنا تشوف كل طلبات المطعم لحظياً. الطلبات الجديدة، قيد التحضير، والجاهزة. تقدر تغير حالة كل طلب بضغطة واحدة.",
+    tip: tx("tour.dashboard.ordersTip"),
   },
   {
     id: "menu",
     icon: Menu,
-    title: "القائمة",
-    description: "تضيف أطباقك وتصنفاتها وسعرها. كل صنف تقدر تصوره وתكتب وصفه. الزبون يشوف هذي القائمة لما يمسح QR.",
-    tip: "أضف أصنافك هنا أول شي قبل ما تبدأ",
+    title: tx("tour.dashboard.menuTitle"),
+    description:
+      "تضيف أطباقك وتصنفاتها وسعرها. كل صنف تقدر تصوره وتكتب وصفه. الزبون يشوف هذي القائمة لما يمسح QR.",
+    tip: tx("tour.dashboard.menuTip"),
   },
   {
     id: "tables",
     icon: LayoutGrid,
-    title: "الطاولات",
-    description: "تدير طاولات المطعم وتولّد QR Code لكل طاولة. الزبون يمسح الكود ويطلب مباشرة من هاتفه.",
-    tip: "اطبع الـ QR وحطيه على كل طاولة",
+    title: tx("tour.dashboard.tablesTitle"),
+    description:
+      "تدير طاولات المطعم وتولّد QR Code لكل طاولة. الزبون يمسح الكود ويطلب مباشرة من هاتفه.",
+    tip: tx("tour.dashboard.tablesTip"),
   },
   {
     id: "analytics",
     icon: BarChart3,
-    title: "التحليلات",
-    description: "تقارير المبيعات والأرباح. تشوف كم باعت اليوم وهل أرباحك تزيد ولا تناقص. تقدر تصدر التقارير لـ PDF أو Excel.",
-    tip: "راجعها كل أسبوع عشان تعرف وضعك",
+    title: tx("tour.dashboard.analyticsTitle"),
+    description:
+      "تقارير المبيعات والأرباح. تشوف كم باعت اليوم وهل أرباحك تزيد ولا تناقص. تقدر تصدر التقارير لـ PDF أو Excel.",
+    tip: tx("tour.dashboard.analyticsTip"),
   },
   {
     id: "reviews",
     icon: Star,
-    title: "التقييمات",
-    description: "تقييمات الزبائن لمطعمك. تشوف رأيهم وتتابع التقييم العام. لو فيه شكوى تقدر ترد عليها.",
-    tip: "الزبائن يحبوا المطاعم اللي ترد على تقييماتهم",
+    title: tx("tour.dashboard.reviewsTitle"),
+    description:
+      "تقييمات الزبائن لمطعمك. تشوف رأيهم وتتابع التقييم العام. لو فيه شكوى تقدر ترد عليها.",
+    tip: tx("tour.dashboard.reviewsTip"),
   },
   {
     id: "settings",
     icon: Settings,
-    title: "الإعدادات",
-    description: "تعدّل بيانات مطعمك، تضيف موظفين، تربط تليجرام، وتضبط إعدادات الطلبات. هنا التحكم الكامل في النظام.",
-    tip: "عدّل بياناتك هنا عشان تظهر صح للزبائن",
+    title: tx("tour.dashboard.settingsTitle"),
+    description:
+      "تعدّل بيانات مطعمك، تضيف موظفين، تربط تليجرام، وتضبط إعدادات الطلبات. هنا التحكم الكامل في النظام.",
+    tip: tx("tour.dashboard.settingsTip"),
   },
 ];
 
@@ -101,7 +108,10 @@ export function DashboardOnboarding({
   }
 
   return (
-    <div className="min-h-screen bg-[var(--background)] flex items-center justify-center p-4" dir="rtl">
+    <div
+      className="min-h-screen bg-[var(--background)] flex items-center justify-center p-4"
+      dir="rtl"
+    >
       <div className="w-full max-w-md">
         {/* Progress */}
         <div className="flex items-center gap-1.5 mb-6 justify-center">
@@ -112,8 +122,8 @@ export function DashboardOnboarding({
                 i < currentStep
                   ? "w-6 bg-[var(--primary)]"
                   : i === currentStep
-                  ? "w-8 bg-[var(--primary)]"
-                  : "w-3 bg-[var(--border)]"
+                    ? "w-8 bg-[var(--primary)]"
+                    : "w-3 bg-[var(--border)]"
               }`}
             />
           ))}
@@ -127,7 +137,9 @@ export function DashboardOnboarding({
           </div>
 
           {/* Content */}
-          <h2 className="text-lg font-bold text-[var(--foreground)] mb-2">{step.title}</h2>
+          <h2 className="text-lg font-bold text-[var(--foreground)] mb-2">
+            {step.title}
+          </h2>
           <p className="text-sm text-[var(--muted-foreground)] leading-relaxed mb-4">
             {step.description}
           </p>
@@ -150,16 +162,16 @@ export function DashboardOnboarding({
               isLast ? (
                 <>
                   <Check className="w-4 h-4 ml-1" />
-                  فهمت، نبدأ!
+                  {tx("tour.dashboard.understoodLetsStart")}
                 </>
               ) : (
                 <>
                   <ArrowLeft className="w-4 h-4 ml-1" />
-                  التالي
+                  {tx("tour.dashboard.next")}
                 </>
               )
             ) : (
-              "فهمت"
+              tx("tour.dashboard.understood")
             )}
           </Button>
 
@@ -170,7 +182,7 @@ export function DashboardOnboarding({
               className="w-full flex items-center justify-center gap-2 text-xs text-[var(--muted-foreground)] mt-3 hover:text-[var(--foreground)] transition-colors"
             >
               <RotateCcw className="w-3.5 h-3.5" />
-              البدء من جديد
+              {tx("tour.dashboard.restartFromBeginning")}
             </button>
           )}
         </div>
@@ -183,7 +195,7 @@ export function DashboardOnboarding({
           }}
           className="w-full text-center text-xs text-[var(--muted-foreground)] mt-4 hover:text-[var(--foreground)] transition-colors"
         >
-          تخطى الشرح
+          {tx("tour.dashboard.skipTutorial")}
         </button>
       </div>
     </div>

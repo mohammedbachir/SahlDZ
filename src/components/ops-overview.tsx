@@ -1,9 +1,17 @@
 import { useEffect, useState } from "react";
-import { Wallet, AlertTriangle, Users, Trash2, TrendingUp, PiggyBank } from "lucide-react";
+import {
+  Wallet,
+  AlertTriangle,
+  Users,
+  Trash2,
+  TrendingUp,
+  PiggyBank,
+} from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { tx } from "@/lib/ops-tx";
 import { useTranslation } from "react-i18next";
+import { ManagerDownloadBanner } from "@/components/manager-download-banner";
 
 type Kpis = {
   monthExpenses: number;
@@ -38,7 +46,12 @@ async function resolveRestaurantId(userId: string): Promise<string | null> {
 
 // KPIs that should be hidden for specific roles
 const HIDDEN_KPIS: Record<string, string[]> = {
-  production_manager: ["إيرادات هذا الشهر", "صافي الربح", "مصاريف هذا الشهر", "رواتب معلقة"],
+  production_manager: [
+    "إيرادات هذا الشهر",
+    "صافي الربح",
+    "مصاريف هذا الشهر",
+    "رواتب معلقة",
+  ],
   purchasing_manager: ["إيرادات هذا الشهر", "صافي الربح", "رواتب معلقة"],
   hr_manager: ["إيرادات هذا الشهر", "صافي الربح", "مصاريف هذا الشهر"],
 };
@@ -59,7 +72,10 @@ export function OpsOverview() {
   useEffect(() => {
     (async () => {
       const { data: u } = await supabase.auth.getUser();
-      if (!u.user) { setLoading(false); return; }
+      if (!u.user) {
+        setLoading(false);
+        return;
+      }
 
       // Fetch role
       const { data: roleRow } = await supabase
@@ -71,11 +87,20 @@ export function OpsOverview() {
       setUserRole(role);
 
       const rid = await resolveRestaurantId(u.user.id);
-      if (!rid) { setLoading(false); return; }
+      if (!rid) {
+        setLoading(false);
+        return;
+      }
 
       const now = new Date();
-      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-      const weekStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      const monthStart = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        1,
+      ).toISOString();
+      const weekStart = new Date(
+        now.getTime() - 7 * 24 * 60 * 60 * 1000,
+      ).toISOString();
       const periodMonth = new Date(now.getFullYear(), now.getMonth(), 1)
         .toISOString()
         .slice(0, 7); // YYYY-MM, matches employee_salary_payments.month
@@ -89,7 +114,16 @@ export function OpsOverview() {
       const showPendingSalaries = !hidden.includes("رواتب معلقة");
       const empty = Promise.resolve({ data: [] as never[] });
 
-      const [poRes, salRes, ingRes, empRes, paidRes, wasteRes, ordersRes, monthWasteRes] = await Promise.all([
+      const [
+        poRes,
+        salRes,
+        ingRes,
+        empRes,
+        paidRes,
+        wasteRes,
+        ordersRes,
+        monthWasteRes,
+      ] = await Promise.all([
         showExpenses || showNet
           ? supabase
               .from("purchase_orders")
@@ -144,16 +178,35 @@ export function OpsOverview() {
           : empty,
       ]);
 
-      const purchases = (poRes.data ?? []).reduce((s: number, x: any) => s + Number(x.total || 0), 0);
-      const salaries = (salRes.data ?? []).reduce((s: number, x: any) => s + Number(x.net_salary || 0), 0);
+      const purchases = (poRes.data ?? []).reduce(
+        (s: number, x: any) => s + Number(x.total || 0),
+        0,
+      );
+      const salaries = (salRes.data ?? []).reduce(
+        (s: number, x: any) => s + Number(x.net_salary || 0),
+        0,
+      );
       const lowStock = (ingRes.data ?? []).filter(
         (i: any) => Number(i.current_stock) < Number(i.alert_threshold),
       ).length;
-      const paidIds = new Set((paidRes.data ?? []).map((p: any) => p.employee_id));
-      const pendingSalaries = (empRes.data ?? []).filter((e: any) => !paidIds.has(e.id)).length;
-      const weekWaste = (wasteRes.data ?? []).reduce((s: number, x: any) => s + Number(x.cost || 0), 0);
-      const monthRevenue = (ordersRes.data ?? []).reduce((s: number, x: any) => s + Number(x.total || 0), 0);
-      const monthWaste = (monthWasteRes.data ?? []).reduce((s: number, x: any) => s + Number(x.cost || 0), 0);
+      const paidIds = new Set(
+        (paidRes.data ?? []).map((p: any) => p.employee_id),
+      );
+      const pendingSalaries = (empRes.data ?? []).filter(
+        (e: any) => !paidIds.has(e.id),
+      ).length;
+      const weekWaste = (wasteRes.data ?? []).reduce(
+        (s: number, x: any) => s + Number(x.cost || 0),
+        0,
+      );
+      const monthRevenue = (ordersRes.data ?? []).reduce(
+        (s: number, x: any) => s + Number(x.total || 0),
+        0,
+      );
+      const monthWaste = (monthWasteRes.data ?? []).reduce(
+        (s: number, x: any) => s + Number(x.cost || 0),
+        0,
+      );
       const monthExpensesAll = purchases + salaries + monthWaste;
 
       setKpis({
@@ -226,24 +279,39 @@ export function OpsOverview() {
   const visibleItems = allItems.filter((it) => !hiddenKeys.includes(it.key));
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 p-2" data-annotate="ops-overview-kpis">
-      {visibleItems.map((it) => {
-        const Icon = it.icon;
-        return (
-          <Card key={it.key} className="p-5 rounded-2xl glass shadow-glass border-border/60">
-            <div className="flex items-center justify-between mb-4">
-              <div className={`w-11 h-11 rounded-xl flex items-center justify-center ${it.tone}`}>
-                <Icon className="w-5 h-5" />
+    <>
+      {userRole === "admin" && <ManagerDownloadBanner />}
+      <div
+        className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 p-2"
+        data-annotate="ops-overview-kpis"
+      >
+        {visibleItems.map((it) => {
+          const Icon = it.icon;
+          return (
+            <Card
+              key={it.key}
+              className="p-5 rounded-2xl glass shadow-glass border-border/60"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <div
+                  className={`w-11 h-11 rounded-xl flex items-center justify-center ${it.tone}`}
+                >
+                  <Icon className="w-5 h-5" />
+                </div>
               </div>
-            </div>
-            <div className="text-xs text-muted-foreground mb-1">{it.label}</div>
-            <div className="text-2xl font-bold tracking-tight text-foreground">
-              {loading ? "…" : it.value}
-            </div>
-            <div className="text-[11px] text-muted-foreground mt-1">{it.hint}</div>
-          </Card>
-        );
-      })}
-    </div>
+              <div className="text-xs text-muted-foreground mb-1">
+                {it.label}
+              </div>
+              <div className="text-2xl font-bold tracking-tight text-foreground">
+                {loading ? "…" : it.value}
+              </div>
+              <div className="text-[11px] text-muted-foreground mt-1">
+                {it.hint}
+              </div>
+            </Card>
+          );
+        })}
+      </div>
+    </>
   );
 }

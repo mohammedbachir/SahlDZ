@@ -26,12 +26,18 @@ function write(key: string, entry: RateLimitEntry) {
   }
 }
 
-export function checkRateLimit(key: string): { allowed: boolean; waitSeconds: number } {
+export function checkRateLimit(key: string): {
+  allowed: boolean;
+  waitSeconds: number;
+} {
   const entry = read(key);
   const now = Date.now();
 
   if (entry.lockedUntil > now) {
-    return { allowed: false, waitSeconds: Math.ceil((entry.lockedUntil - now) / 1000) };
+    return {
+      allowed: false,
+      waitSeconds: Math.ceil((entry.lockedUntil - now) / 1000),
+    };
   }
 
   if (entry.firstAttemptAt > 0 && now - entry.firstAttemptAt > WINDOW_MS) {
@@ -51,7 +57,8 @@ export function checkRateLimit(key: string): { allowed: boolean; waitSeconds: nu
 export function recordFailedAttempt(key: string): void {
   const entry = read(key);
   const now = Date.now();
-  const firstAttemptAt = entry.firstAttemptAt === 0 ? now : entry.firstAttemptAt;
+  const firstAttemptAt =
+    entry.firstAttemptAt === 0 ? now : entry.firstAttemptAt;
 
   if (now - firstAttemptAt > WINDOW_MS) {
     write(key, { attempts: 1, firstAttemptAt: now, lockedUntil: 0 });

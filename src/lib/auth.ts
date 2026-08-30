@@ -1,6 +1,11 @@
+import { useNavigate } from "@tanstack/react-router";
+import { useEffect } from "react";
 import { redirect } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { cacheSession, readSessionCache } from "@/lib/session-cache";
+import { getFirebaseDb } from "@/integrations/firebase/config";
+
+const IS_PREVIEW = !getFirebaseDb();
 
 // Only trust the cached redirect target while it's fresh; otherwise the real
 // post-auth target is recomputed (roles/ownership may have changed).
@@ -14,7 +19,37 @@ export function freshCachedTarget(): string | null {
   return null;
 }
 
+// Staff login is desktop-only: waiter/kitchen/cashier authenticate from the
+// installed desktop app, never from the public website or mobile.
+export function requireDesktop(): void {
+  if (typeof window !== "undefined" && !window.__ELECTRON__) {
+    throw redirect({ to: "/login" });
+  }
+}
+
+// Hydration-time guard: beforeLoad runs during SSR where `window` is absent,
+// so full page loads in a plain browser skip it. Redirect from the client
+// after mount instead.
+export function useDesktopOnly(): void {
+  const navigate = useNavigate();
+  useEffect(() => {
+    if (typeof window !== "undefined" && !window.__ELECTRON__) {
+      navigate({ to: "/login", replace: true });
+    }
+  }, [navigate]);
+}
+
 export async function getPostAuthRedirect(userId: string): Promise<string> {
+  if (IS_PREVIEW) {
+    const role = localStorage.getItem("sahl_dz_preview_role");
+    if (role === "owner") {
+      cacheSession(userId, "/dashboard");
+      return "/dashboard";
+    }
+    cacheSession(userId, "/ops");
+    return "/ops";
+  }
+
   // Owner: owns a restaurant directly → operations management (general overview)
   const { data: owned } = await supabase
     .from("restaurants")
@@ -45,9 +80,9 @@ export async function getPostAuthRedirect(userId: string): Promise<string> {
   }
 
   // New user with no restaurant — owner onboarding (create restaurant)
-  // happens on the account page itself.
-  cacheSession(userId, "/account");
-  return "/account";
+  // happens on the setup page itself.
+  cacheSession(userId, "/setup");
+  return "/setup";
 }
 
 export async function requireOwner(): Promise<void> {
@@ -90,6 +125,13 @@ export async function redirectIfAuthed(): Promise<void> {
 }
 
 export async function requireAuth(): Promise<void> {
+  if (IS_PREVIEW) {
+    const cached = readSessionCache();
+    if (!cached?.uid) {
+      throw redirect({ to: "/login" });
+    }
+    return;
+  }
   const { data } = await supabase.auth.getSession();
   if (!data.session?.user?.id) {
     throw redirect({ to: "/login" });
@@ -103,7 +145,8 @@ export function translateAuthError(message: string): string {
     "Email not confirmed": "البريد الإلكتروني غير مؤكد بعد، تحقق من بريدك",
     "User already registered": "هذا البريد الإلكتروني مسجل مسبقاً",
     "invalid login": "بيانات الدخول غير صحيحة",
-    "Password should be at least 6 characters": "كلمة المرور يجب أن تكون 6 أحرف على الأقل",
+    "Password should be at least 6 characters":
+      "كلمة المرور يجب أن تكون 6 أحرف على الأقل",
     "Unable to validate email address": "تعذر التحقق من صحة البريد الإلكتروني",
   };
   return map[message] ?? message;

@@ -7,6 +7,10 @@ import { getPostAuthRedirect, redirectIfAuthed, translateAuthError } from "@/lib
 import { checkRateLimit, recordFailedAttempt } from "@/lib/rate-limiter";
 import { useTranslation } from "react-i18next";
 import { appOrigin } from "@/lib/app-url";
+import { getFirebaseDb } from "@/integrations/firebase/config";
+import { cacheSession } from "@/lib/session-cache";
+
+const IS_PREVIEW = !getFirebaseDb();
 
 export const Route = createFileRoute("/signup")({
   beforeLoad: redirectIfAuthed,
@@ -91,6 +95,40 @@ function SignupPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  if (IS_PREVIEW) {
+    return (
+      <AuthShell
+        title={t("auth.signupTitle")}
+        subtitle={t("auth.signupSubtitle")}
+        footer={
+          <>
+            {t("auth.haveAccount")}{" "}
+            <Link to="/login" className="text-[var(--primary)] font-semibold hover:underline">
+              {t("auth.login")}
+            </Link>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-sm text-amber-600 text-center leading-relaxed">
+            التسجيل غير متاح في وضع المعاينة — سجّل الدخول من صفحة الدخول مباشرة
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              cacheSession("preview-owner-id", "/dashboard");
+              localStorage.setItem("sahl_dz_preview_role", "owner");
+              navigate({ to: "/dashboard" });
+            }}
+            className="w-full py-3 rounded-lg bg-[var(--primary)] text-[#1a1612] font-semibold transition-colors hover:bg-[var(--primary)]/90"
+          >
+            الدخول كمدير المطعم (معاينة)
+          </button>
+        </div>
+      </AuthShell>
+    );
   }
 
   return (

@@ -1,1 +1,287 @@
-{"nodes": [{"id": "docs_website_issues_report", "label": "Website Issues Report", "file_type": "document", "source_file": "Docs/website-issues.md", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null, "rationale": "Report is based on static code review, not full runtime testing; only problems with direct code evidence are documented."}, {"id": "docs_website_issues_build_script_missing", "label": "Missing Vercel Build Script", "file_type": "concept", "source_file": "Docs/website-issues.md", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null, "rationale": "npm run build referenced scripts/build-vercel.mjs which did not exist; the script was dropped so build is now just vite build."}, {"id": "docs_website_issues_setup_not_implemented", "label": "Restaurant Setup Not Implemented", "file_type": "concept", "source_file": "Docs/website-issues.md", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null}, {"id": "docs_website_issues_forgot_password_missing", "label": "Password Recovery Unavailable", "file_type": "concept", "source_file": "Docs/website-issues.md", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null}, {"id": "docs_website_issues_stub_server_functions", "label": "Stub Server Functions", "file_type": "concept", "source_file": "Docs/website-issues.md", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null, "rationale": "settings/telegram/daily-summary/summary-bot/ops-alerts server functions return fixed values; UI can suggest saving/sending succeeded while nothing is persisted."}, {"id": "docs_website_issues_rate_limiter_client_side", "label": "Bypassable Client-Side Rate Limiting", "file_type": "concept", "source_file": "Docs/website-issues.md", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null, "rationale": "Counters stored in window.localStorage are bypassable by clearing browser data or using another device; not real protection against guessing or distributed attacks."}, {"id": "docs_website_issues_firebase_adapter_query_semantics", "label": "Firebase Emulator Query Semantics", "file_type": "concept", "source_file": "Docs/website-issues.md", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null, "rationale": "Stub returns empty/success without executing; like/ilike are mapped to >=, which is not text search, so preview results diverge from production."}, {"id": "docs_website_issues_supabase_compat_naming", "label": "Supabase-Compatible Naming", "file_type": "concept", "source_file": "Docs/website-issues.md", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null, "rationale": "Client is exported under the name supabase but is really a Firebase adapter; unsupported operations may fail silently or differ from expected Supabase behavior."}, {"id": "docs_website_issues_any_usage", "label": "Widespread any Usage", "file_type": "concept", "source_file": "Docs/website-issues.md", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null}, {"id": "docs_website_issues_oauth_not_implemented", "label": "OAuth Not Implemented (Closed)", "file_type": "concept", "source_file": "Docs/website-issues.md", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null, "rationale": "Decision: signInWithOAuth returned {data:{},error:null} without opening a provider; social login (Google/Apple) was removed entirely leaving only email/password, so the item is closed."}, {"id": "docs_website_issues_realtime_not_implemented", "label": "Realtime Not Implemented", "file_type": "concept", "source_file": "Docs/website-issues.md", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null}, {"id": "docs_website_issues_role_function_placeholders", "label": "Role Function Placeholders", "file_type": "concept", "source_file": "Docs/website-issues.md", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null, "rationale": "Waiter/cashier/individual-chef/delivery/takeaway server functions are static or unbound to the database; screens may appear to work while data is never saved."}, {"id": "docs_website_issues_authenticated_preview_fallback", "label": "Authenticated Preview Fallback", "file_type": "concept", "source_file": "Docs/website-issues.md", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null, "rationale": "Dashboard falls back to mock restaurant (\u0645\u0637\u0639\u0645 \u0627\u0644\u0633\u0647\u0644 / mock-restaurant-id) after a restaurant/role lookup fails, so an authenticated user with no restaurant can see a demo screen instead of setup."}, {"id": "docs_website_issues_i18n_incomplete", "label": "Incomplete i18n Support", "file_type": "concept", "source_file": "Docs/website-issues.md", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null, "rationale": "ar/fr/en declared in supportedLngs but only ar resources registered; choosing French/English shows keys or Arabic fallback, and hardcoded Arabic strings exist in pages."}, {"id": "docs_website_issues_oauth_callback_missing", "label": "Missing OAuth Callback Route (Closed)", "file_type": "concept", "source_file": "Docs/website-issues.md", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null, "rationale": "Decision: after complete removal of social login there are no OAuth endpoints and no callback route needed; item closed."}, {"id": "docs_website_issues_static_preview_tokens", "label": "Predictable Preview Tokens", "file_type": "concept", "source_file": "Docs/website-issues.md", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null, "rationale": "mock_waiter / mock_chef / mock_cashier tokens are fine for demo only but dangerous if any endpoint accepts them as real credentials or if preview data mixes with production."}, {"id": "docs_website_issues_fake_success_settings", "label": "Fake Success on Settings/Telegram", "file_type": "concept", "source_file": "Docs/website-issues.md", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null, "rationale": "setRestaurantBotToken / setSummaryBotToken return fixed success without saving or validating the token; user believes Telegram/daily summaries are enabled when they are not."}], "edges": [{"source": "docs_website_issues_oauth_not_implemented", "target": "docs_remove_social_login_prompt_prompt", "relation": "conceptually_related_to", "confidence": "EXTRACTED", "confidence_score": 1.0, "source_file": "Docs/website-issues.md", "source_location": null, "weight": 1.0}, {"source": "docs_website_issues_oauth_callback_missing", "target": "docs_remove_social_login_prompt_prompt", "relation": "conceptually_related_to", "confidence": "EXTRACTED", "confidence_score": 1.0, "source_file": "Docs/website-issues.md", "source_location": null, "weight": 1.0}, {"source": "docs_website_issues_oauth_not_implemented", "target": "docs_remove_social_login_prompt_email_password_auth", "relation": "conceptually_related_to", "confidence": "INFERRED", "confidence_score": 0.75, "source_file": "Docs/website-issues.md", "source_location": null, "weight": 1.0}, {"source": "docs_website_issues_role_function_placeholders", "target": "docs_website_issues_stub_server_functions", "relation": "conceptually_related_to", "confidence": "EXTRACTED", "confidence_score": 1.0, "source_file": "Docs/website-issues.md", "source_location": null, "weight": 1.0}, {"source": "docs_website_issues_fake_success_settings", "target": "docs_website_issues_stub_server_functions", "relation": "conceptually_related_to", "confidence": "EXTRACTED", "confidence_score": 1.0, "source_file": "Docs/website-issues.md", "source_location": null, "weight": 1.0}, {"source": "docs_website_issues_any_usage", "target": "docs_website_issues_firebase_adapter_query_semantics", "relation": "conceptually_related_to", "confidence": "EXTRACTED", "confidence_score": 1.0, "source_file": "Docs/website-issues.md", "source_location": null, "weight": 1.0}, {"source": "docs_website_issues_oauth_not_implemented", "target": "docs_website_issues_oauth_callback_missing", "relation": "conceptually_related_to", "confidence": "EXTRACTED", "confidence_score": 1.0, "source_file": "Docs/website-issues.md", "source_location": null, "weight": 1.0}, {"source": "docs_website_issues_supabase_compat_naming", "target": "docs_website_issues_firebase_adapter_query_semantics", "relation": "conceptually_related_to", "confidence": "EXTRACTED", "confidence_score": 1.0, "source_file": "Docs/website-issues.md", "source_location": null, "weight": 1.0}], "hyperedges": []}
+{
+  "nodes": [
+    {
+      "id": "docs_website_issues_report",
+      "label": "Website Issues Report",
+      "file_type": "document",
+      "source_file": "Docs/website-issues.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "rationale": "Report is based on static code review, not full runtime testing; only problems with direct code evidence are documented."
+    },
+    {
+      "id": "docs_website_issues_build_script_missing",
+      "label": "Missing Vercel Build Script",
+      "file_type": "concept",
+      "source_file": "Docs/website-issues.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "rationale": "npm run build referenced scripts/build-vercel.mjs which did not exist; the script was dropped so build is now just vite build."
+    },
+    {
+      "id": "docs_website_issues_setup_not_implemented",
+      "label": "Restaurant Setup Not Implemented",
+      "file_type": "concept",
+      "source_file": "Docs/website-issues.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_website_issues_forgot_password_missing",
+      "label": "Password Recovery Unavailable",
+      "file_type": "concept",
+      "source_file": "Docs/website-issues.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_website_issues_stub_server_functions",
+      "label": "Stub Server Functions",
+      "file_type": "concept",
+      "source_file": "Docs/website-issues.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "rationale": "settings/telegram/daily-summary/summary-bot/ops-alerts server functions return fixed values; UI can suggest saving/sending succeeded while nothing is persisted."
+    },
+    {
+      "id": "docs_website_issues_rate_limiter_client_side",
+      "label": "Bypassable Client-Side Rate Limiting",
+      "file_type": "concept",
+      "source_file": "Docs/website-issues.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "rationale": "Counters stored in window.localStorage are bypassable by clearing browser data or using another device; not real protection against guessing or distributed attacks."
+    },
+    {
+      "id": "docs_website_issues_firebase_adapter_query_semantics",
+      "label": "Firebase Emulator Query Semantics",
+      "file_type": "concept",
+      "source_file": "Docs/website-issues.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "rationale": "Stub returns empty/success without executing; like/ilike are mapped to >=, which is not text search, so preview results diverge from production."
+    },
+    {
+      "id": "docs_website_issues_supabase_compat_naming",
+      "label": "Supabase-Compatible Naming",
+      "file_type": "concept",
+      "source_file": "Docs/website-issues.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "rationale": "Client is exported under the name supabase but is really a Firebase adapter; unsupported operations may fail silently or differ from expected Supabase behavior."
+    },
+    {
+      "id": "docs_website_issues_any_usage",
+      "label": "Widespread any Usage",
+      "file_type": "concept",
+      "source_file": "Docs/website-issues.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_website_issues_oauth_not_implemented",
+      "label": "OAuth Not Implemented (Closed)",
+      "file_type": "concept",
+      "source_file": "Docs/website-issues.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "rationale": "Decision: signInWithOAuth returned {data:{},error:null} without opening a provider; social login (Google/Apple) was removed entirely leaving only email/password, so the item is closed."
+    },
+    {
+      "id": "docs_website_issues_realtime_not_implemented",
+      "label": "Realtime Not Implemented",
+      "file_type": "concept",
+      "source_file": "Docs/website-issues.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_website_issues_role_function_placeholders",
+      "label": "Role Function Placeholders",
+      "file_type": "concept",
+      "source_file": "Docs/website-issues.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "rationale": "Waiter/cashier/individual-chef/delivery/takeaway server functions are static or unbound to the database; screens may appear to work while data is never saved."
+    },
+    {
+      "id": "docs_website_issues_authenticated_preview_fallback",
+      "label": "Authenticated Preview Fallback",
+      "file_type": "concept",
+      "source_file": "Docs/website-issues.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "rationale": "Dashboard falls back to mock restaurant (\u0645\u0637\u0639\u0645 \u0627\u0644\u0633\u0647\u0644 / mock-restaurant-id) after a restaurant/role lookup fails, so an authenticated user with no restaurant can see a demo screen instead of setup."
+    },
+    {
+      "id": "docs_website_issues_i18n_incomplete",
+      "label": "Incomplete i18n Support",
+      "file_type": "concept",
+      "source_file": "Docs/website-issues.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "rationale": "ar/fr/en declared in supportedLngs but only ar resources registered; choosing French/English shows keys or Arabic fallback, and hardcoded Arabic strings exist in pages."
+    },
+    {
+      "id": "docs_website_issues_oauth_callback_missing",
+      "label": "Missing OAuth Callback Route (Closed)",
+      "file_type": "concept",
+      "source_file": "Docs/website-issues.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "rationale": "Decision: after complete removal of social login there are no OAuth endpoints and no callback route needed; item closed."
+    },
+    {
+      "id": "docs_website_issues_static_preview_tokens",
+      "label": "Predictable Preview Tokens",
+      "file_type": "concept",
+      "source_file": "Docs/website-issues.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "rationale": "mock_waiter / mock_chef / mock_cashier tokens are fine for demo only but dangerous if any endpoint accepts them as real credentials or if preview data mixes with production."
+    },
+    {
+      "id": "docs_website_issues_fake_success_settings",
+      "label": "Fake Success on Settings/Telegram",
+      "file_type": "concept",
+      "source_file": "Docs/website-issues.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "rationale": "setRestaurantBotToken / setSummaryBotToken return fixed success without saving or validating the token; user believes Telegram/daily summaries are enabled when they are not."
+    }
+  ],
+  "edges": [
+    {
+      "source": "docs_website_issues_oauth_not_implemented",
+      "target": "docs_remove_social_login_prompt_prompt",
+      "relation": "conceptually_related_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "Docs/website-issues.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docs_website_issues_oauth_callback_missing",
+      "target": "docs_remove_social_login_prompt_prompt",
+      "relation": "conceptually_related_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "Docs/website-issues.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docs_website_issues_oauth_not_implemented",
+      "target": "docs_remove_social_login_prompt_email_password_auth",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.75,
+      "source_file": "Docs/website-issues.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docs_website_issues_role_function_placeholders",
+      "target": "docs_website_issues_stub_server_functions",
+      "relation": "conceptually_related_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "Docs/website-issues.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docs_website_issues_fake_success_settings",
+      "target": "docs_website_issues_stub_server_functions",
+      "relation": "conceptually_related_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "Docs/website-issues.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docs_website_issues_any_usage",
+      "target": "docs_website_issues_firebase_adapter_query_semantics",
+      "relation": "conceptually_related_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "Docs/website-issues.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docs_website_issues_oauth_not_implemented",
+      "target": "docs_website_issues_oauth_callback_missing",
+      "relation": "conceptually_related_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "Docs/website-issues.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docs_website_issues_supabase_compat_naming",
+      "target": "docs_website_issues_firebase_adapter_query_semantics",
+      "relation": "conceptually_related_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "Docs/website-issues.md",
+      "source_location": null,
+      "weight": 1.0
+    }
+  ],
+  "hyperedges": []
+}

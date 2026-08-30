@@ -1,12 +1,28 @@
 import { supabase } from "@/integrations/supabase/client";
+import { sendLowStockAlert } from "@/lib/ops-alerts.functions";
 
-type OrderRow = { id: string; restaurant_id: string; stock_decremented?: boolean };
+type OrderRow = {
+  id: string;
+  restaurant_id: string;
+  stock_decremented?: boolean;
+};
 type OrderItem = { menu_item_id: string | null; quantity: number };
-type RecipeRow = { menu_item_id: string; ingredient_id: string; quantity: number };
-type IngredientRow = { id: string; current_stock: number };
+type RecipeRow = {
+  menu_item_id: string;
+  ingredient_id: string;
+  quantity: number;
+};
+type IngredientRow = {
+  id: string;
+  current_stock: number;
+  alert_threshold: number;
+};
 
 async function markDecremented(orderId: string) {
-  await supabase.from("orders").update({ stock_decremented: true }).eq("id", orderId);
+  await supabase
+    .from("orders")
+    .update({ stock_decremented: true })
+    .eq("id", orderId);
 }
 
 /**
@@ -22,7 +38,8 @@ export async function decrementStockForOrder(orderId: string) {
     .single();
   const ord = order as OrderRow | null;
   if (!ord?.restaurant_id) return { skipped: true, reason: "no-order" };
-  if (ord.stock_decremented) return { skipped: true, reason: "already-decremented" };
+  if (ord.stock_decremented)
+    return { skipped: true, reason: "already-decremented" };
 
   const restaurantId = ord.restaurant_id;
 
@@ -32,7 +49,9 @@ export async function decrementStockForOrder(orderId: string) {
     .eq("order_id", orderId);
   const orderItems = (items as OrderItem[]) ?? [];
   const menuItemIds = new Set(
-    orderItems.map((i) => i.menu_item_id).filter((id): id is string => Boolean(id)),
+    orderItems
+      .map((i) => i.menu_item_id)
+      .filter((id): id is string => Boolean(id)),
   );
   if (menuItemIds.size === 0) {
     await markDecremented(orderId);
@@ -58,17 +77,19 @@ export async function decrementStockForOrder(orderId: string) {
       if (r.menu_item_id === it.menu_item_id) {
         consumption.set(
           r.ingredient_id,
-          (consumption.get(r.ingredient_id) ?? 0) + (Number(r.quantity) || 0) * qty,
+          (consumption.get(r.ingredient_id) ?? 0) +
+            (Number(r.quantity) || 0) * qty,
         );
       }
     }
   }
 
   let ingredientsDecremented = 0;
+  const lowStockIds: string[] = [];
   for (const [ingredientId, used] of consumption) {
     const { data: ing } = await supabase
       .from("ingredients")
-      .select("id, current_stock")
+      .select("id, current_stock, alert_threshold")
       .eq("id", ingredientId)
       .single();
     const row = ing as IngredientRow | null;
@@ -79,8 +100,21 @@ export async function decrementStockForOrder(orderId: string) {
       .update({ current_stock: newStock })
       .eq("id", ingredientId);
     ingredientsDecremented++;
+    if (newStock < Number(row.alert_threshold)) {
+      lowStockIds.push(ingredientId);
+    }
   }
 
   await markDecremented(orderId);
-  return { ok: true, ingredients: ingredientsDecremented };
+
+  // تنبيهات المخزون الناقص — fire-and-forget (لا تُبطئ الطلب)
+  for (const id of lowStockIds) {
+    void sendLowStockAlert(restaurantId, id);
+  }
+
+  return {
+    ok: true,
+    ingredients: ingredientsDecremented,
+    lowStock: lowStockIds.length,
+  };
 }

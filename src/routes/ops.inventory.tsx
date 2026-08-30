@@ -3,10 +3,10 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Plus, Trash2, Pencil, Plus as PlusIcon, Minus, MoreVertical, Camera, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
-import { sendLowStockAlert, sendPurchaseNotification } from "@/lib/ops-alerts.functions";
+import { sendLowStockAlertFn, sendPurchaseNotificationFn } from "@/lib/ops-alerts.functions";
 import { analyzeReceipt } from "@/lib/inventory-receipt.functions";
 import { supabase } from "@/integrations/supabase/client";
-import { useRestaurantId } from "@/lib/restaurant";
+import { useRestaurantId, formatDZD } from "@/lib/restaurant";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -37,6 +37,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { tx } from "@/lib/ops-tx";
 import { useTranslation } from "react-i18next";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 import {
   DropdownMenu,
@@ -95,8 +96,8 @@ function OpsInventory() {
   const { restaurantId, loading: restaurantLoading } = useRestaurantId();
   const [items, setItems] = useState<Ingredient[]>([]);
   const [loading, setLoading] = useState(true);
-  const alertFn = useServerFn(sendLowStockAlert);
-  const notifyPurchase = useServerFn(sendPurchaseNotification);
+  const alertFn = useServerFn(sendLowStockAlertFn);
+  const notifyPurchase = useServerFn(sendPurchaseNotificationFn);
   const analyzeFn = useServerFn(analyzeReceipt);
 
   const maybeAlert = async (ingredientId: string) => {
@@ -104,7 +105,7 @@ function OpsInventory() {
       const { data: sessionData } = await supabase.auth.getSession();
       if (!sessionData.session?.access_token) return;
       const r = await alertFn({
-        data: { ingredientId },
+        data: { restaurantId: restaurantId!, ingredientId },
         headers: { Authorization: `Bearer ${sessionData.session.access_token}` },
       });
       if (r.sent) toast.warning(tx("تم إرسال تنبيه Telegram للمخزون الناقص"));
@@ -122,6 +123,10 @@ function OpsInventory() {
     alert_threshold: "0",
     cost_per_unit: "0",
   });
+
+  // Delete confirmation
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Ingredient | null>(null);
   const [editSaving, setEditSaving] = useState(false);
 
   // Adjust stock modal
@@ -584,13 +589,20 @@ function OpsInventory() {
 
   const deleteIngredient = async (ing: Ingredient) => {
     if (!restaurantId) return;
-    if (!confirm(tx("حذف \"") + (ing.name) + tx("\"؟ لا يمكن التراجع."))) return;
-    const { error } = await supabase.from("ingredients").delete().eq("id", ing.id);
+    setDeleteTarget(ing);
+    setDeleteOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!restaurantId || !deleteTarget) return;
+    const { error } = await supabase.from("ingredients").delete().eq("id", deleteTarget.id);
     if (error) {
       toast.error(tx("فشل الحذف — قد يكون مرتبطاً بسجلات"));
       return;
     }
     toast.success(tx("تم الحذف"));
+    setDeleteOpen(false);
+    setDeleteTarget(null);
     await loadAll(restaurantId);
   };
 
@@ -683,7 +695,7 @@ function OpsInventory() {
                     <TableCell>{i.unit}</TableCell>
                     <TableCell>{Number(i.current_stock)}</TableCell>
                     <TableCell>{Number(i.alert_threshold)}</TableCell>
-                    <TableCell>{Number(i.cost_per_unit)} دج</TableCell>
+                    <TableCell>{formatDZD(Number(i.cost_per_unit))}</TableCell>
                     <TableCell>
                       {low ? (
                         <Badge variant="destructive">{tx("ناقص")}</Badge>
@@ -836,7 +848,7 @@ function OpsInventory() {
               />
             </div>
             <div className="text-sm text-muted-foreground">
-              التكلفة المُحتسبة: {((Number(wasteForm.quantity) || 0) * Number(wasteIng?.cost_per_unit || 0)).toFixed(2)} دج
+              التكلفة المُحتسبة: {formatDZD(((Number(wasteForm.quantity) || 0) * Number(wasteIng?.cost_per_unit || 0)))}
             </div>
           </div>
           <DialogFooter>
@@ -1095,6 +1107,16 @@ function OpsInventory() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title={tx("حذف \"") + (deleteTarget?.name ?? "") + tx("\"")}
+        description={tx("لا يمكن التراجع عن هذا الإجراء.")}
+        confirmLabel={tx("حذف")}
+        destructive
+        onConfirm={confirmDelete}
+      />
     </div>
   );
 }

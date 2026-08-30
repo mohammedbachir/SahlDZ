@@ -1,4 +1,9 @@
-import { createFileRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  Link,
+  redirect,
+  useNavigate,
+} from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
   ShoppingBag,
@@ -16,13 +21,18 @@ import {
   Shield,
 } from "lucide-react";
 import { freshCachedTarget, getPostAuthRedirect } from "@/lib/auth";
+import { isEmbeddedWebView } from "@/lib/device";
 import { supabase } from "@/integrations/supabase/client";
 import { AnimatedCounter } from "@/components/ui/animated-counter";
 import { Button } from "@/components/ui/button";
+import { DownloadBanner } from "@/components/download-banner";
 
 export const Route = createFileRoute("/")({
   beforeLoad: async () => {
     if (typeof window === "undefined") return;
+    if (window.__ELECTRON__) {
+      throw redirect({ to: "/login" });
+    }
     const fast = freshCachedTarget();
     if (fast) {
       throw redirect({ to: fast });
@@ -38,7 +48,8 @@ export const Route = createFileRoute("/")({
       { title: "Sahl DZ - نظام إدارة المطاعم في الجزائر" },
       {
         name: "description",
-        content: "Sahl DZ هو نظام سحابي متكامل لإدارة المطاعم في الجزائر. إدارة الطلبات، القائمة، الموظفين، المخزون، والتحليلات.",
+        content:
+          "Sahl DZ هو نظام سحابي متكامل لإدارة المطاعم في الجزائر. إدارة الطلبات، القائمة، الموظفين، المخزون، والتحليلات.",
       },
     ],
     links: [
@@ -189,7 +200,8 @@ const faqs = [
   },
   {
     question: "كيف يعمل نظام الطلبات بالـ QR؟",
-    answer: "كل طاولة تحصل على QR Code فريد. الزبون يمسحه ويظهر له القائمة مباشرة.",
+    answer:
+      "كل طاولة تحصل على QR Code فريد. الزبون يمسحه ويظهر له القائمة مباشرة.",
   },
   {
     question: "هل يمكنني تجربة النظام مجاناً؟",
@@ -242,14 +254,29 @@ function Navbar() {
       <div className="container-sahl flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Logo size={36} />
-          <span className="font-bold text-lg text-[var(--foreground)]">Sahl DZ</span>
+          <span className="font-bold text-lg text-[var(--foreground)]">
+            Sahl DZ
+          </span>
         </div>
         <div className="flex items-center gap-3">
-          <Link to="/login" className="text-sm font-semibold text-[var(--foreground)] hover:text-[var(--primary)] transition-colors">
+          <Link
+            to="/download"
+            className="hidden sm:inline-flex items-center gap-1.5 text-sm font-semibold text-[var(--muted-foreground)] hover:text-[var(--primary)] transition-colors"
+          >
+            <Smartphone className="w-4 h-4" />
+            تحميل التطبيقات
+          </Link>
+          <Link
+            to="/login"
+            className="text-sm font-semibold text-[var(--foreground)] hover:text-[var(--primary)] transition-colors"
+          >
             تسجيل الدخول
           </Link>
           <Link to="/signup">
-            <Button size="sm" className="bg-[var(--primary)] text-[#1a1612] hover:bg-[var(--primary)]/90">
+            <Button
+              size="sm"
+              className="bg-[var(--primary)] text-[#1a1612] hover:bg-[var(--primary)]/90"
+            >
               ابدأ مجاناً
             </Button>
           </Link>
@@ -271,12 +298,16 @@ function HeroSection() {
           </h1>
 
           <p className="text-lg md:text-xl text-[var(--muted-foreground)] mb-10 max-w-2xl mx-auto">
-            نظام سحابي متكامل للمطاعم في الجزائر. إدارة الطلبات، القائمة، الموظفين، المخزون، والتحليلات في مكان واحد.
+            نظام سحابي متكامل للمطاعم في الجزائر. إدارة الطلبات، القائمة،
+            الموظفين، المخزون، والتحليلات في مكان واحد.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link to="/signup">
-              <Button size="lg" className="bg-[var(--primary)] text-[#1a1612] hover:bg-[var(--primary)]/90 px-8">
+              <Button
+                size="lg"
+                className="bg-[var(--primary)] text-[#1a1612] hover:bg-[var(--primary)]/90 px-8"
+              >
                 ابدأ مجاناً
                 <ArrowLeft className="w-5 h-5 mr-2" />
               </Button>
@@ -294,25 +325,33 @@ function HeroSection() {
               <div className="text-3xl font-bold text-[var(--primary)]">
                 <AnimatedCounter value={500} suffix="+" />
               </div>
-              <div className="text-sm text-[var(--muted-foreground)] mt-1">مطعم نشط</div>
+              <div className="text-sm text-[var(--muted-foreground)] mt-1">
+                مطعم نشط
+              </div>
             </div>
             <div className="text-center">
               <div className="text-3xl font-bold text-[var(--primary)]">
                 <AnimatedCounter value={50000} suffix="+" />
               </div>
-              <div className="text-sm text-[var(--muted-foreground)] mt-1">طلب شهرياً</div>
+              <div className="text-sm text-[var(--muted-foreground)] mt-1">
+                طلب شهرياً
+              </div>
             </div>
             <div className="text-center">
               <div className="text-3xl font-bold text-[var(--primary)]">
                 <AnimatedCounter value={99} suffix="%" />
               </div>
-              <div className="text-sm text-[var(--muted-foreground)] mt-1">رضا العملاء</div>
+              <div className="text-sm text-[var(--muted-foreground)] mt-1">
+                رضا العملاء
+              </div>
             </div>
             <div className="text-center">
               <div className="text-3xl font-bold text-[var(--primary)]">
                 <AnimatedCounter value={24} suffix="/7" />
               </div>
-              <div className="text-sm text-[var(--muted-foreground)] mt-1">دعم فني</div>
+              <div className="text-sm text-[var(--muted-foreground)] mt-1">
+                دعم فني
+              </div>
             </div>
           </div>
         </div>
@@ -387,14 +426,18 @@ function PricingSection() {
               )}
 
               <div className="text-center mb-6">
-                <h3 className="text-lg font-bold text-white mb-1">{plan.nameAr}</h3>
+                <h3 className="text-lg font-bold text-white mb-1">
+                  {plan.nameAr}
+                </h3>
                 <p className="text-xs text-white/50">{plan.description}</p>
               </div>
 
               <div className="text-center mb-6">
                 <div className="flex items-baseline justify-center gap-1">
                   {plan.price === 0 ? (
-                    <span className="text-3xl font-bold text-[#D4A853]">مجاني</span>
+                    <span className="text-3xl font-bold text-[#D4A853]">
+                      مجاني
+                    </span>
                   ) : (
                     <>
                       <span className="text-3xl font-bold text-white">
@@ -454,7 +497,9 @@ function StepsSection() {
               <h3 className="text-lg font-bold text-[var(--foreground)] mb-2">
                 {step.title}
               </h3>
-              <p className="text-sm text-[var(--muted-foreground)]">{step.description}</p>
+              <p className="text-sm text-[var(--muted-foreground)]">
+                {step.description}
+              </p>
             </div>
           ))}
         </div>
@@ -491,7 +536,9 @@ function TestimonialsSection() {
                 "{testimonial.content}"
               </p>
               <div>
-                <div className="font-semibold text-sm text-white">{testimonial.name}</div>
+                <div className="font-semibold text-sm text-white">
+                  {testimonial.name}
+                </div>
                 <div className="text-xs text-white/50">{testimonial.role}</div>
               </div>
             </div>
@@ -575,7 +622,9 @@ function Footer() {
           <div>
             <div className="flex items-center gap-2.5 mb-3">
               <Logo size={28} />
-              <span className="font-bold text-[var(--foreground)]">Sahl DZ</span>
+              <span className="font-bold text-[var(--foreground)]">
+                Sahl DZ
+              </span>
             </div>
             <p className="text-xs text-[var(--muted-foreground)] leading-relaxed">
               نظام سحابي متكامل لإدارة المطاعم في الجزائر
@@ -583,28 +632,98 @@ function Footer() {
           </div>
 
           <div>
-            <h4 className="font-semibold text-sm text-[var(--foreground)] mb-3">المنتج</h4>
+            <h4 className="font-semibold text-sm text-[var(--foreground)] mb-3">
+              المنتج
+            </h4>
             <ul className="space-y-1.5">
-              <li><a href="#features" className="text-xs text-[var(--muted-foreground)] hover:text-[var(--primary)] transition-colors">المميزات</a></li>
-              <li><a href="#pricing" className="text-xs text-[var(--muted-foreground)] hover:text-[var(--primary)] transition-colors">الأسعار</a></li>
-              <li><a href="#faq" className="text-xs text-[var(--muted-foreground)] hover:text-[var(--primary)] transition-colors">الأسئلة الشائعة</a></li>
+              <li>
+                <a
+                  href="#features"
+                  className="text-xs text-[var(--muted-foreground)] hover:text-[var(--primary)] transition-colors"
+                >
+                  المميزات
+                </a>
+              </li>
+              <li>
+                <a
+                  href="#pricing"
+                  className="text-xs text-[var(--muted-foreground)] hover:text-[var(--primary)] transition-colors"
+                >
+                  الأسعار
+                </a>
+              </li>
+              <li>
+                <a
+                  href="#faq"
+                  className="text-xs text-[var(--muted-foreground)] hover:text-[var(--primary)] transition-colors"
+                >
+                  الأسئلة الشائعة
+                </a>
+              </li>
+              <li>
+                <Link
+                  to="/download"
+                  className="text-xs text-[var(--muted-foreground)] hover:text-[var(--primary)] transition-colors"
+                >
+                  تحميل التطبيقات
+                </Link>
+              </li>
             </ul>
           </div>
 
           <div>
-            <h4 className="font-semibold text-sm text-[var(--foreground)] mb-3">الدعم</h4>
+            <h4 className="font-semibold text-sm text-[var(--foreground)] mb-3">
+              الدعم
+            </h4>
             <ul className="space-y-1.5">
-              <li><a href="#" className="text-xs text-[var(--muted-foreground)] hover:text-[var(--primary)] transition-colors">تواصل معنا</a></li>
-              <li><a href="#" className="text-xs text-[var(--muted-foreground)] hover:text-[var(--primary)] transition-colors">التوثيق</a></li>
-              <li><a href="#" className="text-xs text-[var(--muted-foreground)] hover:text-[var(--primary)] transition-colors">الحالة</a></li>
+              <li>
+                <a
+                  href="mailto:support@sahldz.com"
+                  className="text-xs text-[var(--muted-foreground)] hover:text-[var(--primary)] transition-colors"
+                >
+                  تواصل معنا
+                </a>
+              </li>
+              <li>
+                <Link
+                  to="/download"
+                  className="text-xs text-[var(--muted-foreground)] hover:text-[var(--primary)] transition-colors"
+                >
+                  التوثيق والتحميل
+                </Link>
+              </li>
+              <li>
+                <Link
+                  to="/mobile"
+                  className="text-xs text-[var(--muted-foreground)] hover:text-[var(--primary)] transition-colors"
+                >
+                  الحالة المباشرة
+                </Link>
+              </li>
             </ul>
           </div>
 
           <div>
-            <h4 className="font-semibold text-sm text-[var(--foreground)] mb-3">القانوني</h4>
+            <h4 className="font-semibold text-sm text-[var(--foreground)] mb-3">
+              القانوني
+            </h4>
             <ul className="space-y-1.5">
-              <li><a href="#" className="text-xs text-[var(--muted-foreground)] hover:text-[var(--primary)] transition-colors">سياسة الخصوصية</a></li>
-              <li><a href="#" className="text-xs text-[var(--muted-foreground)] hover:text-[var(--primary)] transition-colors">شروط الاستخدام</a></li>
+              <li>
+                <a
+                  href="mailto:legal@sahldz.com"
+                  className="text-xs text-[var(--muted-foreground)] hover:text-[var(--primary)] transition-colors"
+                >
+                  سياسة الخصوصية
+                </a>
+              </li>
+              <li>
+                <a
+                  href="mailto:legal@sahldz.com"
+                  className="text-xs text-[var(--muted-foreground)] hover:text-[var(--primary)] transition-colors"
+                >
+                  شروط الاستخدام
+                </a>
+              </li>
             </ul>
           </div>
         </div>
@@ -614,15 +733,24 @@ function Footer() {
             © {new Date().getFullYear()} Sahl DZ. جميع الحقوق محفوظة.
           </p>
           <div className="flex items-center gap-3 mt-3 md:mt-0">
-            <a href="#" className="text-[var(--muted-foreground)] hover:text-[var(--primary)] transition-colors">
+            <a
+              href="mailto:support@sahldz.com"
+              className="text-[var(--muted-foreground)] hover:text-[var(--primary)] transition-colors"
+            >
               <Globe className="w-4 h-4" />
             </a>
-            <a href="#" className="text-[var(--muted-foreground)] hover:text-[var(--primary)] transition-colors">
+            <Link
+              to="/download"
+              className="text-[var(--muted-foreground)] hover:text-[var(--primary)] transition-colors"
+            >
               <Smartphone className="w-4 h-4" />
-            </a>
-            <a href="#" className="text-[var(--muted-foreground)] hover:text-[var(--primary)] transition-colors">
+            </Link>
+            <Link
+              to="/login"
+              className="text-[var(--muted-foreground)] hover:text-[var(--primary)] transition-colors"
+            >
               <Shield className="w-4 h-4" />
-            </a>
+            </Link>
           </div>
         </div>
       </div>
@@ -639,6 +767,14 @@ function LandingPage() {
 
   useEffect(() => {
     let cancelled = false;
+    if (isEmbeddedWebView()) {
+      window.location.replace("/mobile");
+      return;
+    }
+    if (window.__ELECTRON__) {
+      navigate({ to: "/login" });
+      return;
+    }
     const fast = freshCachedTarget();
     if (fast) {
       navigate({ to: fast });
@@ -659,6 +795,7 @@ function LandingPage() {
     <div className="min-h-screen" dir="rtl">
       <Navbar />
       <HeroSection />
+      <DownloadBanner />
       <FeaturesSection />
       <PricingSection />
       <StepsSection />

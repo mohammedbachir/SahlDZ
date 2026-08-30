@@ -3,13 +3,18 @@ import { supabase } from "@/integrations/supabase/client";
 
 const PREVIEW_RESTAURANT_ID = "mock-restaurant-id";
 
-const numberFormat = new Intl.NumberFormat("ar-DZ", { maximumFractionDigits: 2 });
+const numberFormat = new Intl.NumberFormat("ar-DZ", {
+  maximumFractionDigits: 2,
+});
 
 export function formatDZD(n: number): string {
   return `${numberFormat.format(n)} دج`;
 }
 
-export function useRestaurantId(): { restaurantId: string | null; loading: boolean } {
+export function useRestaurantId(): {
+  restaurantId: string | null;
+  loading: boolean;
+} {
   const [restaurantId, setRestaurantId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 

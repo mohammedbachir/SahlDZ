@@ -1,6 +1,7 @@
 import {
   collection,
   doc,
+  getDoc,
   getDocs,
   addDoc,
   updateDoc,
@@ -10,7 +11,7 @@ import {
   documentId,
   orderBy as fsOrderBy,
   limit as fsLimit,
-  getDoc,
+  onSnapshot,
   type DocumentData,
   type QueryConstraint,
 } from "firebase/firestore";
@@ -26,16 +27,15 @@ import {
   ref as storageRef,
   getDownloadURL,
   uploadString,
+  uploadBytes,
 } from "firebase/storage";
-import {
-  getFirebaseAuth,
-  getFirebaseDb,
-  getFirebaseStorage,
-} from "./config";
+import { getFirebaseAuth, getFirebaseDb, getFirebaseStorage } from "./config";
 import { cacheSession, clearSessionCache } from "@/lib/session-cache";
 
 const NO_BACKEND_MSG =
   "Firebase غير مهيأ. أضف VITE_FIREBASE_API_KEY و VITE_FIREBASE_PROJECT_ID للتشغيل الكامل. (وضع المعاينة لا يحتاج خادماً)";
+
+const IN_CHUNK_SIZE = 30;
 
 // ─── Preview mode stubs ────────────────────────────────────────
 function createStubProxy(): any {
@@ -57,8 +57,10 @@ function createStubProxy(): any {
         limit: () => queryChain(builder),
         range: () => queryChain(builder),
         select: () => queryChain({ ...builder, kind: "select" }),
-        insert: (data: any) => queryChain({ ...builder, kind: "insert", payload: data }),
-        update: (data: any) => queryChain({ ...builder, kind: "update", payload: data }),
+        insert: (data: any) =>
+          queryChain({ ...builder, kind: "insert", payload: data }),
+        update: (data: any) =>
+          queryChain({ ...builder, kind: "update", payload: data }),
         delete: () => queryChain({ ...builder, kind: "delete" }),
         single: async () => ({ data: null, error: null }),
         maybeSingle: async () => ({ data: null, error: null }),
@@ -73,7 +75,8 @@ function createStubProxy(): any {
       {
         get(target: any, prop: string | symbol, receiver: any) {
           if (prop === "then") return target.then;
-          if (typeof prop === "string" && prop in target) return (target as any)[prop];
+          if (typeof prop === "string" && prop in target)
+            return (target as any)[prop];
           return receiver;
         },
       },
@@ -82,14 +85,20 @@ function createStubProxy(): any {
   const fn: any = async () => handler;
   return new Proxy(fn, {
     get(target, prop: string | symbol, receiver) {
-      if (prop === "from") return (table: string) => queryChain({ table, kind: "select" });
-      if (prop === "getSession") return async () => ({ data: { session: null }, error: null });
-      if (prop === "getUser") return async () => ({ data: { user: null }, error: null });
+      if (prop === "from")
+        return (table: string) => queryChain({ table, kind: "select" });
+      if (prop === "getSession")
+        return async () => ({ data: { session: null }, error: null });
+      if (prop === "getUser")
+        return async () => ({ data: { user: null }, error: null });
       if (prop === "signOut") return async () => ({ error: null });
-      if (prop === "signInWithPassword") return async () => ({ data: { user: null }, error: null });
-      if (prop === "signUp") return async () => ({ data: { user: null }, error: null });
+      if (prop === "signInWithPassword")
+        return async () => ({ data: { user: null }, error: null });
+      if (prop === "signUp")
+        return async () => ({ data: { user: null }, error: null });
       if (prop === "then") return undefined;
-      if (typeof prop === "string" && prop in target) return (target as any)[prop];
+      if (typeof prop === "string" && prop in target)
+        return (target as any)[prop];
       return receiver;
     },
     apply() {
@@ -98,15 +107,239 @@ function createStubProxy(): any {
   });
 }
 
+// ─── Shared helpers ────────────────────────────────────────────
+function buildQuery(
+  db: any,
+  table: string,
+  filters: Array<{ op: string; field: string; value: any }>,
+  orderBy: { field: string; direction: "asc" | "desc" } | null,
+  limitN: number | null,
+) {
+  const constraints: QueryConstraint[] = [];
+  for (const f of filters) {
+    if (f.op === "in" && Array.isArray(f.value) && f.value.length === 0)
+      continue;
+    constraints.push(
+      where(f.field === "id" ? documentId() : f.field, f.op as any, f.value),
+    );
+  }
+  if (orderBy) {
+    constraints.push(fsOrderBy(orderBy.field, orderBy.direction));
+  }
+  if (limitN) {
+    constraints.push(fsLimit(limitN));
+  }
+  return query(collection(db, table), ...constraints);
+}
+
+async function executeFilterChain(
+  db: any,
+  table: string,
+  filters: Array<{ op: string; field: string; value: any }>,
+  orderBy: { field: string; direction: "asc" | "desc" } | null = null,
+  limitN: number | null = null,
+): Promise<any[]> {
+  const inFilters = filters.filter(
+    (f) => f.op === "in" && Array.isArray(f.value),
+  );
+  const otherFilters = filters.filter(
+    (f) => !(f.op === "in" && Array.isArray(f.value)),
+  );
+
+  if (inFilters.length === 0) {
+    const q = buildQuery(db, table, filters, orderBy, limitN);
+    const snap = await getDocs(q);
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  }
+
+  const inFilter = inFilters[0];
+  const arr = inFilter.value as any[];
+  let allResults: any[] = [];
+
+  for (let i = 0; i < arr.length; i += IN_CHUNK_SIZE) {
+    const chunk = arr.slice(i, i + IN_CHUNK_SIZE);
+    const chunkFilters = [
+      ...otherFilters,
+      { op: "in", field: inFilter.field, value: chunk },
+    ];
+    const q = buildQuery(db, table, chunkFilters, orderBy, limitN);
+    const snap = await getDocs(q);
+    allResults = allResults.concat(
+      snap.docs.map((d) => ({ id: d.id, ...d.data() })),
+    );
+  }
+
+  return allResults;
+}
+
+function makeUpdateChain(db: any, table: string, data: any) {
+  const pendingFilters: Array<{ op: string; field: string; value: any }> = [];
+
+  const chain: any = {
+    eq: (field: string, value: any) => {
+      pendingFilters.push({ op: "==", field, value });
+      return chain;
+    },
+    neq: (field: string, value: any) => {
+      pendingFilters.push({ op: "!=", field, value });
+      return chain;
+    },
+    in: (field: string, value: any) => {
+      if (Array.isArray(value) && value.length > 0) {
+        pendingFilters.push({ op: "in", field, value });
+      }
+      return chain;
+    },
+    gte: (field: string, value: any) => {
+      pendingFilters.push({ op: ">=", field, value });
+      return chain;
+    },
+    lte: (field: string, value: any) => {
+      pendingFilters.push({ op: "<=", field, value });
+      return chain;
+    },
+    gt: (field: string, value: any) => {
+      pendingFilters.push({ op: ">", field, value });
+      return chain;
+    },
+    lt: (field: string, value: any) => {
+      pendingFilters.push({ op: "<", field, value });
+      return chain;
+    },
+    select: () => chain,
+    single: async () => {
+      try {
+        const rows = await executeFilterChain(
+          db,
+          table,
+          pendingFilters,
+          null,
+          1,
+        );
+        if (!rows.length)
+          return { data: null, error: { message: "Not found" } };
+        await updateDoc(doc(db, table, rows[0].id), data);
+        return { data: { ...rows[0], ...data }, error: null };
+      } catch (e: any) {
+        return { data: null, error: { message: e.message } };
+      }
+    },
+    maybeSingle: async () => {
+      try {
+        const rows = await executeFilterChain(
+          db,
+          table,
+          pendingFilters,
+          null,
+          1,
+        );
+        if (!rows.length) return { data: null, error: null };
+        await updateDoc(doc(db, table, rows[0].id), data);
+        return { data: { ...rows[0], ...data }, error: null };
+      } catch (e: any) {
+        return { data: null, error: { message: e.message } };
+      }
+    },
+    then: async (resolve: any) => {
+      try {
+        const rows = await executeFilterChain(db, table, pendingFilters);
+        for (const d of rows) {
+          await updateDoc(doc(db, table, d.id), data);
+        }
+        resolve({ data: rows.map((d) => ({ ...d, ...data })), error: null });
+      } catch (e: any) {
+        resolve({ data: [], error: { message: e.message } });
+      }
+    },
+  };
+
+  return chain;
+}
+
+function makeDeleteChain(db: any, table: string) {
+  const pendingFilters: Array<{ op: string; field: string; value: any }> = [];
+
+  const chain: any = {
+    eq: (field: string, value: any) => {
+      pendingFilters.push({ op: "==", field, value });
+      return chain;
+    },
+    neq: (field: string, value: any) => {
+      pendingFilters.push({ op: "!=", field, value });
+      return chain;
+    },
+    in: (field: string, value: any) => {
+      if (Array.isArray(value) && value.length > 0) {
+        pendingFilters.push({ op: "in", field, value });
+      }
+      return chain;
+    },
+    gte: (field: string, value: any) => {
+      pendingFilters.push({ op: ">=", field, value });
+      return chain;
+    },
+    lte: (field: string, value: any) => {
+      pendingFilters.push({ op: "<=", field, value });
+      return chain;
+    },
+    select: () => chain,
+    single: async () => {
+      try {
+        const rows = await executeFilterChain(
+          db,
+          table,
+          pendingFilters,
+          null,
+          1,
+        );
+        if (!rows.length)
+          return { data: null, error: { message: "Not found" } };
+        await deleteDoc(doc(db, table, rows[0].id));
+        return { data: rows[0], error: null };
+      } catch (e: any) {
+        return { data: null, error: { message: e.message } };
+      }
+    },
+    maybeSingle: async () => {
+      try {
+        const rows = await executeFilterChain(
+          db,
+          table,
+          pendingFilters,
+          null,
+          1,
+        );
+        if (!rows.length) return { data: null, error: null };
+        await deleteDoc(doc(db, table, rows[0].id));
+        return { data: rows[0], error: null };
+      } catch (e: any) {
+        return { data: null, error: { message: e.message } };
+      }
+    },
+    then: async (resolve: any) => {
+      try {
+        const rows = await executeFilterChain(db, table, pendingFilters);
+        for (const d of rows) {
+          await deleteDoc(doc(db, table, d.id));
+        }
+        resolve({ data: null, error: null });
+      } catch (e: any) {
+        resolve({ data: null, error: { message: e.message } });
+      }
+    },
+  };
+
+  return chain;
+}
+
 // ─── Firestore query chain (real Firebase) ─────────────────────
-function firestoreQueryChain(table: string, builder: any): any {
+function firestoreQueryChain(table: string, _builder: any): any {
   const db = getFirebaseDb();
-  const auth = getFirebaseAuth();
   if (!db) return createStubProxy();
 
-  const filters: QueryConstraint[] = [];
   const pendingFilters: Array<{ op: string; field: string; value: any }> = [];
-  let pendingOrderBy: { field: string; direction: "asc" | "desc" } | null = null;
+  let pendingOrderBy: { field: string; direction: "asc" | "desc" } | null =
+    null;
   let pendingLimit: number | null = null;
 
   const chain: any = {
@@ -134,20 +367,31 @@ function firestoreQueryChain(table: string, builder: any): any {
       pendingFilters.push({ op: "<=", field, value });
       return chain;
     },
-    like: (field: string, value: any) => {
-      pendingFilters.push({ op: ">=", field, value });
+    like: (field: string, _value: any) => {
+      console.warn(
+        `[Firebase adapter] like query on "${field}" not supported — falling back to >= (prefix match).`,
+      );
+      pendingFilters.push({ op: ">=", field, value: _value });
       return chain;
     },
-    ilike: (field: string, value: any) => {
-      pendingFilters.push({ op: ">=", field, value });
+    ilike: (field: string, _value: any) => {
+      console.warn(
+        `[Firebase adapter] ilike query on "${field}" not supported — falling back to >= (prefix match).`,
+      );
+      pendingFilters.push({ op: ">=", field, value: _value });
       return chain;
     },
     in: (field: string, value: any) => {
-      pendingFilters.push({ op: "in", field, value });
+      if (Array.isArray(value) && value.length > 0) {
+        pendingFilters.push({ op: "in", field, value });
+      }
       return chain;
     },
     order: (field: string, opts?: { ascending?: boolean }) => {
-      pendingOrderBy = { field, direction: opts?.ascending !== false ? "asc" : "desc" };
+      pendingOrderBy = {
+        field,
+        direction: opts?.ascending !== false ? "asc" : "desc",
+      };
       return chain;
     },
     limit: (n: number) => {
@@ -177,16 +421,14 @@ function firestoreQueryChain(table: string, builder: any): any {
         _pendingInsert: data,
         single: async () => {
           try {
-            const result = await doInsert();
-            return { data: result, error: null };
+            return { data: await doInsert(), error: null };
           } catch (e: any) {
             return { data: null, error: { message: e.message } };
           }
         },
         maybeSingle: async () => {
           try {
-            const result = await doInsert();
-            return { data: result, error: null };
+            return { data: await doInsert(), error: null };
           } catch (e: any) {
             return { data: null, error: { message: e.message } };
           }
@@ -194,24 +436,21 @@ function firestoreQueryChain(table: string, builder: any): any {
         select: () => ({
           single: async () => {
             try {
-              const result = await doInsert();
-              return { data: result, error: null };
+              return { data: await doInsert(), error: null };
             } catch (e: any) {
               return { data: null, error: { message: e.message } };
             }
           },
           maybeSingle: async () => {
             try {
-              const result = await doInsert();
-              return { data: result, error: null };
+              return { data: await doInsert(), error: null };
             } catch (e: any) {
               return { data: null, error: { message: e.message } };
             }
           },
           then: async (resolve: any) => {
             try {
-              const result = await doInsert();
-              resolve({ data: [result], error: null });
+              resolve({ data: [await doInsert()], error: null });
             } catch (e: any) {
               resolve({ data: [], error: { message: e.message } });
             }
@@ -219,139 +458,52 @@ function firestoreQueryChain(table: string, builder: any): any {
         }),
         then: async (resolve: any) => {
           try {
-            const result = await doInsert();
-            resolve({ data: [result], error: null });
+            resolve({ data: [await doInsert()], error: null });
           } catch (e: any) {
             resolve({ data: [], error: { message: e.message } });
           }
         },
       };
     },
-    update: (data: any) => {
-      const doUpdate = async (filters: Array<{ op: string; field: string; value: any }>) => {
-        const q = buildQuery(db, table, filters, null, null);
-        const snap = await getDocs(q);
-        const updated: any[] = [];
-        for (const d of snap.docs) {
-          await updateDoc(doc(db, table, d.id), data);
-          updated.push({ id: d.id, ...d.data(), ...data });
-        }
-        return updated;
-      };
-      return {
-        eq: (field: string, value: any) => {
-          const filters: Array<{ op: string; field: string; value: any }> = [{ op: "==", field, value }];
-          return {
-            select: () => ({
-              single: async () => {
-                try {
-                  const q = buildQuery(db, table, filters, null, 1);
-                  const snap = await getDocs(q);
-                  if (snap.empty) return { data: null, error: { message: "Not found" } };
-                  const d = snap.docs[0];
-                  await updateDoc(doc(db, table, d.id), data);
-                  return { data: { id: d.id, ...d.data(), ...data }, error: null };
-                } catch (e: any) {
-                  return { data: null, error: { message: e.message } };
-                }
-              },
-            }),
-            single: async () => {
-              try {
-                const q = buildQuery(db, table, filters, null, 1);
-                const snap = await getDocs(q);
-                if (snap.empty) return { data: null, error: { message: "Not found" } };
-                const d = snap.docs[0];
-                await updateDoc(doc(db, table, d.id), data);
-                return { data: { id: d.id, ...d.data(), ...data }, error: null };
-              } catch (e: any) {
-                return { data: null, error: { message: e.message } };
-              }
-            },
-            then: async (resolve: any) => {
-              try {
-                const updated = await doUpdate(filters);
-                resolve({ data: updated, error: null });
-              } catch (e: any) {
-                resolve({ data: [], error: { message: e.message } });
-              }
-            },
-          };
-        },
-        then: async (resolve: any) => {
-          try {
-            const q = buildQuery(db, table, [], null, null);
-            const snap = await getDocs(q);
-            for (const d of snap.docs) {
-              await updateDoc(doc(db, table, d.id), data);
-            }
-            resolve({ data: null, error: null });
-          } catch (e: any) {
-            resolve({ data: null, error: { message: e.message } });
-          }
-        },
-      };
-    },
-    delete: () => {
-      return {
-        eq: (field: string, value: any) => {
-          pendingFilters.push({ op: "==", field, value });
-          return {
-            then: async (resolve: any) => {
-              try {
-                const q = buildQuery(db, table, pendingFilters, null, null);
-                const snap = await getDocs(q);
-                for (const d of snap.docs) {
-                  await deleteDoc(doc(db, table, d.id));
-                }
-                resolve({ data: null, error: null });
-              } catch (e: any) {
-                resolve({ data: null, error: { message: e.message } });
-              }
-            },
-          };
-        },
-        then: async (resolve: any) => {
-          try {
-            const q = buildQuery(db, table, pendingFilters, null, pendingLimit);
-            const snap = await getDocs(q);
-            for (const d of snap.docs) {
-              await deleteDoc(doc(db, table, d.id));
-            }
-            resolve({ data: null, error: null });
-          } catch (e: any) {
-            resolve({ data: null, error: { message: e.message } });
-          }
-        },
-      };
-    },
+    update: (data: any) => makeUpdateChain(db, table, data),
+    delete: () => makeDeleteChain(db, table),
     single: async () => {
       try {
-        const q = buildQuery(db, table, pendingFilters, null, 1);
-        const snap = await getDocs(q);
-        if (snap.empty) return { data: null, error: null };
-        const d = snap.docs[0];
-        return { data: { id: d.id, ...d.data() }, error: null };
+        const rows = await executeFilterChain(
+          db,
+          table,
+          pendingFilters,
+          null,
+          1,
+        );
+        return { data: rows[0] ?? null, error: null };
       } catch (e: any) {
         return { data: null, error: { message: e.message } };
       }
     },
     maybeSingle: async () => {
       try {
-        const q = buildQuery(db, table, pendingFilters, null, 1);
-        const snap = await getDocs(q);
-        if (snap.empty) return { data: null, error: null };
-        const d = snap.docs[0];
-        return { data: { id: d.id, ...d.data() }, error: null };
+        const rows = await executeFilterChain(
+          db,
+          table,
+          pendingFilters,
+          null,
+          1,
+        );
+        return { data: rows[0] ?? null, error: null };
       } catch (e: any) {
         return { data: null, error: { message: e.message } };
       }
     },
     then: async (resolve: any) => {
       try {
-        const q = buildQuery(db, table, pendingFilters, pendingOrderBy, pendingLimit);
-        const snap = await getDocs(q);
-        const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        const rows = await executeFilterChain(
+          db,
+          table,
+          pendingFilters,
+          pendingOrderBy,
+          pendingLimit,
+        );
         resolve({ data: rows, error: null });
       } catch (e: any) {
         resolve({ data: [], error: { message: e.message } });
@@ -360,29 +512,6 @@ function firestoreQueryChain(table: string, builder: any): any {
   };
 
   return chain;
-}
-
-function buildQuery(
-  db: any,
-  table: string,
-  filters: Array<{ op: string; field: string; value: any }>,
-  orderBy: { field: string; direction: "asc" | "desc" } | null,
-  limitN: number | null,
-) {
-  const constraints: QueryConstraint[] = [];
-  for (const f of filters) {
-    // "id" maps to the Firestore document ID, which is not a stored field.
-    constraints.push(
-      where(f.field === "id" ? documentId() : f.field, f.op as any, f.value),
-    );
-  }
-  if (orderBy) {
-    constraints.push(fsOrderBy(orderBy.field, orderBy.direction));
-  }
-  if (limitN) {
-    constraints.push(fsLimit(limitN));
-  }
-  return query(collection(db, table), ...constraints);
 }
 
 // ─── Storage helpers ───────────────────────────────────────────
@@ -398,12 +527,19 @@ function storageChain(bucket: string) {
         return { data: { publicUrl: "" } };
       }
     },
-    upload: async (path: string, data: string) => {
+    upload: async (path: string, fileData: any) => {
       const storage = getFirebaseStorage();
-      if (!storage) return { data: { path }, error: { message: NO_BACKEND_MSG } };
+      if (!storage)
+        return { data: { path }, error: { message: NO_BACKEND_MSG } };
       try {
         const ref = storageRef(storage, `${bucket}/${path}`);
-        await uploadString(ref, data, "data_url");
+        if (typeof fileData === "string") {
+          await uploadString(ref, fileData, "data_url");
+        } else if (fileData instanceof Blob || fileData instanceof File) {
+          await uploadBytes(ref, fileData);
+        } else {
+          await uploadString(ref, String(fileData));
+        }
         const url = await getDownloadURL(ref);
         return { data: { path, url }, error: null };
       } catch (e: any) {
@@ -424,30 +560,51 @@ function authWrapper() {
     }
     const current = auth.currentUser;
     if (current) {
+      const token = await current.getIdToken();
       return {
-        data: { session: { user: { id: current.uid, email: current.email } } },
+        data: {
+          session: {
+            user: { id: current.uid, email: current.email },
+            access_token: token,
+          },
+        },
         error: null,
       };
     }
-    return new Promise<{ data: { session: { user: { id: string; email: string | null } } | null }; error: null }>(
-      (resolve) => {
-        let settled = false;
-        const finish = (user: User | null) => {
-          if (settled) return;
-          settled = true;
+    return new Promise<{
+      data: {
+        session: {
+          user: { id: string; email: string | null };
+          access_token: string;
+        } | null;
+      };
+      error: null;
+    }>((resolve) => {
+      let settled = false;
+      const finish = async (user: User | null) => {
+        if (settled) return;
+        settled = true;
+        if (user) {
+          const token = await user.getIdToken();
           resolve({
-            data: { session: user ? { user: { id: user.uid, email: user.email } } : null },
+            data: {
+              session: {
+                user: { id: user.uid, email: user.email },
+                access_token: token,
+              },
+            },
             error: null,
           });
-        };
-        const unsub = onAuthStateChanged(auth, (user) => {
-          unsub();
-          finish(user);
-        });
-        // Timeout fallback
-        setTimeout(() => finish(null), 3000);
-      }
-    );
+        } else {
+          resolve({ data: { session: null }, error: null });
+        }
+      };
+      const unsub = onAuthStateChanged(auth, (user) => {
+        unsub();
+        finish(user);
+      });
+      setTimeout(() => finish(null), 3000);
+    });
   }
 
   return {
@@ -459,12 +616,12 @@ function authWrapper() {
       }
       if (auth.currentUser) {
         return {
-          data: { user: { id: auth.currentUser.uid, email: auth.currentUser.email } },
+          data: {
+            user: { id: auth.currentUser.uid, email: auth.currentUser.email },
+          },
           error: null,
         };
       }
-      // Firebase restores the persisted session asynchronously, so wait for it
-      // before deciding the user is logged out.
       const { data } = await getSession();
       return { data: { user: data.session?.user ?? null }, error: null };
     },
@@ -475,20 +632,28 @@ function authWrapper() {
       email: string;
       password: string;
     }) => {
-      if (!auth) return { data: { user: null, session: null }, error: { message: NO_BACKEND_MSG } };
+      if (!auth)
+        return {
+          data: { user: null, session: null },
+          error: { message: NO_BACKEND_MSG },
+        };
       try {
         if (typeof window !== "undefined") {
           await setPersistence(auth, browserLocalPersistence);
         }
         const cred = await signInWithEmailAndPassword(auth, email, password);
+        const token = await cred.user.getIdToken();
         const user = { id: cred.user.uid, email: cred.user.email };
         cacheSession(user.id);
         return {
-          data: { user, session: { user } },
+          data: { user, session: { user, access_token: token } },
           error: null,
         };
       } catch (e: any) {
-        return { data: { user: null, session: null }, error: { message: e.message } };
+        return {
+          data: { user: null, session: null },
+          error: { message: e.message },
+        };
       }
     },
     signUp: async ({
@@ -498,21 +663,34 @@ function authWrapper() {
       email: string;
       password: string;
     }) => {
-      if (!auth) return { data: { user: null, session: null }, error: { message: NO_BACKEND_MSG } };
+      if (!auth)
+        return {
+          data: { user: null, session: null },
+          error: { message: NO_BACKEND_MSG },
+        };
       try {
         if (typeof window !== "undefined") {
           await setPersistence(auth, browserLocalPersistence);
         }
-        const { createUserWithEmailAndPassword } = await import("firebase/auth");
-        const cred = await createUserWithEmailAndPassword(auth, email, password);
+        const { createUserWithEmailAndPassword } =
+          await import("firebase/auth");
+        const cred = await createUserWithEmailAndPassword(
+          auth,
+          email,
+          password,
+        );
+        const token = await cred.user.getIdToken();
         const user = { id: cred.user.uid, email: cred.user.email };
         cacheSession(user.id);
         return {
-          data: { user, session: { user } },
+          data: { user, session: { user, access_token: token } },
           error: null,
         };
       } catch (e: any) {
-        return { data: { user: null, session: null }, error: { message: e.message } };
+        return {
+          data: { user: null, session: null },
+          error: { message: e.message },
+        };
       }
     },
     signOut: async () => {
@@ -528,6 +706,81 @@ function authWrapper() {
   };
 }
 
+// ─── Firestore Realtime subscription (via onSnapshot) ──────────
+function createRealtimeChannel(name: string) {
+  const db = getFirebaseDb();
+  const listeners: Array<{ unsub: () => void; filter: any; callback: any }> =
+    [];
+
+  const channelObj: any = {
+    on: (event: string, opts: any, callback?: any) => {
+      if (!db || !callback) return channelObj;
+      const table = opts?.table || opts?.filter?.split("=")[0];
+      const filterStr: string | undefined = opts?.filter;
+      let filterField: string | null = null;
+      let filterValue: string | null = null;
+      if (filterStr) {
+        const match = filterStr.match(/(\w+)=eq\.(.+)/);
+        if (match) {
+          filterField = match[1];
+          filterValue = match[2];
+        }
+      }
+
+      const tableRef = table ? collection(db, table) : null;
+      if (!tableRef) return channelObj;
+
+      const constraints: QueryConstraint[] = [];
+      if (filterField && filterValue) {
+        constraints.push(where(filterField, "==", filterValue));
+      }
+
+      const q = constraints.length ? query(tableRef, ...constraints) : tableRef;
+      const unsub = onSnapshot(q, (snap) => {
+        for (const change of snap.docChanges()) {
+          const rowData = { id: change.doc.id, ...change.doc.data() };
+          const eventType =
+            change.type === "added"
+              ? "INSERT"
+              : change.type === "modified"
+                ? "UPDATE"
+                : change.type === "removed"
+                  ? "DELETE"
+                  : "UPDATE";
+          callback({
+            eventType: eventType.toLowerCase(),
+            new:
+              eventType !== "DELETE"
+                ? { type: "TableRow", table, record: rowData }
+                : undefined,
+            old:
+              eventType !== "INSERT"
+                ? { type: "TableRow", table, record: rowData }
+                : undefined,
+          });
+        }
+      });
+
+      listeners.push({ unsub, filter: opts, callback });
+      return channelObj;
+    },
+    subscribe: () => {
+      return {
+        unsubscribe: () => channelObj.unsubscribe(),
+        status: "SUBSCRIBED",
+      };
+    },
+    unsubscribe: () => {
+      for (const l of listeners) {
+        l.unsub();
+      }
+      listeners.length = 0;
+    },
+  };
+
+  return channelObj;
+}
+
 // ─── Main client export ────────────────────────────────────────
 function createFirebaseClient(): any {
   const firebaseDb = getFirebaseDb();
@@ -541,30 +794,33 @@ function createFirebaseClient(): any {
   const auth = authWrapper();
   const storage = {
     from: (bucket: string) => {
-      if (!isConfigured) return createStubProxy().storage?.from(bucket) ?? { getPublicUrl: () => ({ data: { publicUrl: "" } }) };
+      if (!isConfigured)
+        return (
+          createStubProxy().storage?.from(bucket) ?? {
+            getPublicUrl: () => ({ data: { publicUrl: "" } }),
+          }
+        );
       return storageChain(bucket);
     },
   };
+
+  const channels: Record<string, any> = {};
 
   return {
     from,
     auth,
     storage,
-    channel: (name: string) => ({
-      on: (_event: string, _opts: any, _callback?: any) => ({
-        subscribe: () => ({
-          unsubscribe: () => {},
-          status: "SUBSCRIBED",
-        }),
-      }),
-      subscribe: () => ({
-        unsubscribe: () => {},
-        status: "SUBSCRIBED",
-      }),
-      unsubscribe: () => {},
-    }),
-    removeChannel: () => {},
-    removeAllChannels: () => {},
+    channel: (name: string) => {
+      if (!isConfigured) return createStubProxy().channel(name);
+      if (!channels[name]) channels[name] = createRealtimeChannel(name);
+      return channels[name];
+    },
+    removeChannel: (ch: any) => {
+      ch?.unsubscribe?.();
+    },
+    removeAllChannels: () => {
+      Object.values(channels).forEach((c) => c.unsubscribe());
+    },
   };
 }
 

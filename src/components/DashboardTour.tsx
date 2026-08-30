@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Check, ArrowLeft, Lightbulb } from "lucide-react";
 import { TourAnnotation } from "@/components/TourAnnotation";
+import { tx } from "@/lib/ops-tx";
 
 export type Annotation = {
   target: string;
@@ -20,7 +21,8 @@ export const tourSteps: TourStep[] = [
   {
     id: "orders",
     title: "الطلبات",
-    explanation: "شاشة الطلبات: كل طلب يدخل مطعمك يظهر هنا. الأعمدة تمثل مراحل الطلب من الاستلام إلى التوصيل.",
+    explanation:
+      "شاشة الطلبات: كل طلب يدخل مطعمك يظهر هنا. الأعمدة تمثل مراحل الطلب من الاستلام إلى التوصيل.",
     tip: "الألوان تميز أولوية الطلب — الأحمر مستعجل، الأخضر عادي",
     annotations: [
       {
@@ -43,7 +45,8 @@ export const tourSteps: TourStep[] = [
   {
     id: "menu",
     title: "القائمة",
-    explanation: "قائمة الطعام: كل الأطباق التي تقدمها. تضيف أصنافاً جديدة وتحدد أسعارها وتصنيفاتها.",
+    explanation:
+      "قائمة الطعام: كل الأطباق التي تقدمها. تضيف أصنافاً جديدة وتحدد أسعارها وتصنيفاتها.",
     tip: "أضف صوراً للأطباق — المطاعم التي تستخدم صوراً تحصل على طلبات أكثر",
     annotations: [
       {
@@ -66,7 +69,8 @@ export const tourSteps: TourStep[] = [
   {
     id: "tables",
     title: "الطاولات",
-    explanation: "إدارة طاولات المطعم. كل طاولة لها رمز QR خاص — الزبون يمسحه ويطلب مباشرة.",
+    explanation:
+      "إدارة طاولات المطعم. كل طاولة لها رمز QR خاص — الزبون يمسحه ويطلب مباشرة.",
     tip: "اطبع QR على ورق لاصق شفاف وضعه على حافة الطاولة ليبقى نظيفاً",
     annotations: [
       {
@@ -89,7 +93,8 @@ export const tourSteps: TourStep[] = [
   {
     id: "analytics",
     title: "التحليلات",
-    explanation: "تقارير مبيعاتك وأرباحك. تعرف أداء مطعمك يومياً، أسبوعياً، وشهرياً.",
+    explanation:
+      "تقارير مبيعاتك وأرباحك. تعرف أداء مطعمك يومياً، أسبوعياً، وشهرياً.",
     tip: "قارن هذا الأسبوع بالأسبوع الماضي لترى اتجاه النمو",
     annotations: [
       {
@@ -112,7 +117,8 @@ export const tourSteps: TourStep[] = [
   {
     id: "ops",
     title: "إدارة العمليات",
-    explanation: "جرد المخزون والوصفات: تتبع المواد الخام، تعرف الكميات المتبقية، وحدد مكونات كل طبق.",
+    explanation:
+      "جرد المخزون والوصفات: تتبع المواد الخام، تعرف الكميات المتبقية، وحدد مكونات كل طبق.",
     tip: "تحديد الوصفات بدقة يضمن لك معرفة تكلفة الطبق الفعلية",
     annotations: [
       {
@@ -135,7 +141,8 @@ export const tourSteps: TourStep[] = [
   {
     id: "reviews",
     title: "التقييمات",
-    explanation: "آراء الزبائن في مطعمك. كل تقييم يعطي فرصة لتحسين الخدمة وبناء الثقة.",
+    explanation:
+      "آراء الزبائن في مطعمك. كل تقييم يعطي فرصة لتحسين الخدمة وبناء الثقة.",
     tip: "الرد على التقييمات السلبية يعطيك فرصة لإظهار اهتمامك بالزبائن",
     annotations: [
       {
@@ -158,7 +165,8 @@ export const tourSteps: TourStep[] = [
   {
     id: "settings",
     title: "الإعدادات",
-    explanation: "مركز التحكم في مطعمك. بيانات المطعم، الموظفون، الإشعارات، والتوصيل.",
+    explanation:
+      "مركز التحكم في مطعمك. بيانات المطعم، الموظفون، الإشعارات، والتوصيل.",
     tip: "أضف موظفيك أولاً ورتب صلاحياتهم قبل تشغيل النظام",
     annotations: [
       {
@@ -227,11 +235,14 @@ export function DashboardTour({
       ))}
 
       {/* Arrow coachmark pointing to sidebar */}
-      <div className="hidden md:block fixed z-[60]" style={{
-        top: `${90 + tourStep * 38}px`,
-        right: "268px",
-        transition: "top 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)",
-      }}>
+      <div
+        className="hidden md:block fixed z-[60]"
+        style={{
+          top: `${90 + tourStep * 38}px`,
+          right: "268px",
+          transition: "top 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)",
+        }}
+      >
         <div className="relative">
           <div className="absolute -right-2 top-1/2 -translate-y-1/2 w-4 h-4 bg-[var(--primary)] rotate-45" />
           <div className="bg-[var(--primary)] rounded-lg px-3 py-2 shadow-lg max-w-[200px]">
@@ -246,7 +257,10 @@ export function DashboardTour({
       <div className="fixed right-0 top-0 w-[260px] h-full z-[55] pointer-events-none bg-black/[0.03] hidden md:block" />
 
       {/* Bottom bar */}
-      <div className="fixed bottom-0 inset-x-0 z-[60] bg-[var(--card)] border-t border-[var(--border)] shadow-lg" dir="rtl">
+      <div
+        className="fixed bottom-0 inset-x-0 z-[60] bg-[var(--card)] border-t border-[var(--border)] shadow-lg"
+        dir="rtl"
+      >
         <div className="h-1 bg-[var(--border)]">
           <div
             className="h-full bg-[var(--primary)] transition-all duration-500 ease-out"
@@ -264,8 +278,8 @@ export function DashboardTour({
                   i < tourStep
                     ? "w-2 h-2 bg-[var(--primary)]"
                     : i === tourStep
-                    ? "w-3 h-3 bg-[var(--primary)] ring-2 ring-[var(--primary)]/30"
-                    : "w-2 h-2 bg-[var(--border)]"
+                      ? "w-3 h-3 bg-[var(--primary)] ring-2 ring-[var(--primary)]/30"
+                      : "w-2 h-2 bg-[var(--border)]"
                 }`}
               />
             ))}
@@ -274,7 +288,9 @@ export function DashboardTour({
           {/* Text */}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-0.5">
-              <span className="text-xs font-bold text-[var(--primary)]">{current.title}</span>
+              <span className="text-xs font-bold text-[var(--primary)]">
+                {current.title}
+              </span>
               <span className="text-[10px] text-[var(--muted-foreground)]">
                 {tourStep + 1} / {tourSteps.length}
               </span>
@@ -286,7 +302,9 @@ export function DashboardTour({
             ) : (
               <div className="flex items-center gap-1.5">
                 <Lightbulb className="w-3.5 h-3.5 text-[var(--primary)] shrink-0" />
-                <p className="text-xs text-[var(--foreground)] font-medium truncate">{current.tip}</p>
+                <p className="text-xs text-[var(--foreground)] font-medium truncate">
+                  {current.tip}
+                </p>
               </div>
             )}
           </div>
@@ -297,7 +315,7 @@ export function DashboardTour({
               onClick={handleSkip}
               className="text-[10px] text-[var(--muted-foreground)] hover:text-[var(--foreground)] whitespace-nowrap transition-colors"
             >
-              تخطي
+              {tx("tour.dashboard.skip")}
             </button>
             <Button
               size="sm"
@@ -305,15 +323,15 @@ export function DashboardTour({
               className="bg-[var(--primary)] text-[#1a1612] hover:bg-[var(--primary)]/90 h-7 text-xs font-bold whitespace-nowrap"
             >
               {!showTip ? (
-                "فهمت"
+                tx("tour.dashboard.understood")
               ) : isLast ? (
                 <>
-                  أنهينا
+                  {tx("tour.dashboard.finished")}
                   <Check className="w-3.5 h-3.5 mr-1" />
                 </>
               ) : (
                 <>
-                  التالي
+                  {tx("tour.dashboard.next")}
                   <ArrowLeft className="w-3.5 h-3.5 mr-1" />
                 </>
               )}

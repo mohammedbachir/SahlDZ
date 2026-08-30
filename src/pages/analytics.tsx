@@ -112,8 +112,8 @@ async function loadAnalytics(restaurantId: string): Promise<AnalyticsData> {
   if (error) throw new Error(error.message);
 
   const paid = (ordersRaw ?? [])
-    .map((o) => ({ ...o, _date: safeIsoDate(o.created_at as string) }))
-    .filter((o) => o._date !== null) as Array<{
+    .map((o: any) => ({ ...o, _date: safeIsoDate(o.created_at as string) }))
+    .filter((o: any) => o._date !== null) as Array<{
     id: string;
     total: number | string;
     created_at: string;
@@ -205,7 +205,7 @@ async function loadAnalytics(restaurantId: string): Promise<AnalyticsData> {
       string,
       { name: string; qty: number; revenue: number; menu_item_id: string | null }
     >();
-    (items ?? []).forEach((it) => {
+    (items ?? []).forEach((it: any) => {
       const key = it.menu_item_id ?? `name:${it.name_snapshot}`;
       const cur = agg.get(key) ?? {
         name: it.name_snapshot,
@@ -226,7 +226,7 @@ async function loadAnalytics(restaurantId: string): Promise<AnalyticsData> {
         .from("menu_items")
         .select("id, image_url")
         .in("id", ids);
-      imgs = new Map((mi ?? []).map((m) => [m.id, m.image_url]));
+      imgs = new Map((mi ?? []).map((m: any) => [m.id, m.image_url]));
     }
     const arr: TopItem[] = Array.from(agg.values()).map((v) => ({
       ...v,
@@ -564,7 +564,7 @@ function RevenueRangeCard({
       .gte("created_at", startDate.toISOString())
       .lt("created_at", endDate.toISOString())
       .limit(10000)
-      .then(({ data, error }) => {
+      .then(({ data, error }: { data: any; error: any }) => {
         if (cancelled) return;
         if (error) {
           toast.error("فشل تحميل الإيرادات");
@@ -583,7 +583,7 @@ function RevenueRangeCard({
           map.set(fmtKey(d), 0);
         }
         let sum = 0;
-        (data ?? []).forEach((o) => {
+        (data ?? []).forEach((o: any) => {
           const d = new Date(o.created_at as string);
           if (isNaN(d.getTime())) return;
           const k = fmtKey(d);
@@ -751,7 +751,7 @@ export default function AnalyticsPage() {
       .select("name, created_at")
       .eq("id", restaurantId)
       .maybeSingle()
-      .then(({ data }) => {
+      .then(({ data }: { data: any }) => {
         setRestaurantName(data?.name ?? "");
         setRestaurantCreatedAt((data as { created_at?: string } | null)?.created_at ?? null);
       });
@@ -759,59 +759,6 @@ export default function AnalyticsPage() {
 
   useEffect(() => {
     if (!restaurantId) {
-      // Mock data for preview
-      setRestaurantName("مطعم السهل");
-      setRestaurantCreatedAt("2024-01-15");
-      setData({
-        kpis: {
-          ordersToday: 47,
-          salesToday: 85000,
-          avgOrderWeek: 1850,
-          salesMonth: 2450000,
-          ordersTodayPrev: 38,
-          salesTodayPrev: 72000,
-          avgOrderWeekPrev: 1650,
-          salesMonthPrev: 2100000,
-        },
-        daily: [
-          { date: "2025-07-24", total: 78000 },
-          { date: "2025-07-25", total: 92000 },
-          { date: "2025-07-26", total: 65000 },
-          { date: "2025-07-27", total: 110000 },
-          { date: "2025-07-28", total: 95000 },
-          { date: "2025-07-29", total: 88000 },
-          { date: "2025-07-30", total: 85000 },
-        ],
-        topItems: [
-          { menu_item_id: "1", name: "شاورما لحم", image_url: null, qty: 45, revenue: 36000 },
-          { menu_item_id: "2", name: "برغر دجاج", image_url: null, qty: 38, revenue: 34200 },
-          { menu_item_id: "3", name: "بيتزا مارغريتا", image_url: null, qty: 25, revenue: 30000 },
-          { menu_item_id: "4", name: "كباب لحم", image_url: null, qty: 22, revenue: 24200 },
-          { menu_item_id: "5", name: "فرينش فرايز", image_url: null, qty: 40, revenue: 18000 },
-        ],
-        bottomItems: [
-          { menu_item_id: "6", name: "سلطة سيزر", image_url: null, qty: 8, revenue: 5600 },
-          { menu_item_id: "7", name: "مقبلات مشكلة", image_url: null, qty: 6, revenue: 4800 },
-          { menu_item_id: "8", name: "كنافة نابلسية", image_url: null, qty: 5, revenue: 2500 },
-        ],
-        hourly: [
-          { hour: 8, count: 2 },
-          { hour: 9, count: 5 },
-          { hour: 10, count: 8 },
-          { hour: 11, count: 12 },
-          { hour: 12, count: 25 },
-          { hour: 13, count: 30 },
-          { hour: 14, count: 18 },
-          { hour: 15, count: 10 },
-          { hour: 16, count: 8 },
-          { hour: 17, count: 15 },
-          { hour: 18, count: 28 },
-          { hour: 19, count: 35 },
-          { hour: 20, count: 32 },
-          { hour: 21, count: 22 },
-          { hour: 22, count: 12 },
-        ],
-      });
       setLoading(false);
       return;
     }

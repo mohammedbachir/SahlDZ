@@ -103,27 +103,6 @@ export default function MenuPage() {
 
   useEffect(() => {
     if (!restaurantId) {
-      // Mock data for preview
-      setCategories([
-        { id: "c1", name: "المشروبات", display_order: 1, image_url: null },
-        { id: "c2", name: "الوجبات الرئيسية", display_order: 2, image_url: null },
-        { id: "c3", name: "المقبلات", display_order: 3, image_url: null },
-        { id: "c4", name: "الحلويات", display_order: 4, image_url: null },
-      ]);
-      setItems([
-        { id: "m1", name: "شاي بالنعناع", description: "شاي أخضر طازج بالنعناع", price: 150, category_id: "c1", image_url: null, is_available: true },
-        { id: "m2", name: "قهوة تركية", description: "قهوة تركية أصيلة", price: 200, category_id: "c1", image_url: null, is_available: true },
-        { id: "m3", name: "عصير برتقال", description: "عصير برتقال طبيعي", price: 250, category_id: "c1", image_url: null, is_available: true },
-        { id: "m4", name: "شاورما لحم", description: "شاورما لحم مع الخضار والصلصة", price: 800, category_id: "c2", image_url: null, is_available: true },
-        { id: "m5", name: "برغر دجاج", description: "برغر دجاج مقرمش مع الخضار", price: 900, category_id: "c2", image_url: null, is_available: true },
-        { id: "m6", name: "بيتزا مارغريتا", description: "بيتزا كلاسيكية بالجبنة والطماطم", price: 1200, category_id: "c2", image_url: null, is_available: true },
-        { id: "m7", name: "كباب لحم", description: "كباب لحم مشوي مع الأرز", price: 1100, category_id: "c2", image_url: null, is_available: true },
-        { id: "m8", name: "فرينش فرايز", description: "بطاطس مقلية مقرمشة", price: 450, category_id: "c3", image_url: null, is_available: true },
-        { id: "m9", name: "مقبلات مشكلة", description: "تشكيلة من المقبلات الشرقية", price: 800, category_id: "c3", image_url: null, is_available: true },
-        { id: "m10", name: "سلطة سيزر", description: "سلطة سيزر مع صلصة خاصة", price: 700, category_id: "c3", image_url: null, is_available: true },
-        { id: "m11", name: "كنافة نابلسية", description: "كنافة بالجبنة والقطر", price: 500, category_id: "c4", image_url: null, is_available: true },
-        { id: "m12", name: "بسبوسة", description: "بسبوسة بالسميد والقطر", price: 300, category_id: "c4", image_url: null, is_available: true },
-      ]);
       setLoading(false);
       return;
     }
@@ -784,7 +763,7 @@ function ImportFromPhotoButton({
         .eq("restaurant_id", restaurantId);
       const byName = new Map<string, string>();
       let maxOrder = 0;
-      (existingCats ?? []).forEach((c) => {
+      (existingCats ?? []).forEach((c: any) => {
         byName.set(c.name.trim().toLowerCase(), c.id);
         if (c.display_order > maxOrder) maxOrder = c.display_order;
       });
@@ -810,7 +789,7 @@ function ImportFromPhotoButton({
             .select("id")
             .single();
           if (error || !ins) throw new Error(error?.message || "فشل إنشاء فئة");
-          catId = ins.id;
+          catId = ins.id as string;
           byName.set(key, catId);
           createdCats += 1;
         }

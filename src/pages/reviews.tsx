@@ -67,27 +67,27 @@ export default function ReviewsPage() {
       setLoading(false);
       return;
     }
-    const orderIds = (data ?? []).map((r) => r.order_id);
+    const orderIds = (data ?? []).map((r: any) => r.order_id);
     let tableMap = new Map<string, number>();
     if (orderIds.length) {
       const { data: ords } = await supabase
         .from("orders")
         .select("id, table_id")
         .in("id", orderIds);
-      const tIds = Array.from(new Set((ords ?? []).map((o) => o.table_id).filter(Boolean) as string[]));
+      const tIds = Array.from(new Set((ords ?? []).map((o: any) => o.table_id).filter(Boolean) as string[]));
       let tNumByTid = new Map<string, number>();
       if (tIds.length) {
         const { data: tbls } = await supabase
           .from("tables")
           .select("id, table_number")
           .in("id", tIds);
-        tNumByTid = new Map((tbls ?? []).map((t) => [t.id, t.table_number]));
+        tNumByTid = new Map((tbls ?? []).map((t: any) => [t.id, t.table_number]));
       }
       tableMap = new Map(
-        (ords ?? []).map((o) => [o.id, tNumByTid.get(o.table_id ?? "") ?? 0])
+        (ords ?? []).map((o: any) => [o.id, tNumByTid.get(o.table_id ?? "") ?? 0])
       );
     }
-    const mapped: Review[] = (data ?? []).map((r) => ({
+    const mapped: Review[] = (data ?? []).map((r: any) => ({
       ...r,
       table_number: tableMap.get(r.order_id) ?? null,
     }));
@@ -98,17 +98,6 @@ export default function ReviewsPage() {
 
   useEffect(() => {
     if (!restaurantId) {
-      // Mock data for preview
-      setReviews([
-        { id: "r1", rating: 5, comment: "مطعم ممتاز والأكل لذيذ جداً. الخدمة سريعة والموظفين مبتسمين. سأعود بالتأكيد!", redirected_to_google: true, created_at: new Date(Date.now() - 2 * 3600000).toISOString(), order_id: "o1", table_number: 5 },
-        { id: "r2", rating: 4, comment: "الأكل جيد جداً لكن الانتظار كان قليلاً طويلاً. المكان نظيف والقائمة متنوعة.", redirected_to_google: true, created_at: new Date(Date.now() - 5 * 3600000).toISOString(), order_id: "o2", table_number: 12 },
-        { id: "r3", rating: 5, comment: "أفضل مطعم في المنطقة! البرغر رائع والشاورما لا تُقاوم. أنصح الجميع بتجربته.", redirected_to_google: false, created_at: new Date(Date.now() - 8 * 3600000).toISOString(), order_id: "o3", table_number: null },
-        { id: "r4", rating: 3, comment: "الأكل عادي، لم يكن كما توقعت. ربما في المرة القادمة يكون أفضل.", redirected_to_google: false, created_at: new Date(Date.now() - 24 * 3600000).toISOString(), order_id: "o4", table_number: 3 },
-        { id: "r5", rating: 5, comment: "تجربة رائعة من البداية للنهاية. الترتيب ممتاز والأسعار معقولة. شكراً لكم!", redirected_to_google: true, created_at: new Date(Date.now() - 48 * 3600000).toISOString(), order_id: "o5", table_number: 7 },
-        { id: "r6", rating: 4, comment: "البيتزا ممتازة والصلصة لذيذة. المكان هادئ ومريح للعائلات.", redirected_to_google: true, created_at: new Date(Date.now() - 72 * 3600000).toISOString(), order_id: "o6", table_number: 1 },
-        { id: "r7", rating: 2, comment: "الانتظار كان طويلاً جداً والأكل لم يكن ساخناً. أتمنى تحسين الخدمة.", redirected_to_google: false, created_at: new Date(Date.now() - 96 * 3600000).toISOString(), order_id: "o7", table_number: null },
-        { id: "r8", rating: 5, comment: "مطعم مفضل لدينا! نأتي هنا كل أسبوع. الأكل متماثل في الجودة دائماً.", redirected_to_google: true, created_at: new Date(Date.now() - 120 * 3600000).toISOString(), order_id: "o8", table_number: 10 },
-      ]);
       setLoading(false);
       return;
     }
@@ -129,7 +118,7 @@ export default function ReviewsPage() {
           table: "reviews",
           filter: `restaurant_id=eq.${restaurantId}`,
         },
-        async (payload) => {
+        async (payload: any) => {
           const r = payload.new as Review;
           // Try to fetch table_number
           let tn: number | null = null;

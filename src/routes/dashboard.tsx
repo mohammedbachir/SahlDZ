@@ -13,9 +13,11 @@ import {
   LogOut,
   User,
   Boxes,
+  Calculator,
   ChevronLeft,
   Home,
   Loader2,
+  Smartphone,
 } from "lucide-react";
 import { requireAuth } from "@/lib/auth";
 import { AdminChatBot } from "@/components/AdminChatBot";
@@ -42,6 +44,7 @@ import { NotificationsBell } from "@/components/NotificationsBell";
 import { useTranslation } from "react-i18next";
 
 export const Route = createFileRoute("/dashboard")({
+  beforeLoad: requireAuth,
   component: DashboardLayout,
 });
 
@@ -50,10 +53,19 @@ const OrdersPage = lazy(() => import("@/pages/orders"));
 const MenuPage = lazy(() => import("@/pages/menu"));
 const TablesPage = lazy(() => import("@/pages/tables"));
 const AnalyticsPage = lazy(() => import("@/pages/analytics"));
+const AccountingPage = lazy(() => import("@/pages/accounting"));
 const ReviewsPage = lazy(() => import("@/pages/reviews"));
 const SettingsPage = lazy(() => import("@/pages/settings"));
 
-type TabId = "orders" | "menu" | "tables" | "analytics" | "ops" | "reviews" | "settings";
+type TabId =
+  | "orders"
+  | "menu"
+  | "tables"
+  | "analytics"
+  | "accounting"
+  | "ops"
+  | "reviews"
+  | "settings";
 
 type TabItem = {
   id: TabId;
@@ -68,22 +80,13 @@ const TABS: TabItem[] = [
   { id: "menu", key: "menu", icon: UtensilsCrossed, gradient: "from-emerald-500 to-teal-500", component: MenuPage },
   { id: "tables", key: "tables", icon: LayoutGrid, gradient: "from-blue-500 to-indigo-500", component: TablesPage },
   { id: "analytics", key: "analytics", icon: BarChart3, gradient: "from-purple-500 to-pink-500", component: AnalyticsPage },
+  { id: "accounting", key: "accounting", icon: Calculator, gradient: "from-teal-500 to-cyan-600", component: AccountingPage },
   { id: "ops", key: "ops", icon: Boxes, gradient: "from-rose-500 to-red-500" },
   { id: "reviews", key: "reviews", icon: Star, gradient: "from-yellow-500 to-amber-500", component: ReviewsPage },
   { id: "settings", key: "settings", icon: Settings, gradient: "from-slate-500 to-gray-500", component: SettingsPage },
 ];
 
 type Restaurant = { name: string; logo_url: string | null };
-
-const TAB_STEP: Record<TabId, number> = {
-  orders: 0,
-  menu: 1,
-  tables: 2,
-  analytics: 3,
-  ops: 4,
-  reviews: 5,
-  settings: 6,
-};
 
 function LoadingSpinner() {
   return (
@@ -123,6 +126,13 @@ function DashboardLayout() {
 
     if (tourParam === "0") {
       setTourActive(false);
+      setActiveTab(validTab ? tabParam : "orders");
+    } else if (tourParam === "1") {
+      // Force/resume the dashboard tour at the requested tab's step
+      setShowOnboarding(false);
+      setTourActive(true);
+      const stepIdx = tourSteps.findIndex((s) => s.id === tabParam);
+      setTourStep(stepIdx >= 0 ? stepIdx : 0);
       setActiveTab(validTab ? tabParam : "orders");
     } else if (!hasCompletedOnboarding()) {
       setShowOnboarding(true);
@@ -261,6 +271,8 @@ function DashboardLayout() {
   };
 
   const handleLogout = async () => {
+    localStorage.removeItem("sahl_dz_preview_role");
+    localStorage.removeItem("sahl_dz_auth_cache");
     await supabase.auth.signOut();
     navigate({ to: "/login" });
   };
@@ -503,6 +515,12 @@ function DashboardLayout() {
               <DropdownMenuContent align="end" className="w-48">
                 <DropdownMenuLabel>{t("nav.account")}</DropdownMenuLabel>
                 <DropdownMenuSeparator />
+                <DropdownMenuItem asChild className="cursor-pointer">
+                  <a href="/dashboard/download">
+                    <Smartphone className="w-4 h-4 ml-2" />
+                    تحميل التطبيق
+                  </a>
+                </DropdownMenuItem>
                 <DropdownMenuItem onClick={handleLogout} className="cursor-pointer">
                   <LogOut className="w-4 h-4 ml-2" />
                   {t("nav.logout")}

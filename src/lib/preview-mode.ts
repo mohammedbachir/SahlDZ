@@ -1,4 +1,8 @@
-export type PreviewRestaurant = { id: string; name: string; logo_url: string | null };
+export type PreviewRestaurant = {
+  id: string;
+  name: string;
+  logo_url: string | null;
+};
 
 export const PREVIEW_RESTAURANT: PreviewRestaurant = {
   id: "mock-restaurant-id",

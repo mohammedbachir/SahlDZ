@@ -6,7 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useServerFn } from "@tanstack/react-start";
 import { getWaiterContext, waiterLogout, waiterListReadyOrders, waiterClaimOrder, waiterMarkServed } from "@/lib/waiter.functions";
+import { supabase } from "@/integrations/supabase/client";
 import { isPreviewToken } from "@/lib/preview-mode";
+import { tx } from "@/lib/ops-tx";
+
 
 export const Route = createFileRoute("/waiter-screen")({
   component: Page,
@@ -26,9 +29,9 @@ type Order = {
 };
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
-  new: { label: "جديد ⏳", color: "bg-yellow-100 text-yellow-800 border-yellow-200" },
-  preparing: { label: "قيد التحضير 👨‍🍳", color: "bg-orange-100 text-orange-800 border-orange-200" },
-  ready: { label: "جاهز ✅", color: "bg-green-100 text-green-800 border-green-200" },
+  new: { label: tx("waiter.statusNew"), color: "bg-yellow-100 text-yellow-800 border-yellow-200" },
+  preparing: { label: tx("waiter.statusPreparing"), color: "bg-orange-100 text-orange-800 border-orange-200" },
+  ready: { label: tx("waiter.statusReady"), color: "bg-green-100 text-green-800 border-green-200" },
 };
 
 const MOCK_ORDERS: Order[] = [
@@ -84,6 +87,14 @@ function waiterLoginSearch(): { rid: string } {
   }
 }
 
+function clearWaiterSession() {
+  sessionStorage.removeItem("waiter_token");
+  sessionStorage.removeItem("waiter_expires");
+  sessionStorage.removeItem("waiter_name");
+  sessionStorage.removeItem("waiter_id");
+  sessionStorage.removeItem("waiter_restaurant");
+}
+
 function Page() {
   const navigate = useNavigate();
   const getContext = useServerFn(getWaiterContext);
@@ -94,6 +105,7 @@ function Page() {
 
   const [waiterName, setWaiterName] = useState("");
   const [restaurantName, setRestaurantName] = useState("");
+  const [restaurantId, setRestaurantId] = useState<string | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [loadingCtx, setLoadingCtx] = useState(true);
   const [servingId, setServingId] = useState<string | null>(null);
@@ -118,8 +130,13 @@ function Page() {
 
   useEffect(() => {
     if (!token) { navigate({ to: "/waiter-login", search: waiterLoginSearch() }); return; }
+    if (!isPreviewToken(token) && (Date.now() >= Number(token.split(".")[2]) || !token.startsWith("stf."))) {
+      sessionStorage.removeItem("waiter_token");
+      navigate({ to: "/waiter-login", search: waiterLoginSearch() });
+      return;
+    }
     if (isPreviewToken(token)) {
-      setWaiterName(sessionStorage.getItem("waiter_name") ?? "الويتر");
+      setWaiterName(sessionStorage.getItem("waiter_name") ?? tx("waiter.defaultWaiterName"));
       try {
         const r = JSON.parse(sessionStorage.getItem("waiter_restaurant") ?? "null");
         if (r?.name) setRestaurantName(r.name);
@@ -133,6 +150,7 @@ function Page() {
       .then((ctx) => {
         setWaiterName(ctx.waiterName);
         setRestaurantName(ctx.restaurant.name);
+        setRestaurantId(ctx.restaurant.id);
         setLoadingCtx(false);
       })
       .catch(() => {
@@ -144,14 +162,37 @@ function Page() {
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [token]);
 
+  // Realtime: subscribe to order changes for instant updates
+  useEffect(() => {
+    if (!token || isPreviewToken(token) || !restaurantId) return;
+    const channel = supabase
+      .channel(`waiter-orders-${restaurantId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "orders", filter: `restaurant_id=eq.${restaurantId}` },
+        () => fetchOrders(),
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [token, restaurantId, fetchOrders]);
+
+  // Heartbeat: re-check session expiry every 60s
+  useEffect(() => {
+    if (!token || isPreviewToken(token)) return;
+    const id = setInterval(() => {
+      const exp = sessionStorage.getItem("waiter_expires");
+      if (!exp || new Date(exp) < new Date()) {
+        clearWaiterSession();
+        navigate({ to: "/waiter-login", search: waiterLoginSearch() });
+      }
+    }, 60_000);
+    return () => clearInterval(id);
+  }, [token]);
+
   async function handleLogout() {
     const search = waiterLoginSearch();
     try { await logout({ data: { token } }); } catch { /* ignore */ }
-    sessionStorage.removeItem("waiter_token");
-    sessionStorage.removeItem("waiter_expires");
-    sessionStorage.removeItem("waiter_name");
-    sessionStorage.removeItem("waiter_id");
-    sessionStorage.removeItem("waiter_restaurant");
+    clearWaiterSession();
     navigate({ to: "/waiter-login", search });
   }
 
@@ -159,9 +200,9 @@ function Page() {
     try {
       await claimOrder({ data: { token, orderId } });
       await fetchOrders();
-      toast.success("تم أخذ الطلب");
+      toast.success(tx("waiter.claimSuccess"));
     } catch (e) {
-      toast.error((e as Error).message || "فشل");
+      toast.error((e as Error).message || tx("waiter.claimFailed"));
     }
   }
 
@@ -170,9 +211,9 @@ function Page() {
     try {
       await markServed({ data: { token, orderId } });
       setOrders((prev) => prev.filter((o) => o.id !== orderId));
-      toast.success("تم تسليم الطلب ✅");
+      toast.success(tx("waiter.serveSuccess"));
     } catch (e) {
-      toast.error((e as Error).message || "فشل");
+      toast.error((e as Error).message || tx("waiter.serveFailed"));
     } finally {
       setServingId(null);
     }
@@ -233,7 +274,7 @@ function Page() {
               filter === f ? "bg-[var(--primary)] text-[var(--primary-foreground)]" : "text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--muted)]"
             }`}
           >
-            {f === "ready" ? `جاهزة (${readyCount})` : f === "all" ? "الكل" : "طلباتي"}
+            {f === "ready" ? `${tx("waiter.filterReady")} (${readyCount})` : f === "all" ? tx("waiter.filterAll") : tx("waiter.filterMine")}
           </button>
         ))}
       </div>
@@ -244,7 +285,7 @@ function Page() {
           <div className="flex flex-col items-center justify-center py-16 text-[var(--muted-foreground)] gap-3">
             <CheckCircle2 className="w-10 h-10 opacity-20" />
             <p className="text-sm">
-              {filter === "ready" ? "لا توجد طلبات جاهزة حالياً" : "لا توجد طلبات"}
+              {filter === "ready" ? tx("waiter.noReadyOrders") : tx("waiter.noOrders")}
             </p>
           </div>
         ) : (
@@ -263,21 +304,21 @@ function Page() {
                     </span>
                     {order.table_number && (
                       <span className="text-xs bg-[var(--primary)]/10 text-[var(--primary)] px-1.5 py-0.5 rounded">
-                        طاولة {order.table_number}
+                        {tx("waiter.table")} {order.table_number}
                       </span>
                     )}
                     {order.order_type === "delivery" && (
                       <span className="text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded dark:bg-amber-900/30 dark:text-amber-300">
-                        توصيل
+                        {tx("waiter.delivery")}
                       </span>
                     )}
                     {order.order_type === "takeaway" && (
                       <span className="text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded dark:bg-purple-900/30 dark:text-purple-300">
-                        سريع
+                        {tx("waiter.fastTakeaway")}
                       </span>
                     )}
                     {order.is_mine && (
-                      <span className="text-[11px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded dark:bg-blue-900/30 dark:text-blue-300">طلباتك</span>
+                      <span className="text-[11px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded dark:bg-blue-900/30 dark:text-blue-300">{tx("waiter.yourOrders")}</span>
                     )}
                   </div>
                   {order.customer_name && (
@@ -297,7 +338,7 @@ function Page() {
 
               {order.notes && (
                 <p className="text-xs text-amber-700 bg-amber-50 rounded px-2 py-1 dark:bg-amber-900/20 dark:text-amber-300">
-                  ملاحظة: {order.notes}
+                  {tx("waiter.note")} {order.notes}
                 </p>
               )}
 
@@ -310,7 +351,7 @@ function Page() {
                     className="flex-1 h-8 text-xs"
                   >
                     <UtensilsCrossed className="w-3.5 h-3.5 ms-1" />
-                    أنا سأخدم
+                    {tx("waiter.iWillServe")}
                   </Button>
                 )}
                 {order.status === "ready" && (
@@ -325,13 +366,13 @@ function Page() {
                     ) : (
                       <CheckCircle2 className="w-3.5 h-3.5 ms-1" />
                     )}
-                    تم التسليم
+                    {tx("waiter.delivered")}
                   </Button>
                 )}
                 {order.status !== "ready" && order.is_mine && (
                   <div className="flex-1 flex items-center justify-center gap-1 text-xs text-[var(--muted-foreground)]">
                     <ChefHat className="w-3.5 h-3.5" />
-                    قيد التحضير…
+                    {tx("waiter.preparingEllipsis")}
                   </div>
                 )}
               </div>
