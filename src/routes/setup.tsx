@@ -2,10 +2,11 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { Loader2, Store, ArrowLeft, Sparkles } from "lucide-react";
+import { Loader2, Store, ArrowLeft, Sparkles, LogOut } from "lucide-react";
 import { requireAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
 import { createRestaurant } from "@/lib/restaurant-setup.functions";
+import { clearSessionCache } from "@/lib/session-cache";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -51,6 +52,15 @@ function Setup() {
     })();
   }, [navigate]);
 
+  async function getAuthHeaders() {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const token = session?.access_token;
+    if (!token) return null;
+    return { Authorization: `Bearer ${token}` };
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (submitting) return;
@@ -60,7 +70,14 @@ function Setup() {
     }
     setSubmitting(true);
     try {
+      const headers = await getAuthHeaders();
+      if (!headers) {
+        toast.error("الجلسة منتهية، سجّل دخولك من جديد");
+        navigate({ to: "/login", replace: true });
+        return;
+      }
       const res = await createFn({
+        headers,
         data: {
           name,
           address,
@@ -85,6 +102,14 @@ function Setup() {
     } finally {
       setSubmitting(false);
     }
+  }
+
+  async function handleLogout() {
+    localStorage.removeItem("sahl_dz_preview_role");
+    localStorage.removeItem("sahl_dz_auth_cache");
+    await supabase.auth.signOut();
+    clearSessionCache();
+    navigate({ to: "/login", replace: true });
   }
 
   return (
@@ -226,12 +251,21 @@ function Setup() {
             </p>
           </form>
 
-          <div className="mt-4 border-t border-[var(--border)] pt-4">
+          <div className="mt-4 border-t border-[var(--border)] pt-4 space-y-2">
             <Button asChild variant="outline" className="w-full">
               <Link to="/dashboard">
                 <ArrowLeft className="h-4 w-4" />
                 الانتقال إلى لوحة التحكم (معاينة)
               </Link>
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={handleLogout}
+              className="w-full text-[var(--muted-foreground)]"
+            >
+              <LogOut className="h-4 w-4" />
+              تسجيل الخروج
             </Button>
           </div>
         </CardContent>
