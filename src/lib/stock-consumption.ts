@@ -1,4 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
+import { getFirebaseDb } from "@/integrations/firebase/config";
+import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { sendLowStockAlert } from "@/lib/ops-alerts.functions";
 
 type OrderRow = {
@@ -19,10 +21,9 @@ type IngredientRow = {
 };
 
 async function markDecremented(orderId: string) {
-  await supabase
-    .from("orders")
-    .update({ stock_decremented: true })
-    .eq("id", orderId);
+  const db = getFirebaseDb();
+  if (!db) return;
+  await updateDoc(doc(db, "orders", orderId), { stock_decremented: true });
 }
 
 /**
@@ -31,15 +32,14 @@ async function markDecremented(orderId: string) {
  * العملية idempotent: تتفقد علماً stock_decremented على الطلب لمنع الخصم المزدوج.
  */
 export async function decrementStockForOrder(orderId: string) {
-  const { data: order } = await supabase
-    .from("orders")
-    .select("id, restaurant_id, stock_decremented")
-    .eq("id", orderId)
-    .single();
-  const ord = order as OrderRow | null;
-  if (!ord?.restaurant_id) return { skipped: true, reason: "no-order" };
-  if (ord.stock_decremented)
-    return { skipped: true, reason: "already-decremented" };
+  const db = getFirebaseDb();
+  if (!db) return { skipped: true, reason: "no-db" };
+
+  const orderSnap = await getDoc(doc(db, "orders", orderId));
+  if (!orderSnap.exists()) return { skipped: true, reason: "no-order" };
+  const ord = orderSnap.data() as OrderRow;
+  if (!ord.restaurant_id) return { skipped: true, reason: "no-order" };
+  if (ord.stock_decremented) return { skipped: true, reason: "already-decremented" };
 
   const restaurantId = ord.restaurant_id;
 
@@ -58,7 +58,6 @@ export async function decrementStockForOrder(orderId: string) {
     return { skipped: true, reason: "no-items" };
   }
 
-  // نقرأ كل وصفات المطعم ونطابق في الذاكرة لتجنب حد Firestore للـ in (10 عناصر)
   const { data: recipes } = await supabase
     .from("menu_item_recipes")
     .select("menu_item_id, ingredient_id, quantity")
@@ -87,18 +86,11 @@ export async function decrementStockForOrder(orderId: string) {
   let ingredientsDecremented = 0;
   const lowStockIds: string[] = [];
   for (const [ingredientId, used] of consumption) {
-    const { data: ing } = await supabase
-      .from("ingredients")
-      .select("id, current_stock, alert_threshold")
-      .eq("id", ingredientId)
-      .single();
-    const row = ing as IngredientRow | null;
-    if (!row) continue;
+    const ingSnap = await getDoc(doc(db, "ingredients", ingredientId));
+    if (!ingSnap.exists()) continue;
+    const row = ingSnap.data() as IngredientRow;
     const newStock = Math.max(0, Number(row.current_stock) - used);
-    await supabase
-      .from("ingredients")
-      .update({ current_stock: newStock })
-      .eq("id", ingredientId);
+    await updateDoc(doc(db, "ingredients", ingredientId), { current_stock: newStock });
     ingredientsDecremented++;
     if (newStock < Number(row.alert_threshold)) {
       lowStockIds.push(ingredientId);
@@ -107,7 +99,6 @@ export async function decrementStockForOrder(orderId: string) {
 
   await markDecremented(orderId);
 
-  // تنبيهات المخزون الناقص — fire-and-forget (لا تُبطئ الطلب)
   for (const id of lowStockIds) {
     void sendLowStockAlert(restaurantId, id);
   }

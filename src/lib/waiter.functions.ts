@@ -1,20 +1,30 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getRequestHeader } from "@tanstack/react-start/server";
-import { previewExpiry } from "@/lib/preview-mode";
 import { supabase } from "@/integrations/supabase/client";
 import { getFirebaseDb } from "@/integrations/firebase/config";
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  updateDoc,
+  query,
+  where,
+} from "firebase/firestore";
 import {
   ROLE_WAITER,
   makeStaffSessionToken,
   generateUniqueSerial,
   resolveStaffFromToken,
+  staffSessionExpiry,
 } from "@/lib/staff-core";
 import { requireRestaurantId } from "@/lib/server-staff-auth";
 
 /** DB logic: resolve waiter context from session token. */
 export async function getWaiterContextCore(token: string) {
   const { staffRow, restaurantId } = await resolveStaffFromToken(token);
-  if (staffRow.role !== ROLE_WAITER) throw new Error("هذا الحساب ليس حساب نادل");
+  if (staffRow.role !== ROLE_WAITER)
+    throw new Error("هذا الحساب ليس حساب نادل");
   const { data: rest } = await supabase
     .from("restaurants")
     .select("id,name,logo_url")
@@ -26,11 +36,29 @@ export async function getWaiterContextCore(token: string) {
   };
 }
 
+function safeParseOptions(
+  raw: any,
+): Array<{ label: string; choice: string; price_delta: number }> {
+  try {
+    const arr = typeof raw === "string" ? JSON.parse(raw) : raw;
+    return Array.isArray(arr)
+      ? arr.map((o: any) => ({
+          label: String(o?.label ?? ""),
+          choice: String(o?.choice ?? ""),
+          price_delta: Number(o?.price_delta) || 0,
+        }))
+      : [];
+  } catch {
+    return [];
+  }
+}
+
 export const getWaiterContext = createServerFn({ method: "GET" })
   .validator((d: { token: string }) => d)
   .handler(async ({ data }) => {
     const { token } = data as { token: string };
-    if (!getFirebaseDb()) throw new Error("Firebase غير مُعد — يرجى تكوين الاتصال");
+    if (!getFirebaseDb())
+      throw new Error("Firebase غير مُعد — يرجى تكوين الاتصال");
     return getWaiterContextCore(token);
   });
 
@@ -41,41 +69,44 @@ export const waiterLogout = createServerFn({ method: "POST" })
 /** DB logic: list active orders for the waiter's restaurant. */
 export async function waiterListOrdersCore(token: string) {
   const { staffId, restaurantId } = await resolveStaffFromToken(token);
+  const db = getFirebaseDb();
+  if (!db) throw new Error("Firebase غير متصل");
 
-  const { data: orderRows } = await supabase
-    .from("orders")
-    .select("*")
-    .eq("restaurant_id", restaurantId)
-    .in("status", ["new", "preparing", "ready"])
-    .order("created_at", { ascending: false });
+  const snap = await getDocs(
+    query(collection(db, "orders"), where("restaurant_id", "==", restaurantId)),
+  );
+  const orderRows = snap.docs
+    .map((d) => ({ ...d.data(), id: d.id }))
+    .filter((o: any) => ["new", "preparing", "ready"].includes(o.status));
 
-  if (!orderRows?.length) return { orders: [] };
+  if (!orderRows.length) return { orders: [] };
 
   const ids = orderRows.map((o: any) => o.id as string);
 
-  const [itemsRes, tablesRes] = await Promise.all([
-    supabase.from("order_items").select("*").in("order_id", ids),
-    supabase
-      .from("tables")
-      .select("id,table_number")
-      .in(
-        "id",
-        orderRows.map((o: any) => o.table_id).filter(Boolean),
-      ),
+  const tableIds = orderRows
+    .map((o: any) => o.table_id)
+    .filter(Boolean) as string[];
+
+  const [itemsSnap, tablesSnap] = await Promise.all([
+    getDocs(query(collection(db, "order_items"), where("order_id", "in", ids))),
+    tableIds.length
+      ? getDocs(query(collection(db, "tables"), where("id", "in", tableIds)))
+      : Promise.resolve({ docs: [] } as any),
   ]);
 
-  if (itemsRes.error) throw new Error(itemsRes.error.message);
-  if (tablesRes.error) throw new Error(tablesRes.error.message);
-
   const itemsByOrder = new Map<string, any[]>();
-  for (const it of itemsRes.data ?? []) {
-    const arr = itemsByOrder.get((it as any).order_id) ?? [];
+  for (const d of itemsSnap.docs) {
+    const it = { ...d.data(), id: d.id } as any;
+    const arr = itemsByOrder.get(it.order_id) ?? [];
     arr.push(it);
-    itemsByOrder.set((it as any).order_id, arr);
+    itemsByOrder.set(it.order_id, arr);
   }
 
   const tableMap = new Map<string, number>();
-  for (const t of tablesRes.data ?? []) tableMap.set((t as any).id, (t as any).table_number);
+  for (const d of tablesSnap.docs) {
+    const t = d.data() as any;
+    tableMap.set(d.id, t.table_number);
+  }
 
   const orders = orderRows.map((o: any) => ({
     id: o.id,
@@ -86,11 +117,13 @@ export async function waiterListOrdersCore(token: string) {
     customer_name: (o.customer_name as string) ?? null,
     daily_number: (o.daily_number as number) ?? null,
     notes: (o.notes as string) ?? null,
-    table_number: o.table_id ? tableMap.get(o.table_id) ?? null : null,
+    table_number: o.table_id ? (tableMap.get(o.table_id) ?? null) : null,
     is_mine: o.served_by === staffId,
     items: (itemsByOrder.get(o.id) ?? []).map((it: any) => ({
       name: it.name_snapshot as string,
       qty: it.quantity as number,
+      note: (it.note as string) ?? null,
+      options: it.options_snapshot ? safeParseOptions(it.options_snapshot) : [],
     })),
   }));
 
@@ -107,13 +140,20 @@ export const waiterListReadyOrders = createServerFn({ method: "GET" })
 /** DB logic: waiter claims an order. */
 export async function waiterClaimOrderCore(token: string, orderId: string) {
   const { staffId, restaurantId } = await resolveStaffFromToken(token);
-  const { error } = await supabase
-    .from("orders")
-    .update({ served_by: staffId })
-    .eq("id", orderId)
-    .eq("restaurant_id", restaurantId)
-    .in("status", ["new", "preparing", "ready"]);
-  if (error) throw new Error(error.message);
+  const db = getFirebaseDb();
+  if (!db) throw new Error("Firebase غير متصل");
+
+  const orderRef = doc(db, "orders", orderId);
+  const snap = await getDoc(orderRef);
+  if (!snap.exists()) throw new Error("الطلب غير موجود");
+  const data = snap.data();
+  if (data.restaurant_id !== restaurantId)
+    throw new Error("طلبية مملوكة لمطعم آخر");
+  if (!["new", "preparing", "ready"].includes(data.status)) {
+    throw new Error(`حالة الطلب "${data.status}" — لا يمكن استلامه`);
+  }
+
+  await updateDoc(orderRef, { served_by: staffId });
   return { ok: true };
 }
 
@@ -124,26 +164,53 @@ export const waiterClaimOrder = createServerFn({ method: "POST" })
     return waiterClaimOrderCore(token, orderId);
   });
 
+/** DB logic: waiter releases a claimed order back to the pool. */
+export async function waiterUnclaimOrderCore(token: string, orderId: string) {
+  const { staffId, restaurantId } = await resolveStaffFromToken(token);
+  const db = getFirebaseDb();
+  if (!db) throw new Error("Firebase غير متصل");
+
+  const orderRef = doc(db, "orders", orderId);
+  const snap = await getDoc(orderRef);
+  if (!snap.exists()) throw new Error("الطلب غير موجود");
+  const data = snap.data();
+  if (data.restaurant_id !== restaurantId)
+    throw new Error("طلبية مملوكة لمطعم آخر");
+  if ((data.served_by ?? null) !== staffId)
+    throw new Error("هذا الطلب غير مُسند إليك");
+  if (!["new", "preparing"].includes(data.status)) {
+    throw new Error("لا يمكن إلغاء استلام طلب جاهز للتسليم");
+  }
+
+  await updateDoc(orderRef, { served_by: null });
+  return { ok: true };
+}
+
+export const waiterUnclaimOrder = createServerFn({ method: "POST" })
+  .validator((d: { token: string; orderId: string }) => d)
+  .handler(async ({ data }) => {
+    const { token, orderId } = data as { token: string; orderId: string };
+    return waiterUnclaimOrderCore(token, orderId);
+  });
+
 /** DB logic: waiter marks order as served (delivered to table). */
 export async function waiterMarkServedCore(token: string, orderId: string) {
   const { staffId, restaurantId } = await resolveStaffFromToken(token);
-  const { data: order } = await supabase
-    .from("orders")
-    .select("id,status,served_by")
-    .eq("id", orderId)
-    .eq("restaurant_id", restaurantId)
-    .maybeSingle();
-  if (!order) throw new Error("الطلب غير موجود");
-  if ((order as any).status !== "ready") throw new Error("الطلب ليس جاهزاً للتسليم");
-  if ((order as any).served_by && (order as any).served_by !== staffId) {
+  const db = getFirebaseDb();
+  if (!db) throw new Error("Firebase غير متصل");
+
+  const orderRef = doc(db, "orders", orderId);
+  const snap = await getDoc(orderRef);
+  if (!snap.exists()) throw new Error("الطلب غير موجود");
+  const data = snap.data();
+  if (data.restaurant_id !== restaurantId)
+    throw new Error("طلبية مملوكة لمطعم آخر");
+  if (data.status !== "ready") throw new Error("الطلب ليس جاهزاً للتسليم");
+  if (data.served_by && data.served_by !== staffId) {
     throw new Error("هذا الطلب مُسند لنادل آخر");
   }
-  const { error } = await supabase
-    .from("orders")
-    .update({ served_by: staffId, status: "paid" })
-    .eq("id", orderId)
-    .eq("restaurant_id", restaurantId);
-  if (error) throw new Error(error.message);
+
+  await updateDoc(orderRef, { served_by: staffId, status: "paid" });
   return { ok: true };
 }
 
@@ -161,7 +228,13 @@ export async function getPublicWaiterListCore(restaurantId: string) {
     .select("name,logo_url")
     .eq("id", restaurantId)
     .maybeSingle();
-  if (!rest.data) return { found: false, name: "", logo_url: null as string | null, waiters: [] };
+  if (!rest.data)
+    return {
+      found: false,
+      name: "",
+      logo_url: null as string | null,
+      waiters: [],
+    };
   const rows = await supabase
     .from("staff")
     .select("id,name")
@@ -185,16 +258,24 @@ export const getPublicWaiterList = createServerFn({ method: "GET" })
 
 /** DB logic without the HTTP layer — also used by tests. */
 export async function verifyWaiterPinCore(waiterId: string, pin: string) {
-  const row = await supabase.from("staff").select("*").eq("id", waiterId).maybeSingle();
+  const row = await supabase
+    .from("staff")
+    .select("*")
+    .eq("id", waiterId)
+    .maybeSingle();
   const staffRow = row.data as any;
   if (!staffRow) throw new Error("الحساب غير موجود");
   if (staffRow.frozen) {
     throw new Error(
-      staffRow.freeze_reason ? `تم تجميد حسابك: ${staffRow.freeze_reason}` : "تم تجميد حسابك — راجع الإدارة",
+      staffRow.freeze_reason
+        ? `تم تجميد حسابك: ${staffRow.freeze_reason}`
+        : "تم تجميد حسابك — راجع الإدارة",
     );
   }
-  if (staffRow.role !== ROLE_WAITER) throw new Error("هذا الحساب لم يعد حساب نادل");
-  if (String(staffRow.pin ?? "") !== pin.trim()) throw new Error("رمز PIN غير صحيح");
+  if (staffRow.role !== ROLE_WAITER)
+    throw new Error("هذا الحساب لم يعد حساب نادل");
+  if (String(staffRow.pin ?? "") !== pin.trim())
+    throw new Error("رمز PIN غير صحيح");
 
   const rest = await supabase
     .from("restaurants")
@@ -208,7 +289,7 @@ export async function verifyWaiterPinCore(waiterId: string, pin: string) {
   };
   return {
     token: await makeStaffSessionToken(staffRow.id),
-    expiresAt: previewExpiry(),
+    expiresAt: staffSessionExpiry(),
     waiterName: staffRow.name as string,
     waiterId: staffRow.id as string,
     restaurant,
@@ -219,7 +300,8 @@ export async function verifyWaiterPinCore(waiterId: string, pin: string) {
 export const verifyWaiterPin = createServerFn({ method: "POST" })
   .validator((d: { waiterId: string; pin: string }) => d)
   .handler(async ({ data }) => {
-    if (!getFirebaseDb()) throw new Error("Firebase غير مُعد — يرجى تكوين الاتصال");
+    if (!getFirebaseDb())
+      throw new Error("Firebase غير مُعد — يرجى تكوين الاتصال");
     return verifyWaiterPinCore(data.waiterId, data.pin);
   });
 
@@ -233,7 +315,10 @@ export type WaiterListRow = {
   created_at: string | null;
 };
 
-async function listStaffByRole(rid: string, role: string): Promise<WaiterListRow[]> {
+async function listStaffByRole(
+  rid: string,
+  role: string,
+): Promise<WaiterListRow[]> {
   const rows = await supabase
     .from("staff")
     .select("*")
@@ -243,10 +328,12 @@ async function listStaffByRole(rid: string, role: string): Promise<WaiterListRow
     id: s.id,
     name: s.name,
     is_active: !s.frozen,
-    employee_id: null,
+    employee_id: s.serial ?? null,
     created_at: s.created_at ?? null,
   }));
-  return mapped.sort((a, b) => String(a.name).localeCompare(String(b.name), "ar"));
+  return mapped.sort((a, b) =>
+    String(a.name).localeCompare(String(b.name), "ar"),
+  );
 }
 
 /** DB logic without the HTTP layer — also used by tests. */
@@ -261,7 +348,11 @@ function validateStaffInput(name: string, pin: string) {
   return { name: name.trim(), pin: cleanPin };
 }
 
-export async function addWaiterCore(rid: string, rawName: string, rawPin: string) {
+export async function addWaiterCore(
+  rid: string,
+  rawName: string,
+  rawPin: string,
+) {
   const { name, pin } = validateStaffInput(rawName, rawPin);
   const serial = await generateUniqueSerial();
   const { error } = await supabase.from("staff").insert({
@@ -280,28 +371,51 @@ export async function addWaiterCore(rid: string, rawName: string, rawPin: string
 }
 
 async function assertOwnedStaff(rid: string, staffId: string): Promise<any> {
-  const row = await supabase.from("staff").select("*").eq("id", staffId).single();
+  const row = await supabase
+    .from("staff")
+    .select("*")
+    .eq("id", staffId)
+    .single();
   const staffRow = row.data as any;
   // Adapter returns data:null when not found.
-  if (!staffRow || staffRow.restaurant_id !== rid) throw new Error("الحساب غير موجود");
+  if (!staffRow || staffRow.restaurant_id !== rid)
+    throw new Error("الحساب غير موجود");
   return staffRow;
 }
 
-export async function updateWaiterPinCore(rid: string, waiterId: string, rawPin: string) {
+export async function updateWaiterPinCore(
+  rid: string,
+  waiterId: string,
+  rawPin: string,
+) {
   const cleanPin = rawPin?.trim() ?? "";
   if (!/^\d{4,6}$/.test(cleanPin)) throw new Error("PIN من 4 إلى 6 أرقام");
   await assertOwnedStaff(rid, waiterId);
-  const { error } = await supabase.from("staff").update({ pin: cleanPin }).eq("id", waiterId);
+  const { error } = await supabase
+    .from("staff")
+    .update({ pin: cleanPin })
+    .eq("id", waiterId);
   if (error) throw new Error(error.message);
   return { ok: true };
 }
 
-export async function toggleWaiterCore(rid: string, waiterId: string, isActive: boolean) {
+export async function toggleWaiterCore(
+  rid: string,
+  waiterId: string,
+  isActive: boolean,
+) {
   await assertOwnedStaff(rid, waiterId);
   const payload = isActive
     ? { frozen: false, freeze_reason: null }
-    : { frozen: true, freeze_reason: "تم إيقاف هذا الحساب من الإعدادات", frozen_at: new Date().toISOString() };
-  const { error } = await supabase.from("staff").update(payload).eq("id", waiterId);
+    : {
+        frozen: true,
+        freeze_reason: "تم إيقاف هذا الحساب من الإعدادات",
+        frozen_at: new Date().toISOString(),
+      };
+  const { error } = await supabase
+    .from("staff")
+    .update(payload)
+    .eq("id", waiterId);
   if (error) throw new Error(error.message);
   return { ok: true };
 }
@@ -313,10 +427,12 @@ export async function deleteWaiterCore(rid: string, waiterId: string) {
   return { ok: true };
 }
 
-export const listWaiters = createServerFn({ method: "GET" }).handler(async () => {
-  const rid = await requireRestaurantId(getRequestHeader("authorization"));
-  return listWaitersCore(rid);
-});
+export const listWaiters = createServerFn({ method: "GET" }).handler(
+  async () => {
+    const rid = await requireRestaurantId(getRequestHeader("authorization"));
+    return listWaitersCore(rid);
+  },
+);
 
 export const addWaiter = createServerFn({ method: "POST" })
   .validator((d: { name: string; pin: string }) => d)

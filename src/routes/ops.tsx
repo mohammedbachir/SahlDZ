@@ -15,6 +15,7 @@ import {
   ClipboardCheck,
   Settings,
   Calculator,
+  Archive,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { requireAuth } from "@/lib/auth";
@@ -23,6 +24,16 @@ import { AdminChatBot } from "@/components/AdminChatBot";
 import { OpsTour } from "@/components/OpsTour";
 import { tx } from "@/lib/ops-tx";
 import { useTranslation } from "react-i18next";
+import {
+  ROLE_LABELS,
+  AREA_LABELS,
+  AREA_PATHS,
+  canViewArea,
+  canWriteArea,
+  resolveOpsRole,
+  type OpsArea,
+  type OpsRole,
+} from "@/lib/permissions";
 
 
 export const Route = createFileRoute("/ops")({
@@ -30,57 +41,52 @@ export const Route = createFileRoute("/ops")({
   component: OpsLayout,
 });
 
-type NavItem = {
-  to:
-    | "/ops"
-    | "/ops/inventory"
-    | "/ops/recipes"
-    | "/ops/suppliers"
-    | "/ops/employees"
-    | "/ops/waste"
-    | "/ops/expenses"
-    | "/ops/reports"
-    | "/ops/staff-performance"
-    | "/ops/complaints"
-    | "/ops/inventory-count"
-    | "/ops/accounting"
-    ;
-  label: string;
-  icon: typeof LayoutDashboard;
-  exact?: boolean;
-  roles?: string[]; // which roles can see this item (undefined = all)
+type OpsPath =
+  | "/ops"
+  | "/ops/inventory"
+  | "/ops/recipes"
+  | "/ops/suppliers"
+  | "/ops/employees"
+  | "/ops/waste"
+  | "/ops/expenses"
+  | "/ops/reports"
+  | "/ops/staff-performance"
+  | "/ops/complaints"
+  | "/ops/inventory-count"
+  | "/ops/accounting"
+  | "/ops/report-archive";
+
+const AREA_ICONS: Record<OpsArea, typeof LayoutDashboard> = {
+  overview: LayoutDashboard,
+  inventory: Package,
+  inventoryCount: ClipboardCheck,
+  recipes: ChefHat,
+  suppliers: Truck,
+  employees: Users,
+  staffPerformance: TrendingUp,
+  expenses: Wallet,
+  waste: Trash2,
+  complaints: MessageSquareWarning,
+  reports: BarChart3,
+  accounting: Calculator,
+  reportArchive: Archive,
 };
 
-const ALL_NAV: NavItem[] = [
-  { to: "/ops", label: tx("نظرة عامة"), icon: LayoutDashboard, exact: true, roles: ["admin", "operations_manager", "hr_manager", "purchasing_manager"] },
-  { to: "/ops/inventory", label: tx("المخزون"), icon: Package, roles: ["admin", "operations_manager", "production_manager", "purchasing_manager"] },
-  { to: "/ops/inventory-count", label: tx("جرد المخزون"), icon: ClipboardCheck, roles: ["admin", "operations_manager", "production_manager", "purchasing_manager"] },
-  { to: "/ops/recipes", label: tx("الوصفات"), icon: ChefHat, roles: ["admin", "operations_manager", "production_manager"] },
-  { to: "/ops/suppliers", label: tx("الموردين"), icon: Truck, roles: ["admin", "operations_manager", "purchasing_manager"] },
-  { to: "/ops/employees", label: tx("الموظفين"), icon: Users, roles: ["admin", "hr_manager", "operations_manager"] },
-  { to: "/ops/staff-performance", label: tx("أداء الموظفين"), icon: TrendingUp, roles: ["admin", "hr_manager", "operations_manager", "production_manager"] },
-  { to: "/ops/expenses", label: tx("المصاريف"), icon: Wallet, roles: ["admin", "operations_manager", "purchasing_manager"] },
-  { to: "/ops/waste", label: tx("سجل الهدر"), icon: Trash2, roles: ["admin", "operations_manager", "production_manager"] },
-  { to: "/ops/complaints", label: tx("الشكاوى"), icon: MessageSquareWarning, roles: ["admin", "operations_manager"] },
-  { to: "/ops/reports", label: tx("التقارير"), icon: BarChart3, roles: ["admin", "operations_manager", "hr_manager"] },
-  { to: "/ops/accounting", label: tx("المحاسبة"), icon: Calculator, roles: ["admin", "operations_manager"] },
+const NAV_ORDER: OpsArea[] = [
+  "overview",
+  "inventory",
+  "inventoryCount",
+  "recipes",
+  "suppliers",
+  "employees",
+  "staffPerformance",
+  "expenses",
+  "waste",
+  "complaints",
+  "reports",
+  "accounting",
+  "reportArchive",
 ];
-
-const ROLE_LABELS: Record<string, string> = {
-  admin: "مالك",
-  staff: "موظف",
-  production_manager: "مسؤول الإنتاج",
-  operations_manager: "مسؤول التشغيل",
-  hr_manager: "مسؤول الموارد البشرية",
-  purchasing_manager: "مسؤول المشتريات",
-};
-
-// Roles that should land on their first allowed page instead of the overview
-const REDIRECT_FROM_OVERVIEW: Record<string, string> = {
-  production_manager: "/ops/inventory",
-  purchasing_manager: "/ops/inventory",
-  hr_manager: "/ops/employees",
-};
 
 function OpsLayout() {
   useTranslation();
@@ -89,38 +95,26 @@ function OpsLayout() {
   const tourMode = new URLSearchParams(searchStr).get("tour") === "1";
   const navigate = useNavigate();
   // null = still loading, avoids showing wrong nav items before role is fetched
-  const [userRole, setUserRole] = useState<string | null>(null);
+  const [userRole, setUserRole] = useState<OpsRole | null>(null);
 
   useEffect(() => {
     (async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        // Mock role for preview
-        setUserRole("admin");
-        return;
-      }
-      const { data } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", user.id)
-        .maybeSingle();
-      // Restaurant owners have no `user_roles` row in production → default
-      // them to the full "admin" access. Unknown roles (e.g. stale seed data
-      // like "owner") also land on admin rather than an empty sidebar.
-      let role = data?.role ?? "admin";
-      if (!ROLE_LABELS[role]) role = "admin";
+      const role = await resolveOpsRole();
       setUserRole(role);
-      // If this role can't access the overview page and the user landed there, redirect
-      if ((pathname === "/ops" || pathname === "/ops/") && REDIRECT_FROM_OVERVIEW[role]) {
-        navigate({ to: REDIRECT_FROM_OVERVIEW[role] as "/ops/inventory" | "/ops/employees", replace: true });
-      }
     })();
   }, []);
 
   // Don't render nav until role is known — prevents flicker showing wrong items
-  const NAV = userRole === null
-    ? []
-    : ALL_NAV.filter((item) => !item.roles || item.roles.includes(userRole));
+  const NAV =
+    userRole === null
+      ? []
+      : NAV_ORDER.filter((a) => canViewArea(userRole, a)).map((a) => ({
+          to: AREA_PATHS[a] as OpsPath,
+          label: AREA_LABELS[a],
+          icon: AREA_ICONS[a],
+          exact: a === "overview",
+          write: canWriteArea(userRole, a),
+        }));
 
   const isActive = (to: string, exact?: boolean) =>
     exact ? pathname === to : pathname === to || pathname.startsWith(to + "/");

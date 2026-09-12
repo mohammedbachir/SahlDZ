@@ -86,6 +86,9 @@ export async function getPostAuthRedirect(userId: string): Promise<string> {
 }
 
 export async function requireOwner(): Promise<void> {
+  // During SSR/hydration the browser session isn't available; the guard is
+  // enforced on the client after mount to avoid a false redirect to /login.
+  if (typeof window === "undefined") return;
   const { data } = await supabase.auth.getSession();
   if (!data.session?.user?.id) {
     throw redirect({ to: "/login" });
@@ -113,6 +116,9 @@ export async function requireOwner(): Promise<void> {
 }
 
 export async function redirectIfAuthed(): Promise<void> {
+  // Skip on the server: no browser session exists during SSR hydration, so
+  // this would otherwise briefly bounce authenticated users back to /login.
+  if (typeof window === "undefined") return;
   const fast = freshCachedTarget();
   if (fast) {
     throw redirect({ to: fast });
@@ -125,6 +131,10 @@ export async function redirectIfAuthed(): Promise<void> {
 }
 
 export async function requireAuth(): Promise<void> {
+  // During SSR/hydration the browser session isn't available; the auth guard
+  // is enforced on the client after mount (auth state resolves there) to avoid
+  // a false redirect to /login that then bounces back to the dashboard.
+  if (typeof window === "undefined") return;
   if (IS_PREVIEW) {
     const cached = readSessionCache();
     if (!cached?.uid) {
@@ -148,6 +158,31 @@ export function translateAuthError(message: string): string {
     "Password should be at least 6 characters":
       "كلمة المرور يجب أن تكون 6 أحرف على الأقل",
     "Unable to validate email address": "تعذر التحقق من صحة البريد الإلكتروني",
+    "auth/network-request-failed":
+      "تعذر الاتصال بالخادم، تحقق من اتصالك بالإنترنت",
+    "auth/user-not-found": "الحساب غير موجود",
+    "auth/wrong-password": "كلمة المرور غير صحيحة",
+    "auth/too-many-requests": "محاولات كثيرة جداً، حاول مرة أخرى لاحقاً",
+    "auth/invalid-email": "البريد الإلكتروني غير صالح",
+    "auth/user-disabled": "تم تعطيل هذا الحساب",
+    "auth/operation-not-allowed": "عملية الدخول غير مفعّلة",
+    "auth/popup-closed-by-user": "تم إغلاق نافذة الدخول",
+    "Firebase: Error (auth/network-request-failed)":
+      "تعذر الاتصال بالخادم، تحقق من اتصالك بالإنترنت",
+    "Firebase: Error (auth/user-not-found)":
+      "الحساب غير موجود",
+    "Firebase: Error (auth/wrong-password)":
+      "كلمة المرور غير صحيحة",
+    "Firebase: Error (auth/too-many-requests)":
+      "محاولات كثيرة جداً، حاول مرة أخرى لاحقاً",
+    "Firebase: Error (auth/invalid-email)":
+      "البريد الإلكتروني غير صالح",
+    "Firebase: Error (auth/user-disabled)":
+      "تم تعطيل هذا الحساب",
+    "Firebase: Error (auth/operation-not-allowed)":
+      "عملية الدخول غير مفعّلة",
+    "Firebase: Error (auth/popup-closed-by-user)":
+      "تم إغلاق نافذة الدخول",
   };
   return map[message] ?? message;
 }

@@ -19,6 +19,7 @@ import {
   StaffPinInput,
 } from "@/components/staff-login-ui";
 import { tx } from "@/lib/ops-tx";
+import { rememberKioskRole } from "@/lib/kiosk-session";
 
 const HAS_BACKEND = typeof window !== "undefined" && !!getFirebaseDb();
 
@@ -100,31 +101,33 @@ function Page() {
 
   async function submit(pin: string) {
     if (submitting) return;
-    if (!/^\d{6}$/.test(pin)) {
+    if (!/^\d{4}$/.test(pin)) {
       toast.error(tx("cashierScreen.invalidPinLength"));
       return;
     }
     if (previewMode) {
-      sessionStorage.setItem("cashier_token", "mock_cashier");
-      sessionStorage.setItem("cashier_expires", previewExpiry());
-      sessionStorage.setItem(
+      localStorage.setItem("cashier_token", "mock_cashier");
+      localStorage.setItem("cashier_expires", previewExpiry());
+      localStorage.setItem(
         "cashier_restaurant",
         JSON.stringify(PREVIEW_RESTAURANT),
       );
       toast.success(tx("common.welcome"));
+      rememberKioskRole("cashier");
       navigate({ to: "/cashier" });
       return;
     }
     setSubmitting(true);
     try {
       const res = await verify({ data: { restaurantId: restaurantId!, pin } });
-      sessionStorage.setItem("cashier_token", res.token);
-      sessionStorage.setItem("cashier_expires", res.expiresAt);
-      sessionStorage.setItem(
+      localStorage.setItem("cashier_token", res.token);
+      localStorage.setItem("cashier_expires", res.expiresAt);
+      localStorage.setItem(
         "cashier_restaurant",
         JSON.stringify(res.restaurant),
       );
       toast.success(tx("common.welcome"));
+      rememberKioskRole("cashier");
       navigate({ to: "/cashier" });
     } catch (e) {
       toast.error((e as Error).message || tx("common.wrongPin"));
@@ -162,7 +165,7 @@ function Page() {
               key={pinKey}
               onSubmit={submit}
               submitting={submitting}
-              length={6}
+              length={4}
             />
 
             {enabled === false && (

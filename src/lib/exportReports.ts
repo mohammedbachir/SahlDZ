@@ -74,7 +74,7 @@ export async function exportAnalyticsExcel(
   URL.revokeObjectURL(link.href);
 }
 
-export function exportAnalyticsPDF(payload: AnalyticsExportPayload): void {
+export function buildAnalyticsPDF(payload: AnalyticsExportPayload): string {
   const doc = new jsPDF();
   const { kpis } = payload;
 
@@ -115,7 +115,14 @@ export function exportAnalyticsPDF(payload: AnalyticsExportPayload): void {
     startY: itemsStartY + 8,
   });
 
-  doc.save(`analytics-${payload.restaurantName || "report"}.pdf`);
+  return doc.output("dataurlstring");
+}
+
+export function exportAnalyticsPDF(payload: AnalyticsExportPayload): void {
+  downloadDataUrl(
+    buildAnalyticsPDF(payload),
+    `analytics-${payload.restaurantName || "report"}.pdf`,
+  );
 }
 
 /* ─────────────────────────────────────────────────────────────────────
@@ -231,7 +238,7 @@ export async function exportAccountingExcel(
   URL.revokeObjectURL(link.href);
 }
 
-export function exportAccountingPDF(payload: AccountingExportPayload): void {
+export function buildAccountingPDF(payload: AccountingExportPayload): string {
   const doc = new jsPDF();
   doc.setFontSize(15);
   doc.text(payload.restaurantName || "تقرير المحاسبة", 105, 18, {
@@ -267,9 +274,7 @@ export function exportAccountingPDF(payload: AccountingExportPayload): void {
 
   const dailyStartY = (doc as any).lastAutoTable?.finalY ?? 80;
   autoTable(doc, {
-    head: [
-      ["التاريخ", "الإيراد (دج)", "المصاريف اليومية (دج)", "الصافي (دج)"],
-    ],
+    head: [["التاريخ", "الإيراد (دج)", "المصاريف اليومية (دج)", "الصافي (دج)"]],
     body: payload.daily.map((d) => [
       d.date,
       fmt(d.revenue),
@@ -280,5 +285,19 @@ export function exportAccountingPDF(payload: AccountingExportPayload): void {
     styles: { fontSize: 8 },
   });
 
-  doc.save(`accounting-${payload.restaurantName || "report"}.pdf`);
+  return doc.output("dataurlstring");
+}
+
+export function exportAccountingPDF(payload: AccountingExportPayload): void {
+  downloadDataUrl(
+    buildAccountingPDF(payload),
+    `accounting-${payload.restaurantName || "report"}.pdf`,
+  );
+}
+
+export function downloadDataUrl(dataUrl: string, filename: string): void {
+  const link = document.createElement("a");
+  link.href = dataUrl;
+  link.download = filename;
+  link.click();
 }

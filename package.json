@@ -8,14 +8,17 @@
   },
   "scripts": {
     "dev": "vite dev",
+    "dev:emulators": "node scripts/start-emulators.js && vite dev",
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "build:apk": "node build-apk.js",
     "preview": "vite preview",
     "preview:prod": "node scripts/preview-server.mjs",
+    "bot:poll": "node scripts/delivery-bot-poll.mjs",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "seed:auth": "node scripts/seed-auth-emulator.js"
   },
   "dependencies": {
     "@cloudflare/vite-plugin": "^1.25.5",

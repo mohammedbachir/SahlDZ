@@ -37,6 +37,7 @@ import { Route as DashboardTablesRouteImport } from './routes/dashboard.tables'
 import { Route as InternalManagersRouteImport } from './routes/internal.managers'
 import { Route as MobileIndexRouteImport } from './routes/mobile.index'
 import { Route as MobileDailySummaryRouteImport } from './routes/mobile.daily-summary'
+import { Route as MobileInventoryRouteImport } from './routes/mobile.inventory'
 import { Route as MobileLoginRouteImport } from './routes/mobile.login'
 import { Route as MobileNotificationsRouteImport } from './routes/mobile.notifications'
 import { Route as MobileReportsRouteImport } from './routes/mobile.reports'
@@ -50,10 +51,13 @@ import { Route as OpsExpensesRouteImport } from './routes/ops.expenses'
 import { Route as OpsInventoryRouteImport } from './routes/ops.inventory'
 import { Route as OpsInventoryCountRouteImport } from './routes/ops.inventory-count'
 import { Route as OpsRecipesRouteImport } from './routes/ops.recipes'
+import { Route as OpsReportArchiveRouteImport } from './routes/ops.report-archive'
 import { Route as OpsReportsRouteImport } from './routes/ops.reports'
 import { Route as OpsStaffPerformanceRouteImport } from './routes/ops.staff-performance'
 import { Route as OpsSuppliersRouteImport } from './routes/ops.suppliers'
 import { Route as OpsWasteRouteImport } from './routes/ops.waste'
+import { Route as RTokenRouteImport } from './routes/r.$token'
+import { Route as TTokenRouteImport } from './routes/t.$token'
 import { Route as OpsEmployeesIndexRouteImport } from './routes/ops.employees.index'
 import { Route as OpsEmployeesEmployeeIdRouteImport } from './routes/ops.employees.$employeeId'
 
@@ -197,6 +201,11 @@ const MobileDailySummaryRoute = MobileDailySummaryRouteImport.update({
   path: '/daily-summary',
   getParentRoute: () => MobileRoute,
 } as any)
+const MobileInventoryRoute = MobileInventoryRouteImport.update({
+  id: '/inventory',
+  path: '/inventory',
+  getParentRoute: () => MobileRoute,
+} as any)
 const MobileLoginRoute = MobileLoginRouteImport.update({
   id: '/login',
   path: '/login',
@@ -262,6 +271,11 @@ const OpsRecipesRoute = OpsRecipesRouteImport.update({
   path: '/recipes',
   getParentRoute: () => OpsRoute,
 } as any)
+const OpsReportArchiveRoute = OpsReportArchiveRouteImport.update({
+  id: '/report-archive',
+  path: '/report-archive',
+  getParentRoute: () => OpsRoute,
+} as any)
 const OpsReportsRoute = OpsReportsRouteImport.update({
   id: '/reports',
   path: '/reports',
@@ -281,6 +295,16 @@ const OpsWasteRoute = OpsWasteRouteImport.update({
   id: '/waste',
   path: '/waste',
   getParentRoute: () => OpsRoute,
+} as any)
+const RTokenRoute = RTokenRouteImport.update({
+  id: '/r/$token',
+  path: '/r/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TTokenRoute = TTokenRouteImport.update({
+  id: '/t/$token',
+  path: '/t/$token',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const OpsEmployeesIndexRoute = OpsEmployeesIndexRouteImport.update({
   id: '/',
@@ -320,6 +344,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/tables': typeof DashboardTablesRoute
   '/internal/managers': typeof InternalManagersRoute
   '/mobile/daily-summary': typeof MobileDailySummaryRoute
+  '/mobile/inventory': typeof MobileInventoryRoute
   '/mobile/login': typeof MobileLoginRoute
   '/mobile/notifications': typeof MobileNotificationsRoute
   '/mobile/reports': typeof MobileReportsRoute
@@ -332,10 +357,13 @@ export interface FileRoutesByFullPath {
   '/ops/inventory': typeof OpsInventoryRoute
   '/ops/inventory-count': typeof OpsInventoryCountRoute
   '/ops/recipes': typeof OpsRecipesRoute
+  '/ops/report-archive': typeof OpsReportArchiveRoute
   '/ops/reports': typeof OpsReportsRoute
   '/ops/staff-performance': typeof OpsStaffPerformanceRoute
   '/ops/suppliers': typeof OpsSuppliersRoute
   '/ops/waste': typeof OpsWasteRoute
+  '/r/$token': typeof RTokenRoute
+  '/t/$token': typeof TTokenRoute
   '/account/': typeof AccountIndexRoute
   '/mobile/': typeof MobileIndexRoute
   '/ops/': typeof OpsIndexRoute
@@ -367,6 +395,7 @@ export interface FileRoutesByTo {
   '/dashboard/tables': typeof DashboardTablesRoute
   '/internal/managers': typeof InternalManagersRoute
   '/mobile/daily-summary': typeof MobileDailySummaryRoute
+  '/mobile/inventory': typeof MobileInventoryRoute
   '/mobile/login': typeof MobileLoginRoute
   '/mobile/notifications': typeof MobileNotificationsRoute
   '/mobile/reports': typeof MobileReportsRoute
@@ -378,10 +407,13 @@ export interface FileRoutesByTo {
   '/ops/inventory': typeof OpsInventoryRoute
   '/ops/inventory-count': typeof OpsInventoryCountRoute
   '/ops/recipes': typeof OpsRecipesRoute
+  '/ops/report-archive': typeof OpsReportArchiveRoute
   '/ops/reports': typeof OpsReportsRoute
   '/ops/staff-performance': typeof OpsStaffPerformanceRoute
   '/ops/suppliers': typeof OpsSuppliersRoute
   '/ops/waste': typeof OpsWasteRoute
+  '/r/$token': typeof RTokenRoute
+  '/t/$token': typeof TTokenRoute
   '/account': typeof AccountIndexRoute
   '/mobile': typeof MobileIndexRoute
   '/ops': typeof OpsIndexRoute
@@ -416,6 +448,7 @@ export interface FileRoutesById {
   '/dashboard/tables': typeof DashboardTablesRoute
   '/internal/managers': typeof InternalManagersRoute
   '/mobile/daily-summary': typeof MobileDailySummaryRoute
+  '/mobile/inventory': typeof MobileInventoryRoute
   '/mobile/login': typeof MobileLoginRoute
   '/mobile/notifications': typeof MobileNotificationsRoute
   '/mobile/reports': typeof MobileReportsRoute
@@ -428,10 +461,13 @@ export interface FileRoutesById {
   '/ops/inventory': typeof OpsInventoryRoute
   '/ops/inventory-count': typeof OpsInventoryCountRoute
   '/ops/recipes': typeof OpsRecipesRoute
+  '/ops/report-archive': typeof OpsReportArchiveRoute
   '/ops/reports': typeof OpsReportsRoute
   '/ops/staff-performance': typeof OpsStaffPerformanceRoute
   '/ops/suppliers': typeof OpsSuppliersRoute
   '/ops/waste': typeof OpsWasteRoute
+  '/r/$token': typeof RTokenRoute
+  '/t/$token': typeof TTokenRoute
   '/account/': typeof AccountIndexRoute
   '/mobile/': typeof MobileIndexRoute
   '/ops/': typeof OpsIndexRoute
@@ -467,6 +503,7 @@ export interface FileRouteTypes {
     | '/dashboard/tables'
     | '/internal/managers'
     | '/mobile/daily-summary'
+    | '/mobile/inventory'
     | '/mobile/login'
     | '/mobile/notifications'
     | '/mobile/reports'
@@ -479,10 +516,13 @@ export interface FileRouteTypes {
     | '/ops/inventory'
     | '/ops/inventory-count'
     | '/ops/recipes'
+    | '/ops/report-archive'
     | '/ops/reports'
     | '/ops/staff-performance'
     | '/ops/suppliers'
     | '/ops/waste'
+    | '/r/$token'
+    | '/t/$token'
     | '/account/'
     | '/mobile/'
     | '/ops/'
@@ -514,6 +554,7 @@ export interface FileRouteTypes {
     | '/dashboard/tables'
     | '/internal/managers'
     | '/mobile/daily-summary'
+    | '/mobile/inventory'
     | '/mobile/login'
     | '/mobile/notifications'
     | '/mobile/reports'
@@ -525,10 +566,13 @@ export interface FileRouteTypes {
     | '/ops/inventory'
     | '/ops/inventory-count'
     | '/ops/recipes'
+    | '/ops/report-archive'
     | '/ops/reports'
     | '/ops/staff-performance'
     | '/ops/suppliers'
     | '/ops/waste'
+    | '/r/$token'
+    | '/t/$token'
     | '/account'
     | '/mobile'
     | '/ops'
@@ -562,6 +606,7 @@ export interface FileRouteTypes {
     | '/dashboard/tables'
     | '/internal/managers'
     | '/mobile/daily-summary'
+    | '/mobile/inventory'
     | '/mobile/login'
     | '/mobile/notifications'
     | '/mobile/reports'
@@ -574,10 +619,13 @@ export interface FileRouteTypes {
     | '/ops/inventory'
     | '/ops/inventory-count'
     | '/ops/recipes'
+    | '/ops/report-archive'
     | '/ops/reports'
     | '/ops/staff-performance'
     | '/ops/suppliers'
     | '/ops/waste'
+    | '/r/$token'
+    | '/t/$token'
     | '/account/'
     | '/mobile/'
     | '/ops/'
@@ -604,6 +652,8 @@ export interface RootRouteChildren {
   WaiterScreenRoute: typeof WaiterScreenRoute
   AccountSettingsRoute: typeof AccountSettingsRoute
   InternalManagersRoute: typeof InternalManagersRoute
+  RTokenRoute: typeof RTokenRoute
+  TTokenRoute: typeof TTokenRoute
   AccountIndexRoute: typeof AccountIndexRoute
 }
 
@@ -805,6 +855,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MobileDailySummaryRouteImport
       parentRoute: typeof MobileRoute
     }
+    '/mobile/inventory': {
+      id: '/mobile/inventory'
+      path: '/inventory'
+      fullPath: '/mobile/inventory'
+      preLoaderRoute: typeof MobileInventoryRouteImport
+      parentRoute: typeof MobileRoute
+    }
     '/mobile/login': {
       id: '/mobile/login'
       path: '/login'
@@ -896,6 +953,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OpsRecipesRouteImport
       parentRoute: typeof OpsRoute
     }
+    '/ops/report-archive': {
+      id: '/ops/report-archive'
+      path: '/report-archive'
+      fullPath: '/ops/report-archive'
+      preLoaderRoute: typeof OpsReportArchiveRouteImport
+      parentRoute: typeof OpsRoute
+    }
     '/ops/reports': {
       id: '/ops/reports'
       path: '/reports'
@@ -923,6 +987,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/ops/waste'
       preLoaderRoute: typeof OpsWasteRouteImport
       parentRoute: typeof OpsRoute
+    }
+    '/r/$token': {
+      id: '/r/$token'
+      path: '/r/$token'
+      fullPath: '/r/$token'
+      preLoaderRoute: typeof RTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/t/$token': {
+      id: '/t/$token'
+      path: '/t/$token'
+      fullPath: '/t/$token'
+      preLoaderRoute: typeof TTokenRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/ops/employees/': {
       id: '/ops/employees/'
@@ -967,6 +1045,7 @@ const DashboardRouteWithChildren = DashboardRoute._addFileChildren(
 
 interface MobileRouteChildren {
   MobileDailySummaryRoute: typeof MobileDailySummaryRoute
+  MobileInventoryRoute: typeof MobileInventoryRoute
   MobileLoginRoute: typeof MobileLoginRoute
   MobileNotificationsRoute: typeof MobileNotificationsRoute
   MobileReportsRoute: typeof MobileReportsRoute
@@ -977,6 +1056,7 @@ interface MobileRouteChildren {
 
 const MobileRouteChildren: MobileRouteChildren = {
   MobileDailySummaryRoute: MobileDailySummaryRoute,
+  MobileInventoryRoute: MobileInventoryRoute,
   MobileLoginRoute: MobileLoginRoute,
   MobileNotificationsRoute: MobileNotificationsRoute,
   MobileReportsRoute: MobileReportsRoute,
@@ -1010,6 +1090,7 @@ interface OpsRouteChildren {
   OpsInventoryRoute: typeof OpsInventoryRoute
   OpsInventoryCountRoute: typeof OpsInventoryCountRoute
   OpsRecipesRoute: typeof OpsRecipesRoute
+  OpsReportArchiveRoute: typeof OpsReportArchiveRoute
   OpsReportsRoute: typeof OpsReportsRoute
   OpsStaffPerformanceRoute: typeof OpsStaffPerformanceRoute
   OpsSuppliersRoute: typeof OpsSuppliersRoute
@@ -1025,6 +1106,7 @@ const OpsRouteChildren: OpsRouteChildren = {
   OpsInventoryRoute: OpsInventoryRoute,
   OpsInventoryCountRoute: OpsInventoryCountRoute,
   OpsRecipesRoute: OpsRecipesRoute,
+  OpsReportArchiveRoute: OpsReportArchiveRoute,
   OpsReportsRoute: OpsReportsRoute,
   OpsStaffPerformanceRoute: OpsStaffPerformanceRoute,
   OpsSuppliersRoute: OpsSuppliersRoute,
@@ -1053,6 +1135,8 @@ const rootRouteChildren: RootRouteChildren = {
   WaiterScreenRoute: WaiterScreenRoute,
   AccountSettingsRoute: AccountSettingsRoute,
   InternalManagersRoute: InternalManagersRoute,
+  RTokenRoute: RTokenRoute,
+  TTokenRoute: TTokenRoute,
   AccountIndexRoute: AccountIndexRoute,
 }
 export const routeTree = rootRouteImport

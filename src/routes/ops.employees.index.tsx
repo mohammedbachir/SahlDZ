@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { requireOpsAccess, useAreaPermission } from "@/lib/permissions";
+import { CanWrite } from "@/components/PermissionsGate";
 import { UserPlus, RefreshCw, Pencil, Trash2, Snowflake, ShieldCheck, Users, X, Info } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -38,6 +40,7 @@ import {
 } from "@/components/ui/select";
 
 export const Route = createFileRoute("/ops/employees/")({
+  beforeLoad: requireOpsAccess("employees"),
   component: OpsEmployees,
 });
 
@@ -248,12 +251,14 @@ function OpsEmployees() {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <CanWrite area="employees">
             <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5" onClick={() => setRolesOpen(true)}>
               <ShieldCheck className="w-3.5 h-3.5" /> {tx("الأدوار")}
             </Button>
             <Button size="sm" className="h-8 text-xs gap-1.5" onClick={() => void openAdd()}>
               <UserPlus className="w-3.5 h-3.5" /> {tx("إضافة موظف")}
             </Button>
+            </CanWrite>
           </div>
         </div>
       </div>
@@ -307,6 +312,7 @@ function OpsEmployees() {
                           <Info className="w-3 h-3" /> {tx("معلومات")}
                         </Link>
                       </Button>
+                      <CanWrite area="employees">
                       <Button variant="outline" size="sm" className="gap-1.5 h-7 text-[11px]" onClick={() => openEdit(m)}>
                         <Pencil className="w-3 h-3" /> {tx("تعديل")}
                       </Button>
@@ -322,6 +328,7 @@ function OpsEmployees() {
                       <Button variant="ghost" size="sm" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => { setDeleteMember(m); setConfirmDelete(true); }}>
                         <Trash2 className="w-3.5 h-3.5" />
                       </Button>
+                      </CanWrite>
                     </div>
                   </TableCell>
                 </TableRow>

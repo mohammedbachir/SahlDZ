@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurantId, formatDZD } from "@/lib/restaurant";
 import { getFirebaseDb } from "@/integrations/firebase/config";
-import { Calendar } from "lucide-react";
+import { Calendar, Package } from "lucide-react";
 
 type DayData = {
   date: string;
@@ -152,6 +152,13 @@ export default function MobileReports() {
       >
         <Calendar className="w-4 h-4" />
         التقرير الأسبوعي الكامل (إيراد · هدر · مخزون)
+      </a>
+      <a
+        href="/mobile/inventory"
+        className="flex items-center justify-center gap-2 mb-6 py-2.5 rounded-2xl border border-blue-500/40 bg-blue-500/10 text-blue-600 text-sm font-semibold"
+      >
+        <Package className="w-4 h-4" />
+        تقرير المخزون (كميات · حالة · قيمة · جرد)
       </a>
 
       {/* Summary Cards */}

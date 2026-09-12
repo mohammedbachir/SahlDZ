@@ -162,9 +162,105 @@ export const toggleDeliveryDriver = createServerFn({ method: "POST" })
 
 const TELEGRAM_API = "https://api.telegram.org";
 
+function getServerEnv(name: string): string | undefined {
+  try {
+    if (typeof process !== "undefined" && process.env) {
+      return process.env[name];
+    }
+  } catch {
+    // ignore
+  }
+  return undefined;
+}
+
+const DELIVERY_BOT_TOKEN = getServerEnv("DELIVERY_BOT_TOKEN") || "";
+
+/**
+ * Core: notify all linked drivers about a new delivery order through the
+ * shared delivery bot (the bot drivers registered on via @sahldzDelivery_bot).
+ */
+export async function notifyDriversForOrderCore(data: {
+  restaurantId: string;
+  orderId: string;
+  total: number;
+  customerName: string | null;
+  customerPhone: string | null;
+  customerAddress: string | null;
+  items: Array<{ name: string; quantity: number }>;
+  dailyNumber: number | null;
+}): Promise<{ notified: number; configured: boolean }> {
+  if (!getFirebaseDb()) return { notified: 0, configured: false };
+  if (!DELIVERY_BOT_TOKEN) return { notified: 0, configured: false };
+
+  // Restaurant name for the message header
+  const { data: rest } = await supabase
+    .from("restaurants")
+    .select("id,name")
+    .eq("id", data.restaurantId)
+    .single();
+  const r = rest as any;
+
+  // Find linked drivers
+  const { data: drivers } = await supabase
+    .from("staff")
+    .select("id,name,telegram_chat_id,telegram_linked")
+    .eq("restaurant_id", data.restaurantId)
+    .eq("role", "driver")
+    .eq("telegram_linked", true);
+
+  const driverList = (drivers as any[]) ?? [];
+  const linkedDrivers = driverList.filter(
+    (d) => d.telegram_chat_id && d.telegram_linked,
+  );
+
+  if (linkedDrivers.length === 0) return { notified: 0, configured: true };
+
+  // Build message
+  const itemsList = data.items
+    .map((it) => `  • ${it.name} × ${it.quantity}`)
+    .join("\n");
+
+  const msg = [
+    `🛵 *طلب توصيل جديد!*`,
+    r?.name ? `🏪 ${r.name}` : "",
+    ``,
+    `🔢 رقم الطلب: *${data.dailyNumber ?? data.orderId.slice(0, 8)}*`,
+    `💰 الإجمالي: *${Number(data.total).toLocaleString("ar-DZ")} دج*`,
+    ``,
+    `📋 الأصناف:`,
+    itemsList || "  (بدون أصناف)",
+    ``,
+    `👤 العميل: ${data.customerName ?? "—"}`,
+    `📞 الهاتف: ${data.customerPhone ?? "—"}`,
+    `📍 العنوان: ${data.customerAddress ?? "—"}`,
+    ``,
+    `⏰ ${new Date().toLocaleTimeString("ar-DZ", { hour: "2-digit", minute: "2-digit" })}`,
+  ].join("\n");
+
+  let notified = 0;
+  for (const driver of linkedDrivers) {
+    try {
+      await fetch(`${TELEGRAM_API}/bot${DELIVERY_BOT_TOKEN}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: driver.telegram_chat_id,
+          text: msg,
+          parse_mode: "Markdown",
+        }),
+      });
+      notified++;
+    } catch {
+      // skip failed notifications
+    }
+  }
+
+  return { notified, configured: true };
+}
+
 /**
  * Notify all linked drivers about a new delivery order.
- * Called from the app when a delivery order is created.
+ * Called from the app when a delivery order is created / ready.
  */
 export const notifyDriversForOrder = createServerFn({ method: "POST" })
   .validator(
@@ -180,73 +276,5 @@ export const notifyDriversForOrder = createServerFn({ method: "POST" })
     }) => d,
   )
   .handler(async ({ data }) => {
-    if (!getFirebaseDb()) return { notified: 0 };
-
-    // Find the restaurant's bot token
-    const { data: rest } = await supabase
-      .from("restaurants")
-      .select(
-        "id,name,telegram_bot_token,telegram_chat_id,telegram_chat_linked",
-      )
-      .eq("id", data.restaurantId)
-      .single();
-    const r = rest as any;
-
-    if (!r?.telegram_bot_token) return { notified: 0 };
-
-    // Find linked drivers
-    const { data: drivers } = await supabase
-      .from("staff")
-      .select("id,name,telegram_chat_id,telegram_linked")
-      .eq("restaurant_id", data.restaurantId)
-      .eq("role", "driver")
-      .eq("telegram_linked", true);
-
-    const driverList = (drivers as any[]) ?? [];
-    const linkedDrivers = driverList.filter(
-      (d) => d.telegram_chat_id && d.telegram_linked,
-    );
-
-    if (linkedDrivers.length === 0) return { notified: 0 };
-
-    // Build message
-    const itemsList = data.items
-      .map((it) => `  • ${it.name} × ${it.quantity}`)
-      .join("\n");
-
-    const msg = [
-      `🛵 *طلب توصيل جديد!*`,
-      ``,
-      `🔢 رقم الطلب: *${data.dailyNumber ?? data.orderId.slice(0, 8)}*`,
-      `💰 الإجمالي: *${Number(data.total).toLocaleString("ar-DZ")} دج*`,
-      ``,
-      `📋 الأصناف:`,
-      itemsList || "  (بدون أصناف)",
-      ``,
-      `👤 العميل: ${data.customerName ?? "—"}`,
-      `📞 الهاتف: ${data.customerPhone ?? "—"}`,
-      `📍 العنوان: ${data.customerAddress ?? "—"}`,
-      ``,
-      `⏰ ${new Date().toLocaleTimeString("ar-DZ", { hour: "2-digit", minute: "2-digit" })}`,
-    ].join("\n");
-
-    let notified = 0;
-    for (const driver of linkedDrivers) {
-      try {
-        await fetch(`${TELEGRAM_API}/bot${r.telegram_bot_token}/sendMessage`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            chat_id: driver.telegram_chat_id,
-            text: msg,
-            parse_mode: "Markdown",
-          }),
-        });
-        notified++;
-      } catch {
-        // skip failed notifications
-      }
-    }
-
-    return { notified };
+    return notifyDriversForOrderCore(data);
   });

@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from "react";
 import { createFileRoute } from "@tanstack/react-router";
+import { requireOpsAccess } from "@/lib/permissions";
 import { Trash2, Loader2, Filter, AlertTriangle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurantId, formatDZD } from "@/lib/restaurant";
@@ -16,6 +17,7 @@ import { tx } from "@/lib/ops-tx";
 
 
 export const Route = createFileRoute("/ops/waste")({
+  beforeLoad: requireOpsAccess("waste"),
   component: OpsWaste,
 });
 

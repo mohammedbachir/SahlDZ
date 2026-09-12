@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
+import { requireOpsAccess, useAreaPermission } from "@/lib/permissions";
+import { CanWrite } from "@/components/PermissionsGate";
 import { Plus, X, ChefHat, Search, Trash2, ListChecks } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -29,6 +31,7 @@ import {
 } from "@/components/ui/select";
 
 export const Route = createFileRoute("/ops/recipes")({
+  beforeLoad: requireOpsAccess("recipes"),
   component: OpsRecipes,
 });
 
@@ -49,6 +52,7 @@ function fmt(n: number) {
 function OpsRecipes() {
   useTranslation();
   const { restaurantId, loading: restaurantLoading } = useRestaurantId();
+  const { canWrite } = useAreaPermission("recipes");
   const [items, setItems] = useState<MenuItem[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
@@ -209,6 +213,10 @@ function OpsRecipes() {
 
   const save = async () => {
     if (!restaurantId) return;
+    if (!canWrite) {
+      toast.error(tx("لا تملك صلاحية التعديل"));
+      return;
+    }
     const clean = draft
       .map((d) => ({
         ingredient_id: d.ingredient_id,
@@ -357,9 +365,11 @@ function OpsRecipes() {
                 className="pr-8 w-48 h-8 text-xs"
               />
             </div>
+            <CanWrite area="recipes">
             <Button size="sm" className="h-8 text-xs gap-1.5" onClick={openNewRecipe}>
               <Plus className="w-3.5 h-3.5" /> {tx("إضافة وصفة")}
             </Button>
+            </CanWrite>
           </div>
         </div>
         {(orphanCount > 0 || selected.size > 0) && (
@@ -372,6 +382,7 @@ function OpsRecipes() {
             )}
             {selected.size > 0 && (
               <>
+                <CanWrite area="recipes">
                 <Button
                   size="sm"
                   variant="destructive"
@@ -382,6 +393,7 @@ function OpsRecipes() {
                   <Trash2 className="w-3.5 h-3.5" />
                   حذف ({selected.size})
                 </Button>
+                </CanWrite>
                 <Button size="sm" variant="ghost" className="h-7 text-[11px]" onClick={() => setSelected(new Set())}>
                   إلغاء
                 </Button>

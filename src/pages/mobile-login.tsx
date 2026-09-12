@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { getFirebaseDb } from "@/integrations/firebase/config";
-import { translateAuthError, getPostAuthRedirect } from "@/lib/auth";
+import { translateAuthError } from "@/lib/auth";
 import { Smartphone, Loader2, Eye, EyeOff } from "lucide-react";
 
 export default function MobileLoginPage() {
@@ -37,8 +37,7 @@ export default function MobileLoginPage() {
       }
 
       if (data.user) {
-        const redirect = await getPostAuthRedirect(data.user.id);
-        window.location.href = redirect === "/ops" ? "/mobile" : redirect;
+        window.location.href = "/mobile";
       }
     } catch {
       setError("حدث خطأ غير متوقع");

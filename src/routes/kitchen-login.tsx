@@ -3,7 +3,10 @@ import { useEffect, useState } from "react";
 import { ChefHat, Loader2, User } from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
-import { getPublicChefList, verifyIndividualChefPin } from "@/lib/individual-chef.functions";
+import {
+  getPublicChefList,
+  verifyIndividualChefPin,
+} from "@/lib/individual-chef.functions";
 import { PREVIEW_RESTAURANT, previewExpiry } from "@/lib/preview-mode";
 import { verifyActivationCode } from "@/lib/activation";
 import { getFirebaseDb } from "@/integrations/firebase/config";
@@ -19,13 +22,19 @@ import {
   StaffPinInput,
 } from "@/components/staff-login-ui";
 import { tx } from "@/lib/ops-tx";
+import { rememberKioskRole } from "@/lib/kiosk-session";
 
 const HAS_BACKEND = typeof window !== "undefined" && !!getFirebaseDb();
 
 export const Route = createFileRoute("/kitchen-login")({
   beforeLoad: requireDesktop,
   validateSearch: (s) => ({
-    rid: typeof s.rid === "string" && s.rid ? s.rid : typeof s.r === "string" ? s.r : "",
+    rid:
+      typeof s.rid === "string" && s.rid
+        ? s.rid
+        : typeof s.r === "string"
+          ? s.r
+          : "",
   }),
   component: Page,
 });
@@ -37,7 +46,9 @@ function Page() {
   const fetchChefList = useServerFn(getPublicChefList);
   const verifyIndividual = useServerFn(verifyIndividualChefPin);
 
-  const [restaurantId, setRestaurantId] = useState<string | null>(searchRid || null);
+  const [restaurantId, setRestaurantId] = useState<string | null>(
+    searchRid || null,
+  );
   const [restaurantName, setRestaurantName] = useState("");
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [enabled, setEnabled] = useState<boolean | null>(null);
@@ -88,13 +99,20 @@ function Page() {
     setLoadingList(true);
     fetchChefList({ data: { restaurantId } })
       .then((res) => {
-        if (!res.found) { toast.error(tx("common.restaurantNotFound")); setEnabled(false); return; }
+        if (!res.found) {
+          toast.error(tx("common.restaurantNotFound"));
+          setEnabled(false);
+          return;
+        }
         setRestaurantName(res.name);
         setLogoUrl(res.logo_url);
         setChefs(res.chefs);
         setEnabled(res.chefs.length > 0);
       })
-      .catch(() => { toast.error(tx("common.restaurantNotFound")); setEnabled(false); })
+      .catch(() => {
+        toast.error(tx("common.restaurantNotFound"));
+        setEnabled(false);
+      })
       .finally(() => setLoadingList(false));
   }, [restaurantId, fetchChefList]);
 
@@ -111,24 +129,36 @@ function Page() {
     if (submitting) return;
     setSubmitting(true);
     if (previewMode) {
-      sessionStorage.setItem("individual_chef_token", "mock_chef");
-      sessionStorage.setItem("individual_chef_expires", previewExpiry());
-      sessionStorage.setItem("individual_chef_name", selectedChef.name);
-      sessionStorage.setItem("individual_chef_id", selectedChef.id);
-      sessionStorage.setItem("individual_chef_restaurant", JSON.stringify(PREVIEW_RESTAURANT));
-      toast.success(tx("kitchen.previewWelcome").replace("{{name}}", selectedChef.name));
+      localStorage.setItem("individual_chef_token", "mock_chef");
+      localStorage.setItem("individual_chef_expires", previewExpiry());
+      localStorage.setItem("individual_chef_name", selectedChef.name);
+      localStorage.setItem("individual_chef_id", selectedChef.id);
+      localStorage.setItem(
+        "individual_chef_restaurant",
+        JSON.stringify(PREVIEW_RESTAURANT),
+      );
+      toast.success(
+        tx("kitchen.previewWelcome").replace("{{name}}", selectedChef.name),
+      );
       setSubmitting(false);
+      rememberKioskRole("chef");
       navigate({ to: "/kitchen-screen" });
       return;
     }
     try {
-      const res = await verifyIndividual({ data: { chefId: selectedChef.id, pin } });
-      sessionStorage.setItem("individual_chef_token", res.token);
-      sessionStorage.setItem("individual_chef_expires", res.expiresAt);
-      sessionStorage.setItem("individual_chef_name", res.chefName);
-      sessionStorage.setItem("individual_chef_id", res.chefId);
-      sessionStorage.setItem("individual_chef_restaurant", JSON.stringify(res.restaurant));
+      const res = await verifyIndividual({
+        data: { chefId: selectedChef.id, pin },
+      });
+      localStorage.setItem("individual_chef_token", res.token);
+      localStorage.setItem("individual_chef_expires", res.expiresAt);
+      localStorage.setItem("individual_chef_name", res.chefName);
+      localStorage.setItem("individual_chef_id", res.chefId);
+      localStorage.setItem(
+        "individual_chef_restaurant",
+        JSON.stringify(res.restaurant),
+      );
       toast.success(tx("kitchen.welcome").replace("{{name}}", res.chefName));
+      rememberKioskRole("chef");
       navigate({ to: "/kitchen-screen" });
     } catch (e) {
       toast.error((e as Error).message || tx("common.wrongPin"));
@@ -150,7 +180,9 @@ function Page() {
           ) : (
             <LoginLogo icon={ChefHat} />
           )}
-          <h1 className="text-lg font-bold text-[var(--foreground)]">{tx("kitchen.loginTitle")}</h1>
+          <h1 className="text-lg font-bold text-[var(--foreground)]">
+            {tx("kitchen.loginTitle")}
+          </h1>
           {restaurantName && <RestaurantPill name={restaurantName} />}
           {previewMode && (
             <span className="text-[10px] font-bold text-[var(--primary)] bg-[var(--primary)]/10 rounded-md px-2 py-0.5">
@@ -205,7 +237,11 @@ function Page() {
                 <p className="text-xs text-[var(--muted-foreground)] text-center">
                   {tx("kitchen.enterPin")}
                 </p>
-                <StaffPinInput onSubmit={submitIndividual} submitting={submitting} length={6} />
+                <StaffPinInput
+                  onSubmit={submitIndividual}
+                  submitting={submitting}
+                  length={6}
+                />
               </div>
             )}
           </>

@@ -66,7 +66,7 @@ const PRESETS: { value: string; label: string }[] = [
 ];
 
 const CHANNEL_NAMES: Record<string, string> = {
-  dine_in: "في الصالة",
+  dine_in: "inside المطعم",
   takeaway: "سفري",
   delivery: "توصيل",
 };

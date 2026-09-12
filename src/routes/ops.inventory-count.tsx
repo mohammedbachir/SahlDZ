@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
+import { requireOpsAccess, useAreaPermission } from "@/lib/permissions";
+import { CanWrite } from "@/components/PermissionsGate";
 import { Plus, Printer, Lock, Minus, Check } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -12,6 +14,7 @@ import { useTranslation } from "react-i18next";
 
 
 export const Route = createFileRoute("/ops/inventory-count")({
+  beforeLoad: requireOpsAccess("inventoryCount"),
   component: OpsInventoryCount,
 });
 
@@ -35,6 +38,7 @@ type CountItem = {
 function OpsInventoryCount() {
   useTranslation();
   const { restaurantId } = useRestaurantId();
+  const { canWrite } = useAreaPermission("inventoryCount");
   const [counts, setCounts] = useState<CountRow[]>([]);
   const [active, setActive] = useState<CountRow | null>(null);
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
@@ -202,7 +206,7 @@ function OpsInventoryCount() {
           </div>
           <div className="flex gap-2">
             <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => window.print()}><Printer className="w-3.5 h-3.5 ml-1" /> {tx("طباعة")}</Button>
-            {!isClosed && <Button size="sm" className="h-8 text-xs" onClick={closeCount}><Lock className="w-3.5 h-3.5 ml-1" /> {tx("إقفال")}</Button>}
+            {!isClosed && canWrite && <Button size="sm" className="h-8 text-xs" onClick={closeCount}><Lock className="w-3.5 h-3.5 ml-1" /> {tx("إقفال")}</Button>}
             <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => setActive(null)}>{tx("عودة")}</Button>
           </div>
         </div>
@@ -231,7 +235,7 @@ function OpsInventoryCount() {
                       <td className="p-2 text-[var(--muted-foreground)]">{ing?.unit}</td>
                       <td className="p-2">{Number(it.expected_qty).toFixed(2)}</td>
                       <td className="p-2 w-44">
-                        {isClosed ? (
+                        {isClosed || !canWrite ? (
                           Number(it.counted_qty).toFixed(2)
                         ) : (
                           <div className="flex items-center gap-1" dir="rtl">
@@ -288,7 +292,7 @@ function OpsInventoryCount() {
           <h3 className="font-bold text-sm">{tx("جرد المخزون")}</h3>
           <p className="text-xs text-[var(--muted-foreground)]">{tx("قارن المخزون الفعلي بالمخزون النظري واستخرج الفروقات.")}</p>
         </div>
-        <Button onClick={startNew} size="sm" className="h-8 text-xs"><Plus className="w-3.5 h-3.5 ml-1" /> {tx("جرد جديد")}</Button>
+        {canWrite && <Button onClick={startNew} size="sm" className="h-8 text-xs"><Plus className="w-3.5 h-3.5 ml-1" /> {tx("جرد جديد")}</Button>}
       </div>
 
       <div className="space-y-1.5">

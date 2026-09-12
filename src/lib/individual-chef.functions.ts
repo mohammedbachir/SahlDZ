@@ -1,29 +1,61 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getRequestHeader } from "@tanstack/react-start/server";
-import { previewExpiry } from "@/lib/preview-mode";
 import { supabase } from "@/integrations/supabase/client";
 import { getFirebaseDb } from "@/integrations/firebase/config";
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  updateDoc,
+  query,
+  where,
+  documentId,
+} from "firebase/firestore";
 import {
   ROLE_KITCHEN,
   makeStaffSessionToken,
   generateUniqueSerial,
   resolveStaffFromToken,
+  staffSessionExpiry,
 } from "@/lib/staff-core";
 import { requireRestaurantId } from "@/lib/server-staff-auth";
+
+function safeParseOptions(
+  raw: any,
+): Array<{ label: string; choice: string; price_delta: number }> {
+  try {
+    const arr = typeof raw === "string" ? JSON.parse(raw) : raw;
+    return Array.isArray(arr)
+      ? arr.map((o: any) => ({
+          label: String(o?.label ?? ""),
+          choice: String(o?.choice ?? ""),
+          price_delta: Number(o?.price_delta) || 0,
+        }))
+      : [];
+  } catch {
+    return [];
+  }
+}
 
 /** DB logic: resolve chef context from session token. */
 export async function getIndividualChefContextCore(token: string) {
   const { staffRow, restaurantId } = await resolveStaffFromToken(token);
   if (staffRow.role !== ROLE_KITCHEN)
     throw new Error("هذا الحساب ليس حساب مطبخ");
-  const { data: rest } = await supabase
-    .from("restaurants")
-    .select("id,name,logo_url")
-    .eq("id", restaurantId)
-    .maybeSingle();
+
+  const db = getFirebaseDb();
+  let rest: any = { id: restaurantId, name: "", logo_url: null };
+  if (db) {
+    const restSnap = await getDoc(doc(db, "restaurants", restaurantId));
+    if (restSnap.exists()) {
+      rest = { id: restSnap.id, ...restSnap.data() };
+    }
+  }
+
   return {
     chefName: staffRow.name as string,
-    restaurant: (rest as any) ?? { id: restaurantId, name: "", logo_url: null },
+    restaurant: rest,
   };
 }
 
@@ -39,39 +71,44 @@ export const getIndividualChefContext = createServerFn({ method: "GET" })
 /** DB logic: list active orders (new + preparing) for the chef's restaurant. */
 export async function individualChefListActiveCore(token: string) {
   const { restaurantId } = await resolveStaffFromToken(token);
+  const db = getFirebaseDb();
+  if (!db) throw new Error("Firebase غير متصل");
 
-  const { data: orderRows } = await supabase
-    .from("orders")
-    .select("*")
-    .eq("restaurant_id", restaurantId)
-    .in("status", ["new", "preparing"])
-    .order("created_at", { ascending: false });
-
-  if (!orderRows?.length) return { orders: [] };
+  const snap = await getDocs(
+    query(collection(db, "orders"), where("restaurant_id", "==", restaurantId)),
+  );
+  const orderRows = snap.docs
+    .map((d) => ({ ...d.data(), id: d.id }))
+    .filter((o: any) => o.status === "new" || o.status === "preparing");
+  if (!orderRows.length) return { orders: [] };
 
   const ids = orderRows.map((o: any) => o.id as string);
+  const tableIds = orderRows
+    .map((o: any) => o.table_id)
+    .filter(Boolean) as string[];
 
-  const [itemsRes, tablesRes] = await Promise.all([
-    supabase.from("order_items").select("*").in("order_id", ids),
-    supabase
-      .from("tables")
-      .select("id,table_number")
-      .in("id", orderRows.map((o: any) => o.table_id).filter(Boolean)),
+  const [itemsSnap, tablesSnap] = await Promise.all([
+    getDocs(query(collection(db, "order_items"), where("order_id", "in", ids))),
+    tableIds.length
+      ? getDocs(
+          query(collection(db, "tables"), where(documentId(), "in", tableIds)),
+        )
+      : Promise.resolve({ docs: [] } as any),
   ]);
 
-  if (itemsRes.error) throw new Error(itemsRes.error.message);
-  if (tablesRes.error) throw new Error(tablesRes.error.message);
-
   const itemsByOrder = new Map<string, any[]>();
-  for (const it of itemsRes.data ?? []) {
-    const arr = itemsByOrder.get((it as any).order_id) ?? [];
+  for (const d of itemsSnap.docs) {
+    const it = { ...d.data(), id: d.id } as any;
+    const arr = itemsByOrder.get(it.order_id) ?? [];
     arr.push(it);
-    itemsByOrder.set((it as any).order_id, arr);
+    itemsByOrder.set(it.order_id, arr);
   }
 
   const tableMap = new Map<string, number>();
-  for (const t of tablesRes.data ?? [])
-    tableMap.set((t as any).id, (t as any).table_number);
+  for (const d of tablesSnap.docs) {
+    const t = d.data() as any;
+    tableMap.set(d.id, t.table_number);
+  }
 
   const orders = orderRows.map((o: any) => ({
     id: o.id,
@@ -88,6 +125,8 @@ export async function individualChefListActiveCore(token: string) {
     items: (itemsByOrder.get(o.id) ?? []).map((it: any) => ({
       name: it.name_snapshot as string,
       qty: it.quantity as number,
+      note: (it.note as string) ?? null,
+      options: it.options_snapshot ? safeParseOptions(it.options_snapshot) : [],
     })),
   }));
 
@@ -107,13 +146,19 @@ export async function individualChefStartPreparingCore(
   orderId: string,
 ) {
   const { restaurantId } = await resolveStaffFromToken(token);
-  const { error } = await supabase
-    .from("orders")
-    .update({ status: "preparing", acknowledged: true })
-    .eq("id", orderId)
-    .eq("restaurant_id", restaurantId)
-    .eq("status", "new");
-  if (error) throw new Error(error.message);
+  const db = getFirebaseDb();
+  if (!db) throw new Error("Firebase غير متصل");
+
+  const orderRef = doc(db, "orders", orderId);
+  const snap = await getDoc(orderRef);
+  if (!snap.exists()) throw new Error("الطلبية غير موجودة");
+  const data = snap.data();
+  if (data.restaurant_id !== restaurantId)
+    throw new Error("طلبية مملوكة لمطعم آخر");
+  if (data.status !== "new")
+    throw new Error(`حالة الطلبية "${data.status}" — لا يمكن بدء التحضير`);
+
+  await updateDoc(orderRef, { status: "preparing", acknowledged: true });
   return { ok: true };
 }
 
@@ -130,13 +175,19 @@ export async function individualChefMarkReadyCore(
   orderId: string,
 ) {
   const { restaurantId } = await resolveStaffFromToken(token);
-  const { error } = await supabase
-    .from("orders")
-    .update({ status: "ready" })
-    .eq("id", orderId)
-    .eq("restaurant_id", restaurantId)
-    .eq("status", "preparing");
-  if (error) throw new Error(error.message);
+  const db = getFirebaseDb();
+  if (!db) throw new Error("Firebase غير متصل");
+
+  const orderRef = doc(db, "orders", orderId);
+  const snap = await getDoc(orderRef);
+  if (!snap.exists()) throw new Error("الطلبية غير موجودة");
+  const data = snap.data();
+  if (data.restaurant_id !== restaurantId)
+    throw new Error("طلبية مملوكة لمطعم آخر");
+  if (data.status !== "preparing")
+    throw new Error(`حالة الطلبية "${data.status}" — لا يمكن وضعها كجاهزة`);
+
+  await updateDoc(orderRef, { status: "ready" });
   return { ok: true };
 }
 
@@ -153,29 +204,41 @@ export const individualChefLogout = createServerFn({ method: "POST" })
 
 /** Public (login-page) list of active kitchen staff for a restaurant. */
 export async function getPublicChefListCore(restaurantId: string) {
-  const rest = await supabase
-    .from("restaurants")
-    .select("name,logo_url")
-    .eq("id", restaurantId)
-    .maybeSingle();
-  if (!rest.data)
+  const db = getFirebaseDb();
+  if (!db)
     return {
       found: false,
       name: "",
       logo_url: null as string | null,
       chefs: [],
     };
-  const rows = await supabase
-    .from("staff")
-    .select("id,name")
-    .eq("restaurant_id", restaurantId)
-    .eq("role", ROLE_KITCHEN)
-    .eq("frozen", false);
+
+  const restSnap = await getDoc(doc(db, "restaurants", restaurantId));
+  if (!restSnap.exists())
+    return {
+      found: false,
+      name: "",
+      logo_url: null as string | null,
+      chefs: [],
+    };
+
+  const restData = restSnap.data() as Record<string, any>;
+
+  const staffSnap = await getDocs(
+    query(collection(db, "staff"), where("restaurant_id", "==", restaurantId)),
+  );
+
   return {
     found: true,
-    name: (rest.data as any).name ?? "",
-    logo_url: ((rest.data as any).logo_url as string | null) ?? null,
-    chefs: (rows.data ?? []).map((c: any) => ({ id: c.id, name: c.name })),
+    name: (restData.name as string) ?? "",
+    logo_url: (restData.logo_url as string | null) ?? null,
+    chefs: staffSnap.docs
+      .filter(
+        (d) =>
+          (d.data() as any).role === ROLE_KITCHEN &&
+          (d.data() as any).frozen !== true,
+      )
+      .map((d) => ({ id: d.id, name: (d.data() as any).name })),
   };
 }
 
@@ -188,13 +251,13 @@ export const getPublicChefList = createServerFn({ method: "GET" })
 
 /** DB logic without the HTTP layer — also used by tests. */
 export async function verifyIndividualChefPinCore(chefId: string, pin: string) {
-  const row = await supabase
-    .from("staff")
-    .select("*")
-    .eq("id", chefId)
-    .maybeSingle();
-  const staffRow = row.data as any;
-  if (!staffRow) throw new Error("الحساب غير موجود");
+  const db = getFirebaseDb();
+  if (!db) throw new Error("Firebase غير متصل");
+
+  const staffSnap = await getDoc(doc(db, "staff", chefId));
+  if (!staffSnap.exists()) throw new Error("الحساب غير موجود");
+  const staffRow = { id: staffSnap.id, ...staffSnap.data() } as any;
+
   if (staffRow.frozen) {
     throw new Error(
       staffRow.freeze_reason
@@ -207,19 +270,19 @@ export async function verifyIndividualChefPinCore(chefId: string, pin: string) {
   if (String(staffRow.pin ?? "") !== pin.trim())
     throw new Error("رمز PIN غير صحيح");
 
-  const rest = await supabase
-    .from("restaurants")
-    .select("id,name,logo_url")
-    .eq("id", staffRow.restaurant_id)
-    .maybeSingle();
-  const restaurant = (rest.data as any) ?? {
+  let restaurant: any = {
     id: staffRow.restaurant_id,
     name: "",
     logo_url: null,
   };
+  const restSnap = await getDoc(doc(db, "restaurants", staffRow.restaurant_id));
+  if (restSnap.exists()) {
+    restaurant = { id: restSnap.id, ...restSnap.data() };
+  }
+
   return {
     token: await makeStaffSessionToken(staffRow.id),
-    expiresAt: previewExpiry(),
+    expiresAt: staffSessionExpiry(),
     chefName: staffRow.name as string,
     chefId: staffRow.id as string,
     restaurant,
@@ -271,7 +334,7 @@ export async function listIndividualChefsCore(rid: string) {
     id: s.id,
     name: s.name,
     is_active: !s.frozen,
-    employee_id: null,
+    employee_id: s.serial ?? null,
     created_at: s.created_at ?? null,
   }));
   chefs.sort((a, b) => String(a.name).localeCompare(String(b.name), "ar"));

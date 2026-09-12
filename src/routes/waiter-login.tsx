@@ -19,6 +19,7 @@ import {
   StaffPinInput,
 } from "@/components/staff-login-ui";
 import { tx } from "@/lib/ops-tx";
+import { rememberKioskRole } from "@/lib/kiosk-session";
 
 const HAS_BACKEND = typeof window !== "undefined" && !!getFirebaseDb();
 
@@ -37,7 +38,9 @@ function Page() {
   const fetchList = useServerFn(getPublicWaiterList);
   const verify = useServerFn(verifyWaiterPin);
 
-  const [restaurantId, setRestaurantId] = useState<string | null>(searchRid || null);
+  const [restaurantId, setRestaurantId] = useState<string | null>(
+    searchRid || null,
+  );
   const [restaurantName, setRestaurantName] = useState("");
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -89,7 +92,10 @@ function Page() {
     setLoading(true);
     fetchList({ data: { restaurantId } })
       .then((res) => {
-        if (!res.found) { toast.error(tx("waiter.restaurantNotFound")); return; }
+        if (!res.found) {
+          toast.error(tx("waiter.restaurantNotFound"));
+          return;
+        }
         setRestaurantName(res.name);
         setLogoUrl(res.logo_url);
         setWaiters(res.waiters);
@@ -109,27 +115,37 @@ function Page() {
   async function handleSubmit(pin: string) {
     if (!selected) return;
     if (submitting) return;
-    if (pin.length < 4) { toast.error(tx("waiter.invalidPinLength")); return; }
+    if (pin.length < 4) {
+      toast.error(tx("waiter.invalidPinLength"));
+      return;
+    }
     setSubmitting(true);
     if (previewMode) {
-      sessionStorage.setItem("waiter_token", "mock_waiter");
-      sessionStorage.setItem("waiter_expires", previewExpiry());
-      sessionStorage.setItem("waiter_name", selected.name);
-      sessionStorage.setItem("waiter_id", selected.id);
-      sessionStorage.setItem("waiter_restaurant", JSON.stringify(PREVIEW_RESTAURANT));
-      toast.success(tx("waiter.previewWelcome").replace("{{name}}", selected.name));
+      localStorage.setItem("waiter_token", "mock_waiter");
+      localStorage.setItem("waiter_expires", previewExpiry());
+      localStorage.setItem("waiter_name", selected.name);
+      localStorage.setItem("waiter_id", selected.id);
+      localStorage.setItem(
+        "waiter_restaurant",
+        JSON.stringify(PREVIEW_RESTAURANT),
+      );
+      toast.success(
+        tx("waiter.previewWelcome").replace("{{name}}", selected.name),
+      );
       setSubmitting(false);
+      rememberKioskRole("waiter");
       navigate({ to: "/waiter-screen" });
       return;
     }
     try {
       const res = await verify({ data: { waiterId: selected.id, pin } });
-      sessionStorage.setItem("waiter_token", res.token);
-      sessionStorage.setItem("waiter_expires", res.expiresAt);
-      sessionStorage.setItem("waiter_name", res.waiterName);
-      sessionStorage.setItem("waiter_id", res.waiterId);
-      sessionStorage.setItem("waiter_restaurant", JSON.stringify(res.restaurant));
+      localStorage.setItem("waiter_token", res.token);
+      localStorage.setItem("waiter_expires", res.expiresAt);
+      localStorage.setItem("waiter_name", res.waiterName);
+      localStorage.setItem("waiter_id", res.waiterId);
+      localStorage.setItem("waiter_restaurant", JSON.stringify(res.restaurant));
       toast.success(tx("waiter.welcome").replace("{{name}}", res.waiterName));
+      rememberKioskRole("waiter");
       navigate({ to: "/waiter-screen" });
     } catch (e) {
       toast.error((e as Error).message || tx("waiter.wrongPin"));
@@ -151,7 +167,9 @@ function Page() {
           ) : (
             <LoginLogo icon={UtensilsCrossed} />
           )}
-          <h1 className="text-lg font-bold text-[var(--foreground)]">{tx("waiter.loginTitle")}</h1>
+          <h1 className="text-lg font-bold text-[var(--foreground)]">
+            {tx("waiter.loginTitle")}
+          </h1>
           {restaurantName && <RestaurantPill name={restaurantName} />}
           {previewMode && (
             <span className="text-[10px] font-bold text-[var(--primary)] bg-[var(--primary)]/10 rounded-md px-2 py-0.5">
@@ -194,11 +212,19 @@ function Page() {
               <PinBackButton onClick={() => setSelected(null)} />
               <div className="flex items-center gap-2.5">
                 <StaffAvatar icon={User} sm />
-                <span className="font-semibold text-sm text-[var(--foreground)]">{selected.name}</span>
+                <span className="font-semibold text-sm text-[var(--foreground)]">
+                  {selected.name}
+                </span>
               </div>
             </div>
-            <p className="text-xs text-[var(--muted-foreground)] text-center">{tx("waiter.enterPin")}</p>
-            <StaffPinInput onSubmit={handleSubmit} submitting={submitting} length={6} />
+            <p className="text-xs text-[var(--muted-foreground)] text-center">
+              {tx("waiter.enterPin")}
+            </p>
+            <StaffPinInput
+              onSubmit={handleSubmit}
+              submitting={submitting}
+              length={6}
+            />
           </div>
         )}
 

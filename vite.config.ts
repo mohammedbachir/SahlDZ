@@ -105,6 +105,10 @@ export default defineConfig({
       }
     : false,
   vite: {
+    server: {
+      strictPort: true,
+      port: 8080,
+    },
     plugins: [
       VitePWA({
         registerType: "autoUpdate",

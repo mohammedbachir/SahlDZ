@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { requireOpsAccess, useAreaPermission } from "@/lib/permissions";
+import { CanWrite } from "@/components/PermissionsGate";
 import { ArrowRight, Eye, EyeOff, BadgeCheck, Snowflake, User, KeyRound, Hash, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -12,6 +14,7 @@ import { GLOBAL_ROLES } from "@/lib/staff-core";
 import { useTranslation } from "react-i18next";
 
 export const Route = createFileRoute("/ops/employees/$employeeId")({
+  beforeLoad: requireOpsAccess("employees"),
   component: EmployeeInfo,
 });
 
@@ -121,9 +124,11 @@ function EmployeeInfo() {
             </div>
           </div>
           {!editing && (
+            <CanWrite area="employees">
             <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={() => { setEditing(true); setEditName(member.name); setEditRole(member.role); }}>
               <Pencil className="w-3.5 h-3.5" /> {tx("تعديل")}
             </Button>
+            </CanWrite>
           )}
         </div>
 

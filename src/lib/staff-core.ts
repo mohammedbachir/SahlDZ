@@ -1,4 +1,13 @@
 import { supabase } from "@/integrations/supabase/client";
+import { getFirebaseDb } from "@/integrations/firebase/config";
+import {
+  doc,
+  getDoc,
+  collection,
+  query,
+  where,
+  getDocs,
+} from "firebase/firestore";
 
 // ─── HMAC signing for session tokens ───────────────────────────
 // In production, set STAFF_TOKEN_SECRET as an env variable.
@@ -57,19 +66,25 @@ export const randomPin = (): string => {
 };
 
 export async function generateUniqueSerial(): Promise<string> {
+  const db = getFirebaseDb();
   for (let i = 0; i < 30; i++) {
     const s = randomSerial();
-    const { data } = await supabase.from("staff").select("id").eq("serial", s);
-    if ((data?.length ?? 0) === 0) return s;
+    if (!db) return s;
+    const q = query(collection(db, "staff"), where("serial", "==", s));
+    const snap = await getDocs(q);
+    if (snap.empty) return s;
   }
   return randomSerial();
 }
 
 export async function generateUniquePin(): Promise<string> {
+  const db = getFirebaseDb();
   for (let i = 0; i < 30; i++) {
     const pin = randomPin();
-    const { data } = await supabase.from("staff").select("id").eq("pin", pin);
-    if ((data?.length ?? 0) === 0) return pin;
+    if (!db) return pin;
+    const q = query(collection(db, "staff"), where("pin", "==", pin));
+    const snap = await getDocs(q);
+    if (snap.empty) return pin;
   }
   return randomPin();
 }
@@ -77,7 +92,11 @@ export async function generateUniquePin(): Promise<string> {
 // ─── Staff session token ───────────────────────────────────────
 // Signed opaque token: `stf.<staffId>.<expiryEpochMs>.<hmacSignature>`.
 // The HMAC signature prevents token forgery.
-export const STAFF_SESSION_TTL_MS = 24 * 3600 * 1000;
+// Long TTL so restaurant kiosk computers stay logged in for months.
+export const STAFF_SESSION_TTL_MS = 365 * 24 * 3600 * 1000;
+
+export const staffSessionExpiry = (): string =>
+  new Date(Date.now() + STAFF_SESSION_TTL_MS).toISOString();
 
 export async function makeStaffSessionToken(staffId: string): Promise<string> {
   const expiresAt = Date.now() + STAFF_SESSION_TTL_MS;
@@ -116,15 +135,18 @@ export async function resolveStaffFromToken(token: string): Promise<{
 }> {
   const parsed = await parseStaffSessionToken(token);
   if (!parsed) throw new Error("الجلسة منتهية — سجّل دخولك من جديد");
-  const { data: staffRow } = await supabase
-    .from("staff")
-    .select("*")
-    .eq("id", parsed.staffId)
-    .maybeSingle();
-  if (!staffRow) throw new Error("الحساب غير موجود");
+
+  const db = getFirebaseDb();
+  if (!db) throw new Error("Firebase غير متصل");
+
+  const staffSnap = await getDoc(doc(db, "staff", parsed.staffId));
+  if (!staffSnap.exists()) throw new Error("الحساب غير موجود");
+  const staffData = staffSnap.data() as Record<string, any>;
+  const staffRow = { id: staffSnap.id, ...staffData };
+
   return {
     staffRow,
-    restaurantId: (staffRow as any).restaurant_id as string,
+    restaurantId: staffData.restaurant_id as string,
     staffId: parsed.staffId,
   };
 }

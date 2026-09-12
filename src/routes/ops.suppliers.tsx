@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from "react";
 import { createFileRoute } from "@tanstack/react-router";
+import { requireOpsAccess } from "@/lib/permissions";
 import { Truck, Plus, Pencil, Trash2, Loader2, Search, DollarSign } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -18,8 +19,11 @@ import {
 } from "@/components/ui/dialog";
 import { tx } from "@/lib/ops-tx";
 import { useTranslation } from "react-i18next";
+import { useAreaPermission } from "@/lib/permissions";
+import { CanWrite } from "@/components/PermissionsGate";
 
 export const Route = createFileRoute("/ops/suppliers")({
+  beforeLoad: requireOpsAccess("suppliers"),
   component: OpsSuppliers,
 });
 
@@ -33,6 +37,7 @@ type Supplier = {
 
 function OpsSuppliers() {
   const { restaurantId } = useRestaurantId();
+  const { canWrite } = useAreaPermission("suppliers");
 
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(true);
@@ -94,6 +99,7 @@ function OpsSuppliers() {
   }, [suppliers, search]);
 
   async function handleAdd() {
+    if (!canWrite) return;
     if (!newName.trim()) { toast.error(tx("اكتب اسم المورد")); return; }
     if (!restaurantId) { setAddOpen(false); setNewName(""); return; }
     setSaving(true);
@@ -115,6 +121,7 @@ function OpsSuppliers() {
   }
 
   async function handleEdit() {
+    if (!canWrite) return;
     if (!editSupplier || !editName.trim()) return;
     if (!restaurantId) { setEditOpen(false); return; }
     setSaving(true);
@@ -133,6 +140,7 @@ function OpsSuppliers() {
   }
 
   async function handleDelete() {
+    if (!canWrite) return;
     if (!deleteId || !restaurantId) return;
     setSaving(true);
     try {
@@ -158,10 +166,12 @@ function OpsSuppliers() {
           <h1 className="text-lg font-bold">{tx("الموردين")}</h1>
           <Badge variant="secondary">{suppliers.length}</Badge>
         </div>
-        <Button size="sm" onClick={() => setAddOpen(true)} className="gap-1.5">
-          <Plus className="w-4 h-4" />
-          {tx("إضافة مورد")}
-        </Button>
+        <CanWrite area="suppliers">
+            <Button size="sm" onClick={() => setAddOpen(true)} className="gap-1.5">
+              <Plus className="w-4 h-4" />
+              {tx("إضافة مورد")}
+            </Button>
+          </CanWrite>
       </div>
 
       {/* Total Balance */}
@@ -218,6 +228,7 @@ function OpsSuppliers() {
                       {formatDZD(sup.balance)}
                     </TableCell>
                     <TableCell className="text-left">
+                      <CanWrite area="suppliers">
                       <div className="flex items-center gap-1">
                         <Button
                           variant="ghost" size="sm" className="h-7 w-7 p-0"
@@ -232,6 +243,7 @@ function OpsSuppliers() {
                           <Trash2 className="w-3.5 h-3.5" />
                         </Button>
                       </div>
+                      </CanWrite>
                     </TableCell>
                   </TableRow>
                 ))}

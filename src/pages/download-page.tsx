@@ -41,7 +41,7 @@ export default function DownloadPage() {
     setDownloading(true);
     const link = document.createElement("a");
     link.href = "/sahldz.apk";
-    link.download = "SahlDZ-v1.1.0.apk";
+    link.download = "SahlDZ-v1.2.0.apk";
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -193,6 +193,10 @@ export default function DownloadPage() {
           </div>
           <div className="flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4 text-green-500" />
+            <span>يفتح مباشرة على تطبيق التقارير للمدير</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-green-500" />
             <span>يعمل مع الأجهزة القديمة</span>
           </div>
           <div className="flex items-center gap-2">
@@ -205,7 +209,7 @@ export default function DownloadPage() {
           disabled={downloading}
           className="w-full py-3 rounded-xl bg-green-500 text-white font-medium hover:bg-green-600 transition-colors disabled:opacity-50"
         >
-          {downloading ? "جاري التحميل..." : "تحميل SahlDZ v1.1.0"}
+          {downloading ? "جاري التحميل..." : "تحميل SahlDZ v1.2.0"}
         </button>
         <div className="text-xs text-muted-foreground bg-muted/50 rounded-xl p-3">
           <p className="font-medium mb-1">خطوات التثبيت:</p>

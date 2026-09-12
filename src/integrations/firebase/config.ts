@@ -45,7 +45,7 @@ export function getFirebaseAuth(): Auth | null {
   if (!a) return null;
   if (!auth) {
     auth = getAuth(a);
-    if (USE_EMULATORS && typeof window !== "undefined") {
+    if (USE_EMULATORS) {
       connectAuthEmulator(auth, "http://127.0.0.1:9099", {
         disableWarnings: true,
       });

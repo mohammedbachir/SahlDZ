@@ -11,6 +11,7 @@ import {
   DollarSign,
   Package,
   Truck,
+  BarChart3,
 } from "lucide-react";
 
 type KPIs = {
@@ -209,37 +210,37 @@ export default function MobileDashboard() {
         ))}
       </div>
 
-      {/* Quick Actions */}
+      {/* Reports Navigation */}
       <div className="mt-6 space-y-3">
-        <h2 className="text-lg font-bold">إجراءات سريعة</h2>
+        <h2 className="text-lg font-bold">التقارير</h2>
         <div className="grid grid-cols-2 gap-3">
           <a
-            href="/ops/inventory"
+            href="/mobile/daily-summary"
             className="flex items-center gap-3 rounded-2xl border border-border/40 bg-card/80 p-4 hover:bg-accent transition-colors"
           >
-            <Package className="w-5 h-5 text-primary" />
+            <DollarSign className="w-5 h-5 text-emerald-500" />
+            <span className="text-sm font-medium">تقرير اليوم</span>
+          </a>
+          <a
+            href="/mobile/weekly-report"
+            className="flex items-center gap-3 rounded-2xl border border-border/40 bg-card/80 p-4 hover:bg-accent transition-colors"
+          >
+            <TrendingUp className="w-5 h-5 text-blue-500" />
+            <span className="text-sm font-medium">تقرير الأسبوع</span>
+          </a>
+          <a
+            href="/mobile/inventory"
+            className="flex items-center gap-3 rounded-2xl border border-border/40 bg-card/80 p-4 hover:bg-accent transition-colors"
+          >
+            <Package className="w-5 h-5 text-amber-500" />
             <span className="text-sm font-medium">المخزون</span>
           </a>
           <a
-            href="/ops/waste"
+            href="/mobile/reports"
             className="flex items-center gap-3 rounded-2xl border border-border/40 bg-card/80 p-4 hover:bg-accent transition-colors"
           >
-            <AlertTriangle className="w-5 h-5 text-destructive" />
-            <span className="text-sm font-medium">الهدر</span>
-          </a>
-          <a
-            href="/ops/reports"
-            className="flex items-center gap-3 rounded-2xl border border-border/40 bg-card/80 p-4 hover:bg-accent transition-colors"
-          >
-            <TrendingUp className="w-5 h-5 text-emerald-500" />
-            <span className="text-sm font-medium">التقارير</span>
-          </a>
-          <a
-            href="/ops/complaints"
-            className="flex items-center gap-3 rounded-2xl border border-border/40 bg-card/80 p-4 hover:bg-accent transition-colors"
-          >
-            <MessageSquare className="w-5 h-5 text-orange-500" />
-            <span className="text-sm font-medium">الشكاوى</span>
+            <BarChart3 className="w-5 h-5 text-purple-500" />
+            <span className="text-sm font-medium">الإحصائيات</span>
           </a>
         </div>
       </div>

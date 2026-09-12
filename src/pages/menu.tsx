@@ -1,9 +1,26 @@
 import { useEffect, useState } from "react";
-import { Plus, Pencil, Trash2, Loader2, UploadCloud, Sparkles, ImageIcon, X, UtensilsCrossed } from "lucide-react";
+import {
+  Plus,
+  Pencil,
+  Trash2,
+  Loader2,
+  UploadCloud,
+  Sparkles,
+  ImageIcon,
+  X,
+  UtensilsCrossed,
+  ListChecks,
+  Minus,
+} from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useServerFn } from "@tanstack/react-start";
 import { parseMenuImage } from "@/lib/menu-import.functions";
+import {
+  saveMenuOptions,
+  getMenuOptionsForItem,
+} from "@/lib/menu-options.functions";
+import { seedCashierMenu } from "@/lib/cashier.functions";
 import { useRestaurantId, formatDZD } from "@/lib/restaurant";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,7 +52,12 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-type Category = { id: string; name: string; display_order: number; image_url: string | null };
+type Category = {
+  id: string;
+  name: string;
+  display_order: number;
+  image_url: string | null;
+};
 type MenuItem = {
   id: string;
   name: string;
@@ -46,10 +68,25 @@ type MenuItem = {
   is_available: boolean;
 };
 
-function buildMenuImagePath(restaurantId: string, folder: "categories" | "items", file: File) {
+type EditableChoice = { name: string; price_delta: number };
+type EditableOption = {
+  name: string;
+  required: boolean;
+  multi: boolean;
+  choices: EditableChoice[];
+};
+
+function buildMenuImagePath(
+  restaurantId: string,
+  folder: "categories" | "items",
+  file: File,
+) {
   const rawExt = file.name.split(".").pop()?.toLowerCase() || "png";
   const ext = rawExt.replace(/[^a-z0-9]/g, "") || "png";
-  const id = typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}`;
+  const id =
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : `${Date.now()}`;
   return `${restaurantId}/${folder}/${id}.${ext}`;
 }
 
@@ -81,6 +118,12 @@ export default function MenuPage() {
   const [itemSaving, setItemSaving] = useState(false);
   const [itemDelete, setItemDelete] = useState<MenuItem | null>(null);
 
+  // options manager
+  const [optionsFor, setOptionsFor] = useState<MenuItem | null>(null);
+  const [optionsList, setOptionsList] = useState<EditableOption[]>([]);
+  const [optionsLoading, setOptionsLoading] = useState(false);
+  const [optionsSaving, setOptionsSaving] = useState(false);
+
   const reload = async (rid: string) => {
     setLoading(true);
     const [{ data: cats }, { data: its }] = await Promise.all([
@@ -92,7 +135,9 @@ export default function MenuPage() {
         .order("created_at", { ascending: true }),
       supabase
         .from("menu_items")
-        .select("id, name, description, price, category_id, image_url, is_available")
+        .select(
+          "id, name, description, price, category_id, image_url, is_available",
+        )
         .eq("restaurant_id", rid)
         .order("created_at", { ascending: true }),
     ]);
@@ -153,9 +198,12 @@ export default function MenuPage() {
         const path = buildMenuImagePath(restaurantId, "categories", catImage);
         const { error: upErr } = await supabase.storage
           .from("menu-images")
-          .upload(path, catImage, { contentType: catImage.type || "image/png" });
+          .upload(path, catImage, {
+            contentType: catImage.type || "image/png",
+          });
         if (upErr) throw upErr;
-        imageUrl = supabase.storage.from("menu-images").getPublicUrl(path).data.publicUrl;
+        imageUrl = supabase.storage.from("menu-images").getPublicUrl(path)
+          .data.publicUrl;
       }
       if (catEditing) {
         const { error } = await supabase
@@ -192,7 +240,10 @@ export default function MenuPage() {
         .eq("category_id", catDelete.id);
       if (itemsErr) throw itemsErr;
 
-      const { error } = await supabase.from("categories").delete().eq("id", catDelete.id);
+      const { error } = await supabase
+        .from("categories")
+        .delete()
+        .eq("id", catDelete.id);
       if (error) throw error;
       toast.success("تم حذف الفئة وأصنافها");
       setCatDelete(null);
@@ -239,7 +290,8 @@ export default function MenuPage() {
     const price = Number(itemPrice);
     if (!name) return toast.error("اسم الصنف مطلوب");
     if (!itemCat) return toast.error("اختر الفئة");
-    if (!isFinite(price) || price <= 0) return toast.error("السعر يجب أن يكون أكبر من 0");
+    if (!isFinite(price) || price <= 0)
+      return toast.error("السعر يجب أن يكون أكبر من 0");
 
     setItemSaving(true);
     try {
@@ -248,9 +300,12 @@ export default function MenuPage() {
         const path = buildMenuImagePath(restaurantId, "items", itemImage);
         const { error: upErr } = await supabase.storage
           .from("menu-images")
-          .upload(path, itemImage, { contentType: itemImage.type || "image/png" });
+          .upload(path, itemImage, {
+            contentType: itemImage.type || "image/png",
+          });
         if (upErr) throw upErr;
-        imageUrl = supabase.storage.from("menu-images").getPublicUrl(path).data.publicUrl;
+        imageUrl = supabase.storage.from("menu-images").getPublicUrl(path)
+          .data.publicUrl;
       }
 
       const payload = {
@@ -289,13 +344,146 @@ export default function MenuPage() {
   const confirmDeleteItem = async () => {
     if (!itemDelete || !restaurantId) return;
     try {
-      const { error } = await supabase.from("menu_items").delete().eq("id", itemDelete.id);
+      const { error } = await supabase
+        .from("menu_items")
+        .delete()
+        .eq("id", itemDelete.id);
       if (error) throw error;
       toast.success("تم حذف الصنف");
       setItemDelete(null);
       await reload(restaurantId);
     } catch {
       toast.error("تعذّر حذف الصنف");
+    }
+  };
+
+  /* ---------------- Options manager ---------------- */
+  const openOptions = async (it: MenuItem) => {
+    if (!restaurantId) return;
+    setOptionsFor(it);
+    setOptionsLoading(true);
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      const token = sess.session?.access_token;
+      if (!token) throw new Error("الجلسة منتهية");
+      const res = await getMenuOptionsForItem({
+        data: { menuItemId: it.id },
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setOptionsList(
+        res.options.map((o) => ({
+          name: o.name,
+          required: o.required,
+          multi: o.multi,
+          choices: o.choices.map((c) => ({
+            name: c.name,
+            price_delta: c.price_delta,
+          })),
+        })),
+      );
+    } catch (e) {
+      toast.error(`تعذّر تحميل الخيارات: ${(e as Error).message}`);
+      setOptionsList([]);
+    } finally {
+      setOptionsLoading(false);
+    }
+  };
+
+  const addOptionGroup = () => {
+    setOptionsList((prev) => [
+      ...prev,
+      {
+        name: "",
+        required: false,
+        multi: false,
+        choices: [{ name: "", price_delta: 0 }],
+      },
+    ]);
+  };
+  const updateOptionGroup = (idx: number, patch: Partial<EditableOption>) => {
+    setOptionsList((prev) =>
+      prev.map((o, i) => (i === idx ? { ...o, ...patch } : o)),
+    );
+  };
+  const removeOptionGroup = (idx: number) => {
+    setOptionsList((prev) => prev.filter((_, i) => i !== idx));
+  };
+  const addChoice = (optIdx: number) => {
+    setOptionsList((prev) =>
+      prev.map((o, i) =>
+        i === optIdx
+          ? { ...o, choices: [...o.choices, { name: "", price_delta: 0 }] }
+          : o,
+      ),
+    );
+  };
+  const updateChoice = (
+    optIdx: number,
+    chIdx: number,
+    patch: Partial<EditableChoice>,
+  ) => {
+    setOptionsList((prev) =>
+      prev.map((o, i) =>
+        i === optIdx
+          ? {
+              ...o,
+              choices: o.choices.map((c, j) =>
+                j === chIdx ? { ...c, ...patch } : c,
+              ),
+            }
+          : o,
+      ),
+    );
+  };
+  const removeChoice = (optIdx: number, chIdx: number) => {
+    setOptionsList((prev) =>
+      prev.map((o, i) =>
+        i === optIdx
+          ? { ...o, choices: o.choices.filter((_, j) => j !== chIdx) }
+          : o,
+      ),
+    );
+  };
+  const saveOptions = async () => {
+    if (!restaurantId || !optionsFor) return;
+    setOptionsSaving(true);
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      const token = sess.session?.access_token;
+      if (!token) throw new Error("الجلسة منتهية، سجّل دخولك من جديد");
+      await saveMenuOptions({
+        data: { menuItemId: optionsFor.id, options: optionsList },
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      toast.success("تم حفظ الخيارات");
+      setOptionsFor(null);
+    } catch (e) {
+      toast.error(`تعذّر حفظ الخيارات: ${(e as Error).message}`);
+    } finally {
+      setOptionsSaving(false);
+    }
+  };
+
+  const seedFn = useServerFn(seedCashierMenu);
+  const [seeding, setSeeding] = useState(false);
+  const onSeedDemo = async () => {
+    if (!restaurantId) return;
+    setSeeding(true);
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      const token = sess.session?.access_token;
+      if (!token) throw new Error("الجلسة منتهية، سجّل دخولك من جديد");
+      const res = await seedFn({
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      toast.success(
+        `تمت إضافة ${res.insertedItems} صنف و ${res.insertedCategories} فئة`,
+      );
+      reload(restaurantId);
+    } catch (e) {
+      toast.error(`تعذّرت التعبئة: ${(e as Error).message}`);
+    } finally {
+      setSeeding(false);
     }
   };
 
@@ -317,7 +505,9 @@ export default function MenuPage() {
             <UtensilsCrossed className="w-6 h-6" />
           </div>
           <div className="min-w-0">
-            <h1 className="text-xl md:text-2xl font-bold text-foreground tracking-tight">إدارة القائمة</h1>
+            <h1 className="text-xl md:text-2xl font-bold text-foreground tracking-tight">
+              إدارة القائمة
+            </h1>
             <p className="text-xs md:text-sm text-muted-foreground mt-0.5">
               {categories.length} فئة · {items.length} صنف
             </p>
@@ -328,11 +518,28 @@ export default function MenuPage() {
             restaurantId={restaurantId}
             onImported={() => restaurantId && reload(restaurantId)}
           />
+          <Button
+            variant="outline"
+            onClick={onSeedDemo}
+            disabled={seeding}
+            className="rounded-xl"
+          >
+            {seeding ? (
+              <Loader2 className="w-4 h-4 ml-1 animate-spin" />
+            ) : (
+              <Sparkles className="w-4 h-4 ml-1" />
+            )}
+            تعبئة منيو تجريبي
+          </Button>
           <Button variant="outline" onClick={openCatNew} className="rounded-xl">
             <Plus className="w-4 h-4 ml-1" />
             إضافة فئة
           </Button>
-          <Button data-annotate="menu-add" onClick={openItemNew} className="rounded-xl bg-gradient-to-br from-primary to-primary/80 shadow-md shadow-primary/20">
+          <Button
+            data-annotate="menu-add"
+            onClick={openItemNew}
+            className="rounded-xl bg-gradient-to-br from-primary to-primary/80 shadow-md shadow-primary/20"
+          >
             <Plus className="w-4 h-4 ml-1" />
             إضافة صنف
           </Button>
@@ -344,8 +551,12 @@ export default function MenuPage() {
           <div className="w-16 h-16 mx-auto rounded-2xl bg-muted flex items-center justify-center mb-4">
             <UtensilsCrossed className="w-8 h-8 text-muted-foreground" />
           </div>
-          <p className="text-lg font-semibold text-foreground">ابدأ بإضافة فئة جديدة</p>
-          <p className="text-sm text-muted-foreground mt-1">نظّم أصنافك ضمن فئات لتظهر بشكل احترافي للزبائن</p>
+          <p className="text-lg font-semibold text-foreground">
+            ابدأ بإضافة فئة جديدة
+          </p>
+          <p className="text-sm text-muted-foreground mt-1">
+            نظّم أصنافك ضمن فئات لتظهر بشكل احترافي للزبائن
+          </p>
           <Button onClick={openCatNew} className="mt-5 rounded-xl">
             <Plus className="w-4 h-4 ml-1" />
             إضافة فئة
@@ -356,7 +567,10 @@ export default function MenuPage() {
           {categories.map((cat) => {
             const catItems = items.filter((i) => i.category_id === cat.id);
             return (
-              <section key={cat.id} className="glass shadow-glass rounded-2xl p-5 md:p-6">
+              <section
+                key={cat.id}
+                className="glass shadow-glass rounded-2xl p-5 md:p-6"
+              >
                 <div className="flex items-center justify-between gap-3 mb-5 pb-4 border-b border-border/60">
                   <div className="flex items-center gap-3 min-w-0">
                     {cat.image_url ? (
@@ -368,7 +582,9 @@ export default function MenuPage() {
                     ) : (
                       <div className="w-1.5 h-7 rounded-full bg-gradient-to-b from-primary to-accent" />
                     )}
-                    <h2 className="text-lg md:text-xl font-bold text-foreground tracking-tight truncate">{cat.name}</h2>
+                    <h2 className="text-lg md:text-xl font-bold text-foreground tracking-tight truncate">
+                      {cat.name}
+                    </h2>
                     <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
                       {catItems.length}
                     </span>
@@ -391,7 +607,9 @@ export default function MenuPage() {
                   </div>
                 </div>
                 {catItems.length === 0 ? (
-                  <p className="text-sm text-muted-foreground py-4 text-center">لا توجد أصناف بعد</p>
+                  <p className="text-sm text-muted-foreground py-4 text-center">
+                    لا توجد أصناف بعد
+                  </p>
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     {catItems.map((it) => (
@@ -400,6 +618,7 @@ export default function MenuPage() {
                         item={it}
                         onEdit={() => openItemEdit(it)}
                         onDelete={() => setItemDelete(it)}
+                        onOptions={() => openOptions(it)}
                       />
                     ))}
                   </div>
@@ -414,7 +633,9 @@ export default function MenuPage() {
       <Dialog open={catOpen} onOpenChange={setCatOpen}>
         <DialogContent dir="rtl">
           <DialogHeader>
-            <DialogTitle>{catEditing ? "تعديل الفئة" : "إضافة فئة"}</DialogTitle>
+            <DialogTitle>
+              {catEditing ? "تعديل الفئة" : "إضافة فئة"}
+            </DialogTitle>
           </DialogHeader>
           <div className="space-y-2">
             <Label htmlFor="cat-name">اسم الفئة</Label>
@@ -456,7 +677,11 @@ export default function MenuPage() {
             </label>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCatOpen(false)} disabled={catSaving}>
+            <Button
+              variant="outline"
+              onClick={() => setCatOpen(false)}
+              disabled={catSaving}
+            >
               إلغاء
             </Button>
             <Button onClick={saveCat} disabled={catSaving}>
@@ -471,7 +696,9 @@ export default function MenuPage() {
       <Dialog open={itemOpen} onOpenChange={setItemOpen}>
         <DialogContent dir="rtl" className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{itemEditing ? "تعديل الصنف" : "إضافة صنف"}</DialogTitle>
+            <DialogTitle>
+              {itemEditing ? "تعديل الصنف" : "إضافة صنف"}
+            </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
@@ -566,7 +793,11 @@ export default function MenuPage() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setItemOpen(false)} disabled={itemSaving}>
+            <Button
+              variant="outline"
+              onClick={() => setItemOpen(false)}
+              disabled={itemSaving}
+            >
               إلغاء
             </Button>
             <Button onClick={saveItem} disabled={itemSaving}>
@@ -578,34 +809,182 @@ export default function MenuPage() {
       </Dialog>
 
       {/* Delete Category Confirm */}
-      <AlertDialog open={!!catDelete} onOpenChange={(o) => !o && setCatDelete(null)}>
+      <AlertDialog
+        open={!!catDelete}
+        onOpenChange={(o) => !o && setCatDelete(null)}
+      >
         <AlertDialogContent dir="rtl">
           <AlertDialogHeader>
             <AlertDialogTitle>حذف الفئة؟</AlertDialogTitle>
             <AlertDialogDescription>
-              سيتم حذف الفئة وجميع الأصناف التابعة لها نهائياً. هذا الإجراء لا يمكن التراجع عنه.
+              سيتم حذف الفئة وجميع الأصناف التابعة لها نهائياً. هذا الإجراء لا
+              يمكن التراجع عنه.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>إلغاء</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDeleteCat}>حذف</AlertDialogAction>
+            <AlertDialogAction onClick={confirmDeleteCat}>
+              حذف
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
       {/* Delete Item Confirm */}
-      <AlertDialog open={!!itemDelete} onOpenChange={(o) => !o && setItemDelete(null)}>
+      <AlertDialog
+        open={!!itemDelete}
+        onOpenChange={(o) => !o && setItemDelete(null)}
+      >
         <AlertDialogContent dir="rtl">
           <AlertDialogHeader>
             <AlertDialogTitle>حذف الصنف؟</AlertDialogTitle>
-            <AlertDialogDescription>لا يمكن التراجع عن هذه العملية.</AlertDialogDescription>
+            <AlertDialogDescription>
+              لا يمكن التراجع عن هذه العملية.
+            </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>إلغاء</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDeleteItem}>حذف</AlertDialogAction>
+            <AlertDialogAction onClick={confirmDeleteItem}>
+              حذف
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Options manager Dialog */}
+      <Dialog
+        open={!!optionsFor}
+        onOpenChange={(o) => !o && setOptionsFor(null)}
+      >
+        <DialogContent dir="rtl" className="max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>الخيارات — {optionsFor?.name ?? ""}</DialogTitle>
+          </DialogHeader>
+          {optionsLoading ? (
+            <div className="flex items-center justify-center py-10">
+              <Loader2 className="w-6 h-6 animate-spin text-primary" />
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                حدّد مجموعات الخيارات لهذا الصنف (مثل: المقاس، الإضافات). كل
+                مجموعة تحتوي اختيارات يمكن إضافة سعر لها.
+              </p>
+              {optionsList.length === 0 && (
+                <p className="text-sm text-muted-foreground py-2">
+                  لا توجد خيارات بعد.
+                </p>
+              )}
+              {optionsList.map((opt, oi) => (
+                <div
+                  key={oi}
+                  className="border border-border rounded-xl p-3 space-y-3 bg-muted/20"
+                >
+                  <div className="flex items-center gap-2">
+                    <Input
+                      value={opt.name}
+                      onChange={(e) =>
+                        updateOptionGroup(oi, { name: e.target.value })
+                      }
+                      placeholder={`اسم المجموعة ${oi + 1} (مثل: المقاس)`}
+                      className="flex-1"
+                      maxLength={60}
+                    />
+                    <button
+                      onClick={() => removeOptionGroup(oi)}
+                      className="p-2 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition"
+                      aria-label="حذف المجموعة"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-4 px-1">
+                    <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer">
+                      <Switch
+                        checked={opt.required}
+                        onCheckedChange={(v) =>
+                          updateOptionGroup(oi, { required: !!v })
+                        }
+                      />
+                      إجباري
+                    </label>
+                    <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer">
+                      <Switch
+                        checked={opt.multi}
+                        onCheckedChange={(v) =>
+                          updateOptionGroup(oi, { multi: !!v })
+                        }
+                      />
+                      اختيار متعدد
+                    </label>
+                  </div>
+                  <div className="space-y-2">
+                    {opt.choices.map((ch, ci) => (
+                      <div key={ci} className="flex items-center gap-2">
+                        <Input
+                          value={ch.name}
+                          onChange={(e) =>
+                            updateChoice(oi, ci, { name: e.target.value })
+                          }
+                          placeholder={`الاختيار ${ci + 1}`}
+                          className="flex-1"
+                          maxLength={60}
+                        />
+                        <Input
+                          type="number"
+                          min={0}
+                          step="0.01"
+                          value={
+                            ch.price_delta === 0 ? "" : String(ch.price_delta)
+                          }
+                          onChange={(e) =>
+                            updateChoice(oi, ci, {
+                              price_delta: Number(e.target.value) || 0,
+                            })
+                          }
+                          placeholder="+دج"
+                          className="w-24 text-left"
+                        />
+                        <button
+                          onClick={() => removeChoice(oi, ci)}
+                          className="p-2 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition"
+                          aria-label="حذف الاختيار"
+                        >
+                          <Minus className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      onClick={() => addChoice(oi)}
+                      className="flex items-center gap-1 text-sm text-primary hover:underline"
+                    >
+                      <Plus className="w-4 h-4" /> إضافة اختيار
+                    </button>
+                  </div>
+                </div>
+              ))}
+              <button
+                onClick={addOptionGroup}
+                className="w-full flex items-center justify-center gap-1 rounded-xl border border-dashed border-input py-2.5 text-sm text-muted-foreground hover:bg-muted/40 hover:text-foreground transition"
+              >
+                <Plus className="w-4 h-4" /> إضافة مجموعة خيارات
+              </button>
+            </div>
+          )}
+          <DialogFooter className="mt-4">
+            <Button variant="outline" onClick={() => setOptionsFor(null)}>
+              إلغاء
+            </Button>
+            <Button
+              onClick={saveOptions}
+              disabled={optionsLoading || optionsSaving}
+            >
+              {optionsSaving && <Loader2 className="w-4 h-4 animate-spin" />}
+              حفظ الخيارات
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -614,13 +993,18 @@ function ItemCard({
   item,
   onEdit,
   onDelete,
+  onOptions,
 }: {
   item: MenuItem;
   onEdit: () => void;
   onDelete: () => void;
+  onOptions: () => void;
 }) {
   return (
-    <div data-annotate="menu-card" className="group relative rounded-2xl bg-card border border-border overflow-hidden flex flex-col transition-all duration-300 hover:-translate-y-1 hover:shadow-glass hover:border-primary/30">
+    <div
+      data-annotate="menu-card"
+      className="group relative rounded-2xl bg-card border border-border overflow-hidden flex flex-col transition-all duration-300 hover:-translate-y-1 hover:shadow-glass hover:border-primary/30"
+    >
       <div className="relative overflow-hidden">
         {item.image_url ? (
           <img
@@ -641,21 +1025,35 @@ function ItemCard({
         <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
       </div>
       <div className="p-4 flex flex-col flex-1 gap-2">
-        <h3 className="font-bold text-foreground tracking-tight line-clamp-1">{item.name}</h3>
+        <h3 className="font-bold text-foreground tracking-tight line-clamp-1">
+          {item.name}
+        </h3>
         {item.description && (
-          <p className="text-sm text-muted-foreground line-clamp-2 leading-relaxed">{item.description}</p>
+          <p className="text-sm text-muted-foreground line-clamp-2 leading-relaxed">
+            {item.description}
+          </p>
         )}
         <div className="mt-auto flex items-center justify-between pt-3 border-t border-border/60">
           <span className="font-bold text-base text-foreground">
             {formatDZD(item.price)}
           </span>
-          <div data-annotate="menu-controls" className="flex gap-1 opacity-70 group-hover:opacity-100 transition-opacity">
+          <div
+            data-annotate="menu-controls"
+            className="flex gap-1 opacity-70 group-hover:opacity-100 transition-opacity"
+          >
             <button
               onClick={onEdit}
               className="p-2 rounded-lg hover:bg-primary/10 text-muted-foreground hover:text-primary transition"
               aria-label="تعديل"
             >
               <Pencil className="w-4 h-4" />
+            </button>
+            <button
+              onClick={onOptions}
+              className="p-2 rounded-lg hover:bg-primary/10 text-muted-foreground hover:text-primary transition"
+              aria-label="الخيارات"
+            >
+              <ListChecks className="w-4 h-4" />
             </button>
             <button
               onClick={onDelete}
@@ -672,7 +1070,12 @@ function ItemCard({
 }
 
 /* ---------------- Import from photo ---------------- */
-type DraftItem = { name: string; description: string; price: number; included: boolean };
+type DraftItem = {
+  name: string;
+  description: string;
+  price: number;
+  included: boolean;
+};
 type DraftCat = { name: string; included: boolean; items: DraftItem[] };
 
 function ImportFromPhotoButton({
@@ -721,14 +1124,17 @@ function ImportFromPhotoButton({
     if (!file) return;
     setParsing(true);
     try {
-      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      const { data: sessionData, error: sessionError } =
+        await supabase.auth.getSession();
       if (sessionError || !sessionData.session?.access_token) {
         throw new Error("الجلسة منتهية، سجّل دخولك من جديد");
       }
       const b64 = await fileToBase64(file);
       const res = await parseFn({
         data: { imageBase64: b64 },
-        headers: { Authorization: `Bearer ${sessionData.session.access_token}` },
+        headers: {
+          Authorization: `Bearer ${sessionData.session.access_token}`,
+        },
       });
       if (res instanceof Response) {
         throw new Error((await res.text()) || "فشل تحليل الصورة");
@@ -773,7 +1179,9 @@ function ImportFromPhotoButton({
 
       for (const cat of drafts) {
         if (!cat.included) continue;
-        const includedItems = cat.items.filter((i) => i.included && i.name && i.price > 0);
+        const includedItems = cat.items.filter(
+          (i) => i.included && i.name && i.price > 0,
+        );
         if (!includedItems.length) continue;
         const key = cat.name.trim().toLowerCase();
         let catId = byName.get(key);
@@ -802,12 +1210,16 @@ function ImportFromPhotoButton({
           image_url: null as string | null,
           is_available: true,
         }));
-        const { error: insErr } = await supabase.from("menu_items").insert(rows);
+        const { error: insErr } = await supabase
+          .from("menu_items")
+          .insert(rows);
         if (insErr) throw new Error(insErr.message);
         createdItems += rows.length;
       }
 
-      toast.success(`تم استيراد ${createdItems} صنف في ${createdCats || "0"} فئة جديدة`);
+      toast.success(
+        `تم استيراد ${createdItems} صنف في ${createdCats || "0"} فئة جديدة`,
+      );
       onImported();
       setOpen(false);
       reset();
@@ -831,7 +1243,10 @@ function ImportFromPhotoButton({
           if (!o) reset();
         }}
       >
-        <DialogContent dir="rtl" className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent
+          dir="rtl"
+          className="max-w-2xl max-h-[90vh] overflow-y-auto"
+        >
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Sparkles className="w-5 h-5 text-primary" />
@@ -842,18 +1257,25 @@ function ImportFromPhotoButton({
           {!drafts ? (
             <div className="space-y-4">
               <p className="text-sm text-muted-foreground">
-                ارفع صورة المنيو وسنستخرج الأصناف والأسعار والفئات تلقائياً. ستراجع النتائج قبل الإضافة.
+                ارفع صورة المنيو وسنستخرج الأصناف والأسعار والفئات تلقائياً.
+                ستراجع النتائج قبل الإضافة.
               </p>
               <label
                 htmlFor="ai-menu-image"
                 className="flex flex-col items-center justify-center gap-3 border-2 border-dashed border-input rounded-2xl p-6 cursor-pointer hover:bg-muted/40"
               >
                 {preview ? (
-                  <img src={preview} alt="" className="max-h-72 rounded-xl object-contain" />
+                  <img
+                    src={preview}
+                    alt=""
+                    className="max-h-72 rounded-xl object-contain"
+                  />
                 ) : (
                   <>
                     <ImageIcon className="w-10 h-10 text-muted-foreground" />
-                    <span className="text-sm text-muted-foreground">انقر لاختيار صورة المنيو</span>
+                    <span className="text-sm text-muted-foreground">
+                      انقر لاختيار صورة المنيو
+                    </span>
                   </>
                 )}
                 <input
@@ -865,7 +1287,11 @@ function ImportFromPhotoButton({
                 />
               </label>
               <DialogFooter>
-                <Button variant="outline" onClick={() => setOpen(false)} disabled={parsing}>
+                <Button
+                  variant="outline"
+                  onClick={() => setOpen(false)}
+                  disabled={parsing}
+                >
                   إلغاء
                 </Button>
                 <Button onClick={onParse} disabled={!file || parsing}>
@@ -881,23 +1307,30 @@ function ImportFromPhotoButton({
               </p>
               <div className="space-y-4">
                 {drafts.map((cat, ci) => (
-                  <div key={ci} className="rounded-xl border p-3 bg-muted/20 space-y-2">
+                  <div
+                    key={ci}
+                    className="rounded-xl border p-3 bg-muted/20 space-y-2"
+                  >
                     <div className="flex items-center gap-2">
                       <Switch
                         checked={cat.included}
                         onCheckedChange={(v) =>
-                          setDrafts((prev) =>
-                            prev?.map((c, i) => (i === ci ? { ...c, included: v } : c)) ?? null,
+                          setDrafts(
+                            (prev) =>
+                              prev?.map((c, i) =>
+                                i === ci ? { ...c, included: v } : c,
+                              ) ?? null,
                           )
                         }
                       />
                       <Input
                         value={cat.name}
                         onChange={(e) =>
-                          setDrafts((prev) =>
-                            prev?.map((c, i) =>
-                              i === ci ? { ...c, name: e.target.value } : c,
-                            ) ?? null,
+                          setDrafts(
+                            (prev) =>
+                              prev?.map((c, i) =>
+                                i === ci ? { ...c, name: e.target.value } : c,
+                              ) ?? null,
                           )
                         }
                         className="font-bold"
@@ -920,7 +1353,9 @@ function ImportFromPhotoButton({
                                         ? {
                                             ...c,
                                             items: c.items.map((x, j) =>
-                                              j === ii ? { ...x, included: v } : x,
+                                              j === ii
+                                                ? { ...x, included: v }
+                                                : x,
                                             ),
                                           }
                                         : c,
@@ -938,7 +1373,9 @@ function ImportFromPhotoButton({
                                         ? {
                                             ...c,
                                             items: c.items.map((x, j) =>
-                                              j === ii ? { ...x, name: e.target.value } : x,
+                                              j === ii
+                                                ? { ...x, name: e.target.value }
+                                                : x,
                                             ),
                                           }
                                         : c,
@@ -959,7 +1396,12 @@ function ImportFromPhotoButton({
                                             ...c,
                                             items: c.items.map((x, j) =>
                                               j === ii
-                                                ? { ...x, price: Number(e.target.value) || 0 }
+                                                ? {
+                                                    ...x,
+                                                    price:
+                                                      Number(e.target.value) ||
+                                                      0,
+                                                  }
                                                 : x,
                                             ),
                                           }
@@ -974,7 +1416,12 @@ function ImportFromPhotoButton({
                                   (prev) =>
                                     prev?.map((c, i) =>
                                       i === ci
-                                        ? { ...c, items: c.items.filter((_, j) => j !== ii) }
+                                        ? {
+                                            ...c,
+                                            items: c.items.filter(
+                                              (_, j) => j !== ii,
+                                            ),
+                                          }
                                         : c,
                                     ) ?? null,
                                 )
@@ -992,14 +1439,21 @@ function ImportFromPhotoButton({
                 ))}
               </div>
               <p className="text-xs text-muted-foreground">
-                ملاحظة: الصور للأصناف لا تُستخرج من المنيو — تقدر تضيفها يدوياً بعد الاستيراد.
+                ملاحظة: الصور للأصناف لا تُستخرج من المنيو — تقدر تضيفها يدوياً
+                بعد الاستيراد.
               </p>
               <DialogFooter>
-                <Button variant="outline" onClick={() => setDrafts(null)} disabled={importing}>
+                <Button
+                  variant="outline"
+                  onClick={() => setDrafts(null)}
+                  disabled={importing}
+                >
                   رجوع
                 </Button>
                 <Button onClick={onImport} disabled={importing}>
-                  {importing && <Loader2 className="w-4 h-4 animate-spin ml-2" />}
+                  {importing && (
+                    <Loader2 className="w-4 h-4 animate-spin ml-2" />
+                  )}
                   استيراد
                 </Button>
               </DialogFooter>

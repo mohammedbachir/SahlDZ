@@ -12,7 +12,9 @@ Node.js 22 or newer is required.
 
 ```bash
 npm install                 # install dependencies
-npm run dev                 # start the Vite development server
+npm run dev                 # start the Vite development server (without emulators)
+npm run dev:emulators       # start emulators + Vite dev server (recommended)
+npm run seed:auth           # re-seed auth emulator accounts
 npm run build               # production build and Vercel packaging
 npm run build:dev           # development-mode Vite build
 npm run preview             # serve a production build locally
@@ -40,3 +42,12 @@ Preview/demo routes work without a configured backend: `/waiter-login`, `/kitche
 - TypeScript is strict, uses bundler module resolution, and defines the `@/*` alias to `src/*` in `tsconfig.json`.
 - Backend configuration is optional for preview mode. Full Firebase operation requires the `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_STORAGE_BUCKET`, `VITE_FIREBASE_MESSAGING_SENDER_ID`, and `VITE_FIREBASE_APP_ID` environment variables.
 - Tour query parameters use numeric values: `?tour=1` activates/continues a tour and `?tour=0` disables it. This avoids TanStack Router search-value serialization issues documented in the README.
+
+## Firebase Emulators Setup
+
+- **Firebase Emulators require Java.** The system has Java 17. Firebase-tools v15+ requires Java 21 for emulators. We use firebase-tools v14.x which ships emulator JARs compatible with Java 17.
+- **DO NOT upgrade firebase-tools** (`npm i -g firebase-tools@latest`). The latest version downloads Firestore emulator v1.22.0 which requires Java 21 and will break.
+- The emulator config is in `firebase.json`. Auth runs on `:9099`, Firestore on `:8081`.
+- Data is auto-imported from `firebase-emulator-data/` on start and auto-exported on exit (`exportOnExit` in firebase.json).
+- Use `npm run dev:emulators` to start everything — it checks if emulators are already running, starts them if not, seeds auth accounts, then starts Vite.
+- To manually start emulators: `firebase emulators:start --only auth,firestore --project sahldz-demo`

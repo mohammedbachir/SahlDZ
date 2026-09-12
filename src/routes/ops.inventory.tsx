@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
+import { requireOpsAccess, useAreaPermission } from "@/lib/permissions";
+import { CanWrite } from "@/components/PermissionsGate";
 import { Plus, Trash2, Pencil, Plus as PlusIcon, Minus, MoreVertical, Camera, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
@@ -48,6 +50,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 export const Route = createFileRoute("/ops/inventory")({
+  beforeLoad: requireOpsAccess("inventory"),
   component: OpsInventory,
 });
 
@@ -94,6 +97,7 @@ const unitOptions = (extra?: string): string[] => {
 function OpsInventory() {
   useTranslation();
   const { restaurantId, loading: restaurantLoading } = useRestaurantId();
+  const { canWrite } = useAreaPermission("inventory");
   const [items, setItems] = useState<Ingredient[]>([]);
   const [loading, setLoading] = useState(true);
   const alertFn = useServerFn(sendLowStockAlertFn);
@@ -642,6 +646,7 @@ function OpsInventory() {
       <div className="flex items-center justify-between" data-annotate="ops-inventory-actions">
         <div className="text-sm text-muted-foreground">إجمالي المكونات: {items.length}</div>
         <div className="flex items-center gap-2">
+          <CanWrite area="inventory">
           <Button
             variant="outline"
             onClick={() => {
@@ -657,6 +662,7 @@ function OpsInventory() {
           <Button onClick={() => setAddOpen(true)} className="gap-2">
             <Plus className="w-4 h-4" /> {tx("إضافة مكون")}
           </Button>
+          </CanWrite>
         </div>
       </div>
 
@@ -704,6 +710,7 @@ function OpsInventory() {
                       )}
                     </TableCell>
                     <TableCell>
+                      <CanWrite area="inventory">
                       <div className="flex items-center gap-1 justify-end">
                         <Button
                           variant="outline"
@@ -739,6 +746,7 @@ function OpsInventory() {
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </div>
+                      </CanWrite>
                     </TableCell>
                   </TableRow>
                 );

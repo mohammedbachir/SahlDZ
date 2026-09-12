@@ -209,7 +209,7 @@ export const GENERAL_SUGGESTIONS: Suggestion[] = [
 
 export const OPS_SUGGESTIONS: Suggestion[] = [
   { label: "إدارة المخزون", query: "كيف أضيف مادة للمخزون" },
-  { label: "الوصفات والتكلفة", query: "كيف أعرف تكلفة الطبق" },
+  { label: "الوصفات والمنيو والتكلفة", query: "كيف أعرف تكلفة الطبق" },
   { label: "جرد المخزون", query: "كيف أعمل جرد للمخزون" },
   { label: "الموردون", query: "أين أجد الموردين" },
   { label: "تقارير الأرباح", query: "كيف أطبع تقرير الأرباح" },

@@ -13,10 +13,10 @@ client/
 *.exe
 *.log
 *.err
+*-debug.log
 start-*.bat
 seed-emulator.mjs
 telegram-driver-bot.mjs
-firebase.json
 .firebaserc
 firestore.rules
 invoice-SahlDZ.pdf
@@ -24,3 +24,7 @@ invoice-SahlDZ.pdf
 
 # Local Netlify folder
 .netlify
+
+# Local emulator data and exports (regenerable via seed scripts)
+firebase-emulator-data/
+firebase-export-*/

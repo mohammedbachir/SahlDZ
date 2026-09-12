@@ -272,13 +272,13 @@ export default function ActivationPage() {
               <>
                 <div className="space-y-2">
                   <label className="text-sm font-medium" style={{ color: "var(--foreground)" }}>
-                    رقم الموظف
+                    رقم الموظف (السيريال)
                   </label>
                   <input
                     type="text"
                     value={staffId}
                     onChange={(e) => setStaffId(e.target.value.toUpperCase())}
-                    placeholder="CH001"
+                    placeholder="ABCD-123456"
                     className="w-full px-4 py-3 rounded-xl text-center tracking-widest font-mono outline-none"
                     style={{
                       background: "var(--card)",

@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from "react";
 import { createFileRoute } from "@tanstack/react-router";
+import { requireOpsAccess } from "@/lib/permissions";
 import { BarChart3, ShoppingCart, Trash2, Users, Loader2, Printer } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurantId, formatDZD } from "@/lib/restaurant";
@@ -10,6 +11,7 @@ import { tx } from "@/lib/ops-tx";
 
 
 export const Route = createFileRoute("/ops/reports")({
+  beforeLoad: requireOpsAccess("reports"),
   component: OpsReports,
 });
 

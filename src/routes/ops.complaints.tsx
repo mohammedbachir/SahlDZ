@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from "react";
 import { createFileRoute } from "@tanstack/react-router";
+import { requireOpsAccess } from "@/lib/permissions";
 import { MessageSquareWarning, Plus, Pencil, Trash2, Loader2, Search, CheckCircle2, AlertTriangle, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -21,8 +22,10 @@ import {
 } from "@/components/ui/select";
 import { tx } from "@/lib/ops-tx";
 import { useTranslation } from "react-i18next";
+import { useAreaPermission } from "@/lib/permissions";
 
 export const Route = createFileRoute("/ops/complaints")({
+  beforeLoad: requireOpsAccess("complaints"),
   component: OpsComplaints,
 });
 
@@ -54,6 +57,7 @@ const EMPTY_FORM = { title: "", description: "", customer_name: "", severity: "m
 
 function OpsComplaints() {
   const { restaurantId } = useRestaurantId();
+  const { canWrite } = useAreaPermission("complaints");
 
   const [complaints, setComplaints] = useState<Complaint[]>([]);
   const [loading, setLoading] = useState(true);
@@ -111,6 +115,7 @@ function OpsComplaints() {
   }), [complaints]);
 
   async function handleSave() {
+    if (!canWrite) return;
     if (!form.title.trim()) { toast.error(tx("اكتب عنوان الشكوى")); return; }
     if (!restaurantId) { setAddOpen(false); setForm(EMPTY_FORM); return; }
     setSaving(true);
@@ -137,6 +142,7 @@ function OpsComplaints() {
   }
 
   async function handleEdit() {
+    if (!canWrite) return;
     if (!editItem) return;
     if (!restaurantId) { setEditOpen(false); return; }
     setSaving(true);
@@ -161,6 +167,7 @@ function OpsComplaints() {
   }
 
   async function handleChangeStatus(id: string, newStatus: string) {
+    if (!canWrite) return;
     if (!restaurantId) return;
     const patch: any = { status: newStatus };
     if (newStatus === "resolved") patch.resolved_at = new Date().toISOString();
@@ -171,6 +178,7 @@ function OpsComplaints() {
   }
 
   async function handleDelete() {
+    if (!canWrite) return;
     if (!deleteId || !restaurantId) return;
     setSaving(true);
     try {
@@ -194,10 +202,12 @@ function OpsComplaints() {
           <h1 className="text-lg font-bold">{tx("الشكاوى")}</h1>
           <Badge variant="secondary">{complaints.length}</Badge>
         </div>
+        {canWrite && (
         <Button size="sm" onClick={() => { setForm(EMPTY_FORM); setAddOpen(true); }} className="gap-1.5">
           <Plus className="w-4 h-4" />
           {tx("شكوى جديدة")}
         </Button>
+        )}
       </div>
 
       {/* Status Counts */}
@@ -276,6 +286,7 @@ function OpsComplaints() {
                         <Badge variant="secondary" className={`text-[10px] ${statusInfo.color}`}>{statusInfo.label}</Badge>
                       </TableCell>
                       <TableCell className="text-left">
+                        {canWrite ? (
                         <div className="flex items-center gap-1">
                           {c.status !== "resolved" && (
                             <Button
@@ -298,6 +309,7 @@ function OpsComplaints() {
                             <Trash2 className="w-3.5 h-3.5" />
                           </Button>
                         </div>
+                        ) : null}
                       </TableCell>
                     </TableRow>
                   );

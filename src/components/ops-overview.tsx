@@ -5,13 +5,14 @@ import {
   Users,
   Trash2,
   TrendingUp,
-  PiggyBank,
+  CircleDollarSign,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { tx } from "@/lib/ops-tx";
 import { useTranslation } from "react-i18next";
 import { ManagerDownloadBanner } from "@/components/manager-download-banner";
+import { ensureMonthlyArchive } from "@/lib/report-archive";
 
 type Kpis = {
   monthExpenses: number;
@@ -90,6 +91,17 @@ export function OpsOverview() {
       if (!rid) {
         setLoading(false);
         return;
+      }
+
+      // Auto-archive monthly reports in the background (accounting, reports,
+      // staff performance). Only for roles that can access those pages.
+      if (role === "admin" || role === "operations_manager") {
+        const { data: restRow } = await supabase
+          .from("restaurants")
+          .select("name")
+          .eq("id", rid)
+          .maybeSingle();
+        void ensureMonthlyArchive(rid, (restRow as any)?.name ?? "");
       }
 
       const now = new Date();
@@ -235,7 +247,7 @@ export function OpsOverview() {
       label: tx("صافي الربح"),
       value: fmt(kpis.monthNet) + tx(" دج"),
       hint: tx("إيرادات − (مشتريات + رواتب + هدر)"),
-      icon: PiggyBank,
+      icon: CircleDollarSign,
       tone:
         kpis.monthNet >= 0
           ? "bg-primary/10 text-primary"

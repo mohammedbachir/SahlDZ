@@ -111,7 +111,7 @@ export async function activateRestaurant(
  */
 export async function activateStaff(
   code: string,
-  staffId: string,
+  staffSerial: string,
   pin: string
 ): Promise<{ success: boolean; error?: string; config?: any }> {
   if (!getFirebaseDb()) {
@@ -125,11 +125,12 @@ export async function activateStaff(
       return { success: false, error: "كود التفعيل غير صحيح" };
     }
 
-    // 2. Find staff member
+    // 2. Find staff member by their public serial number (رقم الموظف)
+    const serial = staffSerial.trim().toUpperCase();
     const { data: staff } = await supabase
       .from("staff")
-      .select("id, name, role, pin, restaurant_id, frozen")
-      .eq("id", staffId)
+      .select("id, name, role, pin, serial, restaurant_id, frozen")
+      .eq("serial", serial)
       .eq("restaurant_id", verification.restaurantId)
       .maybeSingle();
 
@@ -152,7 +153,8 @@ export async function activateStaff(
         restaurant_id: verification.restaurantId,
         restaurant_name: verification.restaurantName,
         activation_code: code.toUpperCase(),
-        staff_id: staffId,
+        staff_id: staff.id,
+        staff_serial: staff.serial,
         staff_name: staff.name,
         role: staff.role,
         activated_at: new Date().toISOString(),
