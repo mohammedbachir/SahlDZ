@@ -10,7 +10,10 @@ desktop/
 android-app/
 client/
 *.apk
+!public/sahldz.apk
+!public/sahldz-v1.2.0.apk
 *.exe
+!public/SahlDZ-Setup-1.0.0.exe
 *.log
 *.err
 *-debug.log
