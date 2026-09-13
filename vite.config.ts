@@ -99,8 +99,8 @@ export default defineConfig({
         preset: process.env.NITRO_PRESET || "vercel",
         output: {
           dir: ".vercel/output",
-          serverDir: ".vercel/output/functions/__sahldz",
-          publicDir: "dist/client",
+          serverDir: ".vercel/output/functions/__server.func",
+          publicDir: ".vercel/output/static",
         },
       }
     : false,
