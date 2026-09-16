@@ -48,12 +48,25 @@ import { formatDZD } from "@/lib/restaurant";
 import { isPreviewToken, PREVIEW_RESTAURANT } from "@/lib/preview-mode";
 import { tx } from "@/lib/ops-tx";
 import { clearKioskRole } from "@/lib/kiosk-session";
+import { hasUnifiedStaffSessionEver } from "@/lib/staff-session";
+import { StaffTabs } from "@/components/staff-tabs";
 
 export const Route = createFileRoute("/cashier")({
   component: Page,
 });
 
 type Restaurant = { id: string; name: string; logo_url: string | null };
+
+/** Bounce target after a failed session check: unified login when a unified
+ * session was ever started here, else the legacy cashier login. */
+function cashierFailPath(rid: string): {
+  to: string;
+  search: { rid: string } | { r: string };
+} {
+  return hasUnifiedStaffSessionEver()
+    ? { to: "/staff-login", search: { rid } }
+    : { to: "/cashier-login", search: { r: rid } };
+}
 
 function fmtOrderNo(n: number | null | undefined): string {
   return n != null ? String(n).padStart(3, "0") : "—";
@@ -150,7 +163,7 @@ function Page() {
       const rid = r ? (JSON.parse(r) as Restaurant).id : "";
       localStorage.removeItem("cashier_token");
       localStorage.removeItem("cashier_expires");
-      navigate({ to: "/cashier-login", search: { r: rid } });
+      navigate(cashierFailPath(rid));
       return;
     }
     setToken(t);
@@ -164,7 +177,7 @@ function Page() {
         localStorage.removeItem("cashier_token");
         const r = localStorage.getItem("cashier_restaurant");
         const rid = r ? (JSON.parse(r) as Restaurant).id : "";
-        navigate({ to: "/cashier-login", search: { r: rid } });
+        navigate(cashierFailPath(rid));
       });
   }, [ctxFn, navigate]);
 
@@ -203,7 +216,7 @@ function Page() {
         localStorage.removeItem("cashier_expires");
         const r = localStorage.getItem("cashier_restaurant");
         const rid = r ? (JSON.parse(r) as Restaurant).id : "";
-        navigate({ to: "/cashier-login", search: { r: rid } });
+        navigate(cashierFailPath(rid));
       }
     }, 60_000);
     return () => clearInterval(id);
@@ -354,7 +367,7 @@ function Page() {
     localStorage.removeItem("cashier_token");
     localStorage.removeItem("cashier_expires");
     clearKioskRole("cashier");
-    navigate({ to: "/cashier-login", search: { r: rid } });
+    navigate(cashierFailPath(rid));
   }
 
   if (!restaurant) {
@@ -370,7 +383,7 @@ function Page() {
       className="min-h-screen bg-[var(--background)] flex flex-col"
       dir="rtl"
     >
-      {/* Header */}
+      <StaffTabs />
       <header className="h-14 bg-[var(--card)] border-b border-[var(--border)] flex items-center justify-between gap-3 px-3 md:px-6 sticky top-0 z-20">
         <div className="flex items-center gap-2.5 min-w-0">
           {restaurant.logo_url ? (
@@ -962,7 +975,7 @@ function NewOrderView({
         setTables(res.tables);
         setOptionsByItem(res.optionsByItem);
       })
-      .catch(() => toast.error(tx("cashierScreen.searchFailed")))
+      .catch((e) => toast.error((e as Error).message || tx("cashierScreen.searchFailed")))
       .finally(() => setLoading(false));
   }, [token, isPreview, menuFn]);
 

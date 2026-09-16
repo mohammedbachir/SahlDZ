@@ -8,6 +8,7 @@ import {
   LogOut,
   ArrowRight,
   ChefHat,
+  UtensilsCrossed,
   BarChart3,
   Wallet,
   TrendingUp,
@@ -18,10 +19,11 @@ import {
   Archive,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { requireAuth } from "@/lib/auth";
+import { requireOpsLayoutAccess } from "@/lib/permissions";
 import { supabase } from "@/integrations/supabase/client";
 import { AdminChatBot } from "@/components/AdminChatBot";
 import { OpsTour } from "@/components/OpsTour";
+import { StaffTabs } from "@/components/staff-tabs";
 import { tx } from "@/lib/ops-tx";
 import { useTranslation } from "react-i18next";
 import {
@@ -30,6 +32,7 @@ import {
   AREA_PATHS,
   canViewArea,
   canWriteArea,
+  hasStaffOpsSession,
   resolveOpsRole,
   type OpsArea,
   type OpsRole,
@@ -37,7 +40,7 @@ import {
 
 
 export const Route = createFileRoute("/ops")({
-  beforeLoad: requireAuth,
+  beforeLoad: requireOpsLayoutAccess(),
   component: OpsLayout,
 });
 
@@ -45,6 +48,7 @@ type OpsPath =
   | "/ops"
   | "/ops/inventory"
   | "/ops/recipes"
+  | "/ops/menu"
   | "/ops/suppliers"
   | "/ops/employees"
   | "/ops/waste"
@@ -61,6 +65,7 @@ const AREA_ICONS: Record<OpsArea, typeof LayoutDashboard> = {
   inventory: Package,
   inventoryCount: ClipboardCheck,
   recipes: ChefHat,
+  menu: UtensilsCrossed,
   suppliers: Truck,
   employees: Users,
   staffPerformance: TrendingUp,
@@ -77,6 +82,7 @@ const NAV_ORDER: OpsArea[] = [
   "inventory",
   "inventoryCount",
   "recipes",
+  "menu",
   "suppliers",
   "employees",
   "staffPerformance",
@@ -96,6 +102,12 @@ function OpsLayout() {
   const navigate = useNavigate();
   // null = still loading, avoids showing wrong nav items before role is fetched
   const [userRole, setUserRole] = useState<OpsRole | null>(null);
+  // Desktop kiosk: a unified staff session replaces the owner sidebar with tabs.
+  const [staffMode, setStaffMode] = useState(false);
+
+  useEffect(() => {
+    setStaffMode(hasStaffOpsSession());
+  }, [pathname]);
 
   useEffect(() => {
     (async () => {
@@ -127,6 +139,17 @@ function OpsLayout() {
   };
 
   const current = NAV.find((n) => isActive(n.to, n.exact));
+
+  if (staffMode) {
+    return (
+      <div className="min-h-screen flex flex-col bg-[var(--background)]" dir="rtl">
+        <StaffTabs />
+        <main className="flex-1 px-4 pb-20 md:pb-8 pt-3">
+          <Outlet />
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex md:gap-4 md:p-4 bg-[var(--background)]" dir="rtl">

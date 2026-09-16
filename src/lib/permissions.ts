@@ -2,6 +2,14 @@ import { useState, useEffect } from "react";
 import { redirect } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { getFirebaseDb } from "@/integrations/firebase/config";
+import { requireAuth } from "@/lib/auth";
+import {
+  canAccessOpsArea,
+  canWriteOpsArea,
+  allowedStaffPaths,
+  type StaffOpsArea,
+} from "@/lib/staff-permissions";
+import { loadUnifiedStaffSession } from "@/lib/staff-session";
 
 export type OpsRole =
   | "admin"
@@ -34,6 +42,7 @@ export type OpsArea =
   | "inventory"
   | "inventoryCount"
   | "recipes"
+  | "menu"
   | "suppliers"
   | "employees"
   | "staffPerformance"
@@ -48,7 +57,8 @@ export const AREA_LABELS: Record<OpsArea, string> = {
   overview: "نظرة عامة",
   inventory: "المخزون",
   inventoryCount: "جرد المخزون",
-  recipes: "الوصفات والمنيو",
+  recipes: "الوصفات",
+  menu: "المنيو والأصناف",
   suppliers: "الموردين",
   employees: "الموظفين",
   staffPerformance: "أداء الموظفين",
@@ -65,6 +75,7 @@ export const AREA_PATHS: Record<OpsArea, string> = {
   inventory: "/ops/inventory",
   inventoryCount: "/ops/inventory-count",
   recipes: "/ops/recipes",
+  menu: "/ops/menu",
   suppliers: "/ops/suppliers",
   employees: "/ops/employees",
   staffPerformance: "/ops/staff-performance",
@@ -116,12 +127,12 @@ export const ROLE_CAPABILITIES: Record<OpsRole, Record<OpsArea, AreaAccess>> = b
   admin: [ALL, ALL],
   staff: [["overview", "inventory", "reports"], []],
   production_manager: [
-    ["overview", "inventory", "inventoryCount", "recipes", "suppliers", "waste", "staffPerformance", "reports"],
-    ["inventory", "inventoryCount", "recipes", "waste"],
+    ["overview", "inventory", "inventoryCount", "recipes", "menu", "suppliers", "waste", "staffPerformance", "reports"],
+    ["inventory", "inventoryCount", "recipes", "menu", "waste"],
   ],
   operations_manager: [
     ALL,
-    ["inventory", "inventoryCount", "recipes", "suppliers", "expenses", "waste", "complaints"],
+    ["inventory", "inventoryCount", "recipes", "menu", "suppliers", "expenses", "waste", "complaints"],
   ],
   hr_manager: [
     ["overview", "employees", "staffPerformance", "reports"],
@@ -134,11 +145,20 @@ export const ROLE_CAPABILITIES: Record<OpsRole, Record<OpsArea, AreaAccess>> = b
 });
 
 export function canViewArea(role: OpsRole, area: OpsArea): boolean {
+  const staff = loadUnifiedStaffSession();
+  if (staff) return canAccessOpsArea(staff.permissions, area as StaffOpsArea);
   return ROLE_CAPABILITIES[role]?.[area]?.view === true;
 }
 
 export function canWriteArea(role: OpsRole, area: OpsArea): boolean {
+  const staff = loadUnifiedStaffSession();
+  if (staff) return canWriteOpsArea(staff.permissions, area as StaffOpsArea);
   return ROLE_CAPABILITIES[role]?.[area]?.write === true;
+}
+
+/** True when a unified staff session is the active identity (desktop kiosk). */
+export function hasStaffOpsSession(): boolean {
+  return typeof window !== "undefined" && loadUnifiedStaffSession() !== null;
 }
 
 export function normalizeRole(role: string | null | undefined): OpsRole {
@@ -160,10 +180,21 @@ export function firstAllowedPath(role: OpsRole): string {
   if (canViewArea(role, "inventory")) return AREA_PATHS.inventory;
   if (canViewArea(role, "employees")) return AREA_PATHS.employees;
   if (canViewArea(role, "overview")) return AREA_PATHS.overview;
+  // Staff with only operational interfaces fall back to their first screen.
+  const staff = loadUnifiedStaffSession();
+  if (staff) {
+    const allowed = allowedStaffPaths(staff.permissions);
+    if (allowed[0]) return allowed[0];
+  }
   return "/ops";
 }
 
 export async function resolveOpsRole(): Promise<OpsRole> {
+  // A unified staff session (desktop kiosk) takes precedence: the granted
+  // operations areas drive access instead of the owner/admin role.
+  if (typeof window !== "undefined" && loadUnifiedStaffSession()) {
+    return "staff";
+  }
   if (!getFirebaseDb()) {
     const saved = localStorage.getItem("sahl_dz_preview_role");
     return saved === "owner" ? "admin" : "admin";
@@ -176,6 +207,15 @@ export async function resolveOpsRole(): Promise<OpsRole> {
     .eq("user_id", user.id)
     .maybeSingle();
   return normalizeRole(data?.role);
+}
+
+// beforeLoad guard for the /ops layout: a unified staff session (desktop
+// kiosk) is accepted, otherwise fall back to the normal manager auth guard.
+export function requireOpsLayoutAccess(): () => Promise<void> {
+  return async () => {
+    if (typeof window !== "undefined" && loadUnifiedStaffSession()) return;
+    await requireAuth();
+  };
 }
 
 // beforeLoad guard: redirect to the role's first allowed page if it can't view any of the required areas.

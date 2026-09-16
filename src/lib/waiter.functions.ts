@@ -17,14 +17,15 @@ import {
   generateUniqueSerial,
   resolveStaffFromToken,
   staffSessionExpiry,
+  effectiveStaffPermissions,
 } from "@/lib/staff-core";
 import { requireRestaurantId } from "@/lib/server-staff-auth";
 
 /** DB logic: resolve waiter context from session token. */
 export async function getWaiterContextCore(token: string) {
   const { staffRow, restaurantId } = await resolveStaffFromToken(token);
-  if (staffRow.role !== ROLE_WAITER)
-    throw new Error("هذا الحساب ليس حساب نادل");
+  if (!staffRow.permissions?.includes("waiter"))
+    throw new Error("هذا الحساب لا يملك صلاحية النادل");
   const { data: rest } = await supabase
     .from("restaurants")
     .select("id,name,logo_url")
@@ -272,7 +273,7 @@ export async function verifyWaiterPinCore(waiterId: string, pin: string) {
         : "تم تجميد حسابك — راجع الإدارة",
     );
   }
-  if (staffRow.role !== ROLE_WAITER)
+  if (!effectiveStaffPermissions(staffRow).includes("waiter"))
     throw new Error("هذا الحساب لم يعد حساب نادل");
   if (String(staffRow.pin ?? "") !== pin.trim())
     throw new Error("رمز PIN غير صحيح");

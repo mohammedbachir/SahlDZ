@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { resolveStaffFromToken } from "@/lib/staff-core";
 
 // Server-only helpers used inside createServerFn handlers.
 // NOTE: this module deliberately never imports "@tanstack/react-start/server"
@@ -52,10 +53,29 @@ export async function resolveRestaurantIdForUser(
   return (roles.data?.restaurant_id as string) ?? null;
 }
 
-/** Throws an Arabic error unless the request carries a valid session with a restaurant. */
+/** Resolves the restaurant from a signed unified staff session token (`stf.*`). */
+export async function requireStaffRestaurantId(
+  staffToken: string | null | undefined,
+): Promise<string> {
+  if (!staffToken)
+    throw new Error("الجلسة منتهية أو غير مصرح بها — سجّل دخولك من جديد");
+  const { restaurantId } = await resolveStaffFromToken(staffToken);
+  if (!restaurantId) throw new Error("لا يوجد مطعم مرتبط بهذا الحساب");
+  return restaurantId;
+}
+
+/**
+ * Throws an Arabic error unless the request carries a valid session with a
+ * restaurant. Accepts either a Firebase Auth ID token (owner/manager) or a
+ * unified staff session token (`stf.*`, desktop kiosk).
+ */
 export async function requireRestaurantId(
   authHeader: string | null | undefined,
+  staffToken?: string | null,
 ): Promise<string> {
+  if (staffToken && staffToken.startsWith("stf.")) {
+    return requireStaffRestaurantId(staffToken);
+  }
   const userId = await getAuthedUserId(authHeader);
   if (!userId)
     throw new Error("الجلسة منتهية أو غير مصرح بها — سجّل دخولك من جديد");

@@ -1,10 +1,20 @@
 import { useEffect, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { requireOpsAccess, useAreaPermission } from "@/lib/permissions";
+import { requireOpsAccess } from "@/lib/permissions";
 import { CanWrite } from "@/components/PermissionsGate";
-import { UserPlus, RefreshCw, Pencil, Trash2, Snowflake, ShieldCheck, Users, X, Info } from "lucide-react";
+import {
+  UserPlus,
+  Pencil,
+  Trash2,
+  Snowflake,
+  RefreshCw,
+  Users,
+  Info,
+} from "lucide-react";
 import { toast } from "sonner";
+import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
+import { getFirebaseDb } from "@/integrations/firebase/config";
 import { useRestaurantId } from "@/lib/restaurant";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,8 +22,17 @@ import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { PermissionsSelect } from "@/components/permissions-select";
+import { permissionLabel } from "@/lib/staff-permissions";
+import { generateUniquePin } from "@/lib/staff-core";
+import {
+  listStaff,
+  addStaff,
+  updateStaff,
+  deleteStaff,
+  type StaffRecord,
+} from "@/lib/staff.functions";
 import { tx } from "@/lib/ops-tx";
-import { GLOBAL_ROLES, generateUniqueSerial, generateUniquePin } from "@/lib/staff-core";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -31,210 +50,213 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 
 export const Route = createFileRoute("/ops/employees/")({
   beforeLoad: requireOpsAccess("employees"),
   component: OpsEmployees,
 });
 
-type StaffMember = {
-  id: string;
-  restaurant_id: string;
+type EmployeeForm = {
   name: string;
-  role: string;
-  serial: string;
   pin: string;
-  pin_changed?: boolean;
-  email?: string | null;
-  frozen: boolean;
-  freeze_reason: string | null;
-  created_at?: string;
+  permissions: string[];
 };
 
-type CustomRole = { id: string; name: string };
+const EMPTY_FORM: EmployeeForm = { name: "", pin: "", permissions: [] };
 
 function OpsEmployees() {
   useTranslation();
   const { restaurantId, loading: restaurantLoading } = useRestaurantId();
-  const [staff, setStaff] = useState<StaffMember[]>([]);
-  const [customRoles, setCustomRoles] = useState<CustomRole[]>([]);
+  const listStaffFn = useServerFn(listStaff);
+  const addStaffFn = useServerFn(addStaff);
+  const updateStaffFn = useServerFn(updateStaff);
+  const deleteStaffFn = useServerFn(deleteStaff);
+  const [staff, setStaff] = useState<StaffRecord[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [addOpen, setAddOpen] = useState(false);
-  const [form, setForm] = useState<{ name: string; role: string }>({ name: "", role: GLOBAL_ROLES[0] });
-  const [serial, setSerial] = useState("");
-  const [pin, setPin] = useState("");
+  const [form, setForm] = useState<EmployeeForm>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
 
   const [editOpen, setEditOpen] = useState(false);
-  const [editMember, setEditMember] = useState<StaffMember | null>(null);
-  const [editForm, setEditForm] = useState<{ name: string; role: string }>({ name: "", role: "" });
+  const [editMember, setEditMember] = useState<StaffRecord | null>(null);
+  const [editForm, setEditForm] = useState<EmployeeForm>(EMPTY_FORM);
 
   const [freezeOpen, setFreezeOpen] = useState(false);
-  const [freezeMember, setFreezeMember] = useState<StaffMember | null>(null);
+  const [freezeMember, setFreezeMember] = useState<StaffRecord | null>(null);
   const [freezeReason, setFreezeReason] = useState("");
 
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [deleteMember, setDeleteMember] = useState<StaffMember | null>(null);
+  const [deleteMember, setDeleteMember] = useState<StaffRecord | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  const [rolesOpen, setRolesOpen] = useState(false);
-  const [newRoleName, setNewRoleName] = useState("");
+  async function getServerAuthHeaders() {
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) throw new Error(tx("الجلسة منتهية، سجّل دخولك من جديد"));
+    return { Authorization: `Bearer ${token}` };
+  }
 
-  const allRoles = [...GLOBAL_ROLES, ...customRoles.map((r) => r.name)];
-
-  const loadAll = async (rid: string) => {
-    const [s, r] = await Promise.all([
-      supabase.from("staff").select("*").eq("restaurant_id", rid),
-      supabase.from("roles").select("id,name").eq("restaurant_id", rid),
-    ]);
-    const list = (s.data ?? []) as StaffMember[];
-    list.sort((a, b) => a.name.localeCompare(b.name, "ar"));
-    const roles = (r.data ?? []) as CustomRole[];
-    roles.sort((a, b) => a.name.localeCompare(b.name, "ar"));
-    setStaff(list);
-    setCustomRoles(roles);
-    setLoading(false);
+  const loadAll = async () => {
+    try {
+      let headers: Record<string, string> = {};
+      if (getFirebaseDb()) headers = await getServerAuthHeaders();
+      const res = await listStaffFn({ headers });
+      setStaff((res.staff ?? []) as StaffRecord[]);
+    } catch (e) {
+      toast.error((e as Error).message || tx("فشل تحميل الموظفين"));
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
     if (restaurantLoading) return;
-    if (!restaurantId) {
-      setStaff([
-        { id: "s1", restaurant_id: "mock", name: "أحمد بلحاج", role: "مطبخ", serial: "XKQM-482913", pin: "4821", pin_changed: false, frozen: false, freeze_reason: null },
-        { id: "s2", restaurant_id: "mock", name: "سمير حمداني", role: "كاشير", serial: "BZHT-937145", pin: "937145", pin_changed: false, frozen: false, freeze_reason: null },
-        { id: "s3", restaurant_id: "mock", name: "ليلى بوعلام", role: "نادل", serial: "QRWE-660241", pin: "6602", pin_changed: true, frozen: true, freeze_reason: "غياب متكرر" },
-      ]);
-      setLoading(false);
-      return;
-    }
-    void loadAll(restaurantId);
+    void loadAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [restaurantId, restaurantLoading]);
 
-  const openAdd = async () => {
-    setForm({ name: "", role: GLOBAL_ROLES[0] });
-    setSerial(await generateUniqueSerial());
-    setPin(await generateUniquePin());
-    setAddOpen(true);
+  const openAdd = () => {
+    void generateUniquePin().then((p) => {
+      setForm({ name: "", pin: p, permissions: [] });
+      setAddOpen(true);
+    });
   };
 
   const submitAdd = async () => {
-    if (!restaurantId) return;
     if (!form.name.trim()) return toast.error(tx("أدخل اسم الموظف"));
-    if (!serial || !pin) return toast.error(tx("لم يُولَّد الرقم التسلسلي أو PIN"));
+    if (form.pin && !/^\d{4,6}$/.test(form.pin))
+      return toast.error(tx("PIN من 4 إلى 6 أرقام"));
     setSaving(true);
-    const { error } = await supabase.from("staff").insert({
-      restaurant_id: restaurantId,
-      name: form.name.trim(),
-      role: form.role,
-      serial,
-      pin,
-      pin_changed: false,
-      frozen: false,
-      freeze_reason: null,
-      created_at: new Date().toISOString(),
-    });
-    setSaving(false);
-    if (error) return toast.error(error.message);
-    toast.success(tx("تمت الإضافة — التسلسلي: ") + serial + tx(" — PIN: ") + pin);
-    setAddOpen(false);
-    await loadAll(restaurantId);
+    try {
+      let headers: Record<string, string> = {};
+      if (getFirebaseDb()) headers = await getServerAuthHeaders();
+      const res = await addStaffFn({
+        headers,
+        data: {
+          name: form.name.trim(),
+          pin: form.pin.trim(),
+          permissions: form.permissions,
+        },
+      });
+      toast.success(
+        tx("تمت الإضافة — التسلسلي: ") +
+          res.serial +
+          tx(" — PIN: ") +
+          (res.pin ?? form.pin),
+      );
+      setAddOpen(false);
+      await loadAll();
+    } catch (e) {
+      toast.error((e as Error).message || tx("فشل الإضافة"));
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const openEdit = (m: StaffMember) => {
+  const openEdit = (m: StaffRecord) => {
     setEditMember(m);
-    setEditForm({ name: m.name, role: m.role });
+    setEditForm({ name: m.name, pin: "", permissions: m.permissions ?? [] });
     setEditOpen(true);
   };
 
   const submitEdit = async () => {
-    if (!editMember || !restaurantId) return;
+    if (!editMember) return;
     if (!editForm.name.trim()) return toast.error(tx("أدخل اسم الموظف"));
+    if (editForm.pin && !/^\d{4,6}$/.test(editForm.pin))
+      return toast.error(tx("PIN من 4 إلى 6 أرقام"));
     setSaving(true);
-    const { error } = await supabase
-      .from("staff")
-      .update({ name: editForm.name.trim(), role: editForm.role })
-      .eq("id", editMember.id);
-    setSaving(false);
-    if (error) return toast.error(error.message);
-    toast.success(tx("تم تعديل الموظف"));
-    setEditOpen(false);
-    await loadAll(restaurantId);
+    try {
+      let headers: Record<string, string> = {};
+      if (getFirebaseDb()) headers = await getServerAuthHeaders();
+      const input: Record<string, unknown> = {
+        name: editForm.name.trim(),
+        permissions: editForm.permissions,
+      };
+      if (editForm.pin) input.pin = editForm.pin;
+      await updateStaffFn({ headers, data: { staffId: editMember.id, input } });
+      toast.success(tx("تم تعديل الموظف"));
+      setEditOpen(false);
+      await loadAll();
+    } catch (e) {
+      toast.error((e as Error).message || tx("فشل التعديل"));
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const openFreeze = (m: StaffMember) => {
+  const openFreeze = (m: StaffRecord) => {
     setFreezeMember(m);
     setFreezeReason("");
     setFreezeOpen(true);
   };
 
   const submitFreeze = async () => {
-    if (!freezeMember || !restaurantId) return;
+    if (!freezeMember) return;
     if (!freezeReason.trim()) return toast.error(tx("أدخل سبب التجميد"));
     setSaving(true);
-    const { error } = await supabase
-      .from("staff")
-      .update({ frozen: true, freeze_reason: freezeReason.trim(), frozen_at: new Date().toISOString() })
-      .eq("id", freezeMember.id);
-    setSaving(false);
-    if (error) return toast.error(error.message);
-    toast.success(tx("تم تجميد الموظف"));
-    setFreezeOpen(false);
-    await loadAll(restaurantId);
+    try {
+      let headers: Record<string, string> = {};
+      if (getFirebaseDb()) headers = await getServerAuthHeaders();
+      await updateStaffFn({
+        headers,
+        data: {
+          staffId: freezeMember.id,
+          input: { frozen: true, freeze_reason: freezeReason.trim() },
+        },
+      });
+      toast.success(tx("تم تجميد الموظف"));
+      setFreezeOpen(false);
+      await loadAll();
+    } catch (e) {
+      toast.error((e as Error).message || tx("فشل التجميد"));
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const unfreeze = async (m: StaffMember) => {
-    if (!restaurantId) return;
-    const { error } = await supabase
-      .from("staff")
-      .update({ frozen: false, freeze_reason: null, frozen_at: null })
-      .eq("id", m.id);
-    if (error) return toast.error(error.message);
-    toast.success(tx("تم إلغاء التجميد"));
-    await loadAll(restaurantId);
+  const unfreeze = async (m: StaffRecord) => {
+    try {
+      let headers: Record<string, string> = {};
+      if (getFirebaseDb()) headers = await getServerAuthHeaders();
+      await updateStaffFn({
+        headers,
+        data: { staffId: m.id, input: { frozen: false, freeze_reason: null } },
+      });
+      toast.success(tx("تم إلغاء التجميد"));
+      await loadAll();
+    } catch (e) {
+      toast.error((e as Error).message || tx("فشل إلغاء التجميد"));
+    }
   };
 
   const deleteSelected = async () => {
-    if (!deleteMember || !restaurantId) return;
-    setDeleting(true);
-    const { error } = await supabase.from("staff").delete().eq("id", deleteMember.id);
-    setDeleting(false);
-    setConfirmDelete(false);
-    if (error) return toast.error(error.message);
-    toast.success(tx("تم حذف الموظف"));
-    setDeleteMember(null);
-    await loadAll(restaurantId);
-  };
-
-  const submitAddRole = async () => {
-    if (!restaurantId) return;
-    const name = newRoleName.trim();
-    if (!name) return;
-    if (GLOBAL_ROLES.includes(name) || customRoles.some((r) => r.name === name)) {
-      return toast.error(tx("الدور موجود مسبقاً"));
+    if (!deleteMember) return;
+    if (getFirebaseDb()) {
+      setDeleting(true);
+      try {
+        const headers = await getServerAuthHeaders();
+        await deleteStaffFn({ headers, data: { staffId: deleteMember.id } });
+        toast.success(tx("تم حذف الموظف"));
+        setDeleteMember(null);
+        setConfirmDelete(false);
+        await loadAll();
+      } catch (e) {
+        toast.error((e as Error).message || tx("فشل الحذف"));
+      } finally {
+        setDeleting(false);
+      }
+    } else {
+      setStaff((prev) => prev.filter((x) => x.id !== deleteMember.id));
+      setDeleteMember(null);
+      setConfirmDelete(false);
+      toast.success(tx("تم حذف الموظف"));
     }
-    const { error } = await supabase.from("roles").insert({ restaurant_id: restaurantId, name });
-    if (error) return toast.error(error.message);
-    toast.success(tx("تمت إضافة الدور"));
-    setNewRoleName("");
-    await loadAll(restaurantId);
   };
 
-  const deleteRole = async (r: CustomRole) => {
-    if (!restaurantId) return;
-    const used = staff.some((s) => s.role === r.name);
-    if (used) return toast.error(tx("لا يمكن حذف دور مستخدم من قبل موظف"));
-    const { error } = await supabase.from("roles").delete().eq("id", r.id);
-    if (error) return toast.error(error.message);
-    toast.success(tx("تم حذف الدور"));
-    await loadAll(restaurantId);
+  const copySerial = (m: StaffRecord) => {
+    navigator.clipboard.writeText(m.serial ?? "");
+    toast.success(tx("تم نسخ رقم الموظف"));
   };
 
   return (
@@ -247,28 +269,25 @@ function OpsEmployees() {
               {tx("الموظفون")}
             </h3>
             <p className="text-xs text-[var(--muted-foreground)] mt-0.5">
-              {tx("أضف الموظفين والأدوار. الكود يُسلم للموظف للدخول ولا يُعرض في الواجهات.")}
+              {tx(
+                "نفس بيانات الموظفين في صفحة الإعدادات — صلاحيات متعددة لكل موظف.",
+              )}
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            <CanWrite area="employees">
-            <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5" onClick={() => setRolesOpen(true)}>
-              <ShieldCheck className="w-3.5 h-3.5" /> {tx("الأدوار")}
-            </Button>
-            <Button size="sm" className="h-8 text-xs gap-1.5" onClick={() => void openAdd()}>
+          <CanWrite area="employees">
+            <Button size="sm" className="h-8 text-xs gap-1.5" onClick={openAdd}>
               <UserPlus className="w-3.5 h-3.5" /> {tx("إضافة موظف")}
             </Button>
-            </CanWrite>
-          </div>
+          </CanWrite>
         </div>
       </div>
 
       <Card className="rounded-2xl glass shadow-glass border-border/60 overflow-x-auto">
-        <Table className="min-w-[560px]">
+        <Table className="min-w-[620px]">
           <TableHeader>
             <TableRow>
               <TableHead className="text-right">{tx("الاسم")}</TableHead>
-              <TableHead className="text-right">{tx("الدور")}</TableHead>
+              <TableHead className="text-right">{tx("الصلاحيات")}</TableHead>
               <TableHead className="text-right">{tx("الحالة")}</TableHead>
               <TableHead className="text-right">{tx("إجراء")}</TableHead>
             </TableRow>
@@ -276,22 +295,59 @@ function OpsEmployees() {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
+                <TableCell
+                  colSpan={4}
+                  className="text-center text-muted-foreground py-8"
+                >
                   {tx("جاري التحميل…")}
                 </TableCell>
               </TableRow>
             ) : staff.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
+                <TableCell
+                  colSpan={4}
+                  className="text-center text-muted-foreground py-8"
+                >
                   {tx("لا يوجد موظفون بعد")}
                 </TableCell>
               </TableRow>
             ) : (
               staff.map((m) => (
                 <TableRow key={m.id}>
-                  <TableCell className="font-medium">{m.name}</TableCell>
+                  <TableCell className="font-medium">
+                    <span className="block">{m.name}</span>
+                    <button
+                      type="button"
+                      onClick={() => copySerial(m)}
+                      className="text-[11px] font-mono text-[var(--muted-foreground)] hover:text-[var(--primary)] underline decoration-dotted text-left"
+                      dir="ltr"
+                      title={tx("نسخ رقم الموظف")}
+                    >
+                      {m.serial ?? ""} ⧉
+                    </button>
+                  </TableCell>
                   <TableCell>
-                    <Badge variant="secondary">{m.role}</Badge>
+                    <div className="flex flex-wrap gap-1 max-w-[220px]">
+                      {(m.permissions ?? []).slice(0, 3).map((p) => (
+                        <Badge
+                          key={p}
+                          variant="secondary"
+                          className="text-[10px]"
+                        >
+                          {permissionLabel(p)}
+                        </Badge>
+                      ))}
+                      {(m.permissions ?? []).length > 3 && (
+                        <span className="text-[11px] text-[var(--muted-foreground)]">
+                          +{(m.permissions ?? []).length - 3}
+                        </span>
+                      )}
+                      {(m.permissions ?? []).length === 0 && (
+                        <span className="text-[11px] text-[var(--muted-foreground)]">
+                          {tx("بدون صلاحيات")}
+                        </span>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell>
                     {m.frozen ? (
@@ -301,33 +357,66 @@ function OpsEmployees() {
                     )}
                     {m.frozen && m.freeze_reason && (
                       <span className="text-[11px] text-[var(--muted-foreground)] block mt-1">
-                        {tx("السبب: ")}{m.freeze_reason}
+                        {tx("السبب: ")}
+                        {m.freeze_reason}
                       </span>
                     )}
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1 justify-end">
-                      <Button asChild variant="outline" size="sm" className="gap-1.5 h-7 text-[11px]">
-                        <Link to="/ops/employees/$employeeId" params={{ employeeId: m.id }}>
+                      <Button
+                        asChild
+                        variant="outline"
+                        size="sm"
+                        className="gap-1.5 h-7 text-[11px]"
+                      >
+                        <Link
+                          to="/ops/employees/$employeeId"
+                          params={{ employeeId: m.id }}
+                        >
                           <Info className="w-3 h-3" /> {tx("معلومات")}
                         </Link>
                       </Button>
                       <CanWrite area="employees">
-                      <Button variant="outline" size="sm" className="gap-1.5 h-7 text-[11px]" onClick={() => openEdit(m)}>
-                        <Pencil className="w-3 h-3" /> {tx("تعديل")}
-                      </Button>
-                      {m.frozen ? (
-                        <Button variant="outline" size="sm" className="gap-1.5 h-7 text-[11px]" onClick={() => unfreeze(m)}>
-                          <RefreshCw className="w-3 h-3" /> {tx("إلغاء التجميد")}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-1.5 h-7 text-[11px]"
+                          onClick={() => openEdit(m)}
+                        >
+                          <Pencil className="w-3 h-3" /> {tx("تعديل")}
                         </Button>
-                      ) : (
-                        <Button variant="outline" size="sm" className="gap-1.5 h-7 text-[11px]" onClick={() => openFreeze(m)}>
-                          <Snowflake className="w-3 h-3" /> {tx("تجميد")}
+                        {m.frozen ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="gap-1.5 h-7 text-[11px]"
+                            onClick={() => void unfreeze(m)}
+                          >
+                            <RefreshCw className="w-3 h-3" />{" "}
+                            {tx("إلغاء التجميد")}
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="gap-1.5 h-7 text-[11px]"
+                            onClick={() => openFreeze(m)}
+                          >
+                            <Snowflake className="w-3 h-3" /> {tx("تجميد")}
+                          </Button>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 text-destructive hover:text-destructive"
+                          onClick={() => {
+                            setDeleteMember(m);
+                            setConfirmDelete(true);
+                          }}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
                         </Button>
-                      )}
-                      <Button variant="ghost" size="sm" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => { setDeleteMember(m); setConfirmDelete(true); }}>
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
                       </CanWrite>
                     </div>
                   </TableCell>
@@ -347,45 +436,58 @@ function OpsEmployees() {
           <div className="space-y-3">
             <div>
               <Label>{tx("الاسم")}</Label>
-              <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder={tx("مثال: أحمد بلحاج")} />
+              <Input
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                placeholder={tx("مثال: أحمد بلحاج")}
+              />
             </div>
             <div>
-              <Label>{tx("الدور")}</Label>
-              <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v })}>
-                <SelectTrigger>
-                  <SelectValue placeholder={tx("اختر الدور")} />
-                </SelectTrigger>
-                <SelectContent>
-                  {allRoles.map((r) => (
-                    <SelectItem key={r} value={r}>{r}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>{tx("الرقم التسلسلي")}</Label>
-              <div className="flex items-center gap-2">
-                <Input dir="ltr" readOnly value={serial} className="font-mono tracking-widest text-center" />
-                <Button variant="outline" size="icon" title={tx("توليد رقم آخر")} onClick={() => void generateUniqueSerial().then(setSerial)}>
-                  <RefreshCw className="w-4 h-4" />
-                </Button>
-              </div>
-              <p className="text-[11px] text-[var(--muted-foreground)] mt-1">{tx("رقم تسلسلي فريد على مستوى المنصة.")}</p>
+              <Label>{tx("الصلاحيات")}</Label>
+              <PermissionsSelect
+                value={form.permissions}
+                onChange={(perms) => setForm({ ...form, permissions: perms })}
+              />
             </div>
             <div>
               <Label>{tx("رقم PIN للدخول")}</Label>
               <div className="flex items-center gap-2">
-                <Input dir="ltr" readOnly value={pin} className="font-mono tracking-widest text-center" />
-                <Button variant="outline" size="icon" title={tx("توليد PIN آخر")} onClick={() => void generateUniquePin().then(setPin)}>
+                <Input
+                  dir="ltr"
+                  value={form.pin}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      pin: e.target.value.replace(/\D/g, "").slice(0, 6),
+                    })
+                  }
+                  className="font-mono tracking-widest text-center"
+                />
+                <Button
+                  variant="outline"
+                  size="icon"
+                  title={tx("توليد PIN آخر")}
+                  onClick={() =>
+                    void generateUniquePin().then((p) =>
+                      setForm((f) => ({ ...f, pin: p })),
+                    )
+                  }
+                >
                   <RefreshCw className="w-4 h-4" />
                 </Button>
               </div>
-              <p className="text-[11px] text-[var(--muted-foreground)] mt-1">{tx("سلّمه PIN للموظف — سيغيّره بنفسه عند أول دخول.")}</p>
+              <p className="text-[11px] text-[var(--muted-foreground)] mt-1">
+                {tx("رقم تسلسلي يُولد تلقائياً عند الحفظ.")}
+              </p>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setAddOpen(false)}>{tx("إلغاء")}</Button>
-            <Button onClick={submitAdd} disabled={saving}>{saving ? tx("جاري الحفظ…") : tx("حفظ")}</Button>
+            <Button variant="outline" onClick={() => setAddOpen(false)}>
+              {tx("إلغاء")}
+            </Button>
+            <Button onClick={submitAdd} disabled={saving}>
+              {saving ? tx("جاري الحفظ…") : tx("حفظ")}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -399,25 +501,60 @@ function OpsEmployees() {
           <div className="space-y-3">
             <div>
               <Label>{tx("الاسم")}</Label>
-              <Input value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} />
+              <Input
+                value={editForm.name}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, name: e.target.value })
+                }
+              />
             </div>
             <div>
-              <Label>{tx("الدور")}</Label>
-              <Select value={editForm.role} onValueChange={(v) => setEditForm({ ...editForm, role: v })}>
-                <SelectTrigger>
-                  <SelectValue placeholder={tx("اختر الدور")} />
-                </SelectTrigger>
-                <SelectContent>
-                  {allRoles.map((r) => (
-                    <SelectItem key={r} value={r}>{r}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label>{tx("الصلاحيات")}</Label>
+              <PermissionsSelect
+                value={editForm.permissions}
+                onChange={(perms) =>
+                  setEditForm({ ...editForm, permissions: perms })
+                }
+              />
+            </div>
+            <div>
+              <Label>
+                {tx("رقم PIN للدخول")} — {tx("اتركه فارغاً لعدم التغيير")}
+              </Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  dir="ltr"
+                  value={editForm.pin}
+                  onChange={(e) =>
+                    setEditForm({
+                      ...editForm,
+                      pin: e.target.value.replace(/\D/g, "").slice(0, 6),
+                    })
+                  }
+                  className="font-mono tracking-widest text-center"
+                />
+                <Button
+                  variant="outline"
+                  size="icon"
+                  title={tx("توليد PIN")}
+                  onClick={() =>
+                    void generateUniquePin().then((p) =>
+                      setEditForm((f) => ({ ...f, pin: p })),
+                    )
+                  }
+                >
+                  <RefreshCw className="w-4 h-4" />
+                </Button>
+              </div>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEditOpen(false)}>{tx("إلغاء")}</Button>
-            <Button onClick={submitEdit} disabled={saving}>{saving ? tx("جاري الحفظ…") : tx("حفظ")}</Button>
+            <Button variant="outline" onClick={() => setEditOpen(false)}>
+              {tx("إلغاء")}
+            </Button>
+            <Button onClick={submitEdit} disabled={saving}>
+              {saving ? tx("جاري الحفظ…") : tx("حفظ")}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -426,7 +563,9 @@ function OpsEmployees() {
       <Dialog open={freezeOpen} onOpenChange={setFreezeOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>{tx("تجميد الموظف")} — {freezeMember?.name}</DialogTitle>
+            <DialogTitle>
+              {tx("تجميد الموظف")} — {freezeMember?.name}
+            </DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
             <p className="text-xs text-[var(--muted-foreground)]">
@@ -434,47 +573,25 @@ function OpsEmployees() {
             </p>
             <div>
               <Label>{tx("سبب التجميد")}</Label>
-              <Input value={freezeReason} onChange={(e) => setFreezeReason(e.target.value)} placeholder={tx("مثال: غياب متكرر")} />
+              <Input
+                value={freezeReason}
+                onChange={(e) => setFreezeReason(e.target.value)}
+                placeholder={tx("مثال: غياب متكرر")}
+              />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setFreezeOpen(false)}>{tx("إلغاء")}</Button>
-            <Button variant="destructive" onClick={submitFreeze} disabled={saving}>{saving ? tx("جاري الحفظ…") : tx("تجميد")}</Button>
+            <Button variant="outline" onClick={() => setFreezeOpen(false)}>
+              {tx("إلغاء")}
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={submitFreeze}
+              disabled={saving}
+            >
+              {saving ? tx("جاري الحفظ…") : tx("تجميد")}
+            </Button>
           </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Roles */}
-      <Dialog open={rolesOpen} onOpenChange={setRolesOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>{tx("إدارة الأدوار")}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-2">
-            <div className="text-xs font-semibold text-[var(--muted-foreground)]">{tx("أدوار ثابتة")}</div>
-            {GLOBAL_ROLES.map((r) => (
-              <div key={r} className="flex items-center justify-between bg-[var(--muted)]/50 rounded-lg px-3 py-2">
-                <span className="text-sm">{r}</span>
-                <Badge variant="secondary">{tx("افتراضي")}</Badge>
-              </div>
-            ))}
-            <div className="text-xs font-semibold text-[var(--muted-foreground)] pt-2">{tx("أدوار المطعم")}</div>
-            {customRoles.length === 0 && (
-              <div className="text-sm text-[var(--muted-foreground)] py-1">{tx("لا توجد أدوار مخصصة")}</div>
-            )}
-            {customRoles.map((r) => (
-              <div key={r.id} className="flex items-center justify-between bg-[var(--card)] border border-[var(--border)] rounded-lg px-3 py-2">
-                <span className="text-sm">{r.name}</span>
-                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => deleteRole(r)}>
-                  <X className="w-3.5 h-3.5" />
-                </Button>
-              </div>
-            ))}
-            <div className="flex items-center gap-2 pt-2">
-              <Input value={newRoleName} onChange={(e) => setNewRoleName(e.target.value)} placeholder={tx("اسم الدور الجديد...")} onKeyDown={(e) => { if (e.key === "Enter") void submitAddRole(); }} />
-              <Button onClick={submitAddRole} className="gap-1.5"><UserPlus className="w-3.5 h-3.5" /> {tx("إضافة")}</Button>
-            </div>
-          </div>
         </DialogContent>
       </Dialog>
 
@@ -482,7 +599,9 @@ function OpsEmployees() {
         open={confirmDelete}
         onOpenChange={setConfirmDelete}
         title={`${tx("حذف الموظف")} "${deleteMember?.name}"؟`}
-        description={tx("الحذف نهائي ولا يمكن التراجع عنه. سيُحرم الموظف من الدخول نهائياً.")}
+        description={tx(
+          "الحذف نهائي ولا يمكن التراجع عنه. سيُحرم الموظف من الدخول نهائياً.",
+        )}
         confirmLabel={deleting ? tx("جاري الحذف…") : tx("نعم، احذف")}
         destructive
         onConfirm={() => void deleteSelected()}

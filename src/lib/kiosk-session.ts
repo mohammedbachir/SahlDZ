@@ -1,4 +1,5 @@
 import { isPreviewToken } from "@/lib/preview-mode";
+import { allowedStaffPaths } from "@/lib/staff-permissions";
 
 /**
  * Kiosk mode: restaurant computers boot straight into the last staff session
@@ -85,6 +86,27 @@ export function getAutoScreenPath(): string | null {
   if (lastRole) return lastRole.screenPath;
   const first = KIOSK_ROLES.find((x) => x.role === active[0]);
   return first ? first.screenPath : null;
+}
+
+/**
+ * Auto-open for the unified staff session: the first allowed screen
+ * (interface or operations area), or the tab remembered via the unified
+ * session, else null.
+ */
+export function getUnifiedAutoScreenPath(): string | null {
+  const token = read("staff_token");
+  const expires = read("staff_expires");
+  if (!isStaffTokenActive(token, expires)) return null;
+  try {
+    const perms = JSON.parse(read("staff_permissions") ?? "[]") as string[];
+    const paths = allowedStaffPaths(perms);
+    if (paths.length === 0) return null;
+    const last = read("staff_last_open_tab");
+    if (last && paths.includes(last)) return last;
+    return paths[0];
+  } catch {
+    return null;
+  }
 }
 
 /** Remember the most recently used role for multi-session computers. */

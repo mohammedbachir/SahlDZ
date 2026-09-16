@@ -13,6 +13,7 @@ export type OptionChoice = {
   id: string;
   name: string;
   price_delta: number;
+  display_order?: number;
 };
 export type MenuOption = {
   id: string;
@@ -32,15 +33,16 @@ export async function getMenuOptionsForItemsCore(menuItemIds: string[]) {
     supabase
       .from("menu_item_options")
       .select("*")
-      .in("menu_item_id", menuItemIds)
-      .order("display_order", { ascending: true }),
+      .in("menu_item_id", menuItemIds),
     supabase.from("menu_item_option_choices").select("*"),
   ]);
   if (optRes.error) throw new Error(optRes.error.message);
   if (choiceRes.error) throw new Error(choiceRes.error.message);
 
   const choiceByOption = new Map<string, OptionChoice[]>();
-  for (const c of choiceRes.data ?? []) {
+  for (const c of (choiceRes.data ?? []).sort(
+    (a: any, b: any) => (a.display_order ?? 0) - (b.display_order ?? 0),
+  ) as any[]) {
     const arr = choiceByOption.get((c as any).option_id) ?? [];
     arr.push({
       id: (c as any).id,
@@ -51,7 +53,9 @@ export async function getMenuOptionsForItemsCore(menuItemIds: string[]) {
   }
 
   const result: Record<string, MenuOption[]> = {};
-  for (const o of optRes.data ?? []) {
+  for (const o of (optRes.data ?? []).sort(
+    (a: any, b: any) => (a.display_order ?? 0) - (b.display_order ?? 0),
+  ) as any[]) {
     const itemId = (o as any).menu_item_id;
     (result[itemId] ??= []).push({
       id: (o as any).id,
@@ -59,7 +63,9 @@ export async function getMenuOptionsForItemsCore(menuItemIds: string[]) {
       required: (o as any).required ?? false,
       multi: (o as any).multi ?? false,
       display_order: (o as any).display_order ?? 0,
-      choices: choiceByOption.get((o as any).id) ?? [],
+      choices: (choiceByOption.get((o as any).id) ?? []).sort(
+        (a, b) => (a.display_order ?? 0) - (b.display_order ?? 0),
+      ),
     });
   }
   return { optionsByItem: result };

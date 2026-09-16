@@ -18,6 +18,7 @@ import {
   generateUniqueSerial,
   resolveStaffFromToken,
   staffSessionExpiry,
+  effectiveStaffPermissions,
 } from "@/lib/staff-core";
 import { requireRestaurantId } from "@/lib/server-staff-auth";
 
@@ -41,8 +42,8 @@ function safeParseOptions(
 /** DB logic: resolve chef context from session token. */
 export async function getIndividualChefContextCore(token: string) {
   const { staffRow, restaurantId } = await resolveStaffFromToken(token);
-  if (staffRow.role !== ROLE_KITCHEN)
-    throw new Error("هذا الحساب ليس حساب مطبخ");
+  if (!staffRow.permissions?.includes("kitchen"))
+    throw new Error("هذا الحساب لا يملك صلاحية المطبخ");
 
   const db = getFirebaseDb();
   let rest: any = { id: restaurantId, name: "", logo_url: null };
@@ -265,7 +266,7 @@ export async function verifyIndividualChefPinCore(chefId: string, pin: string) {
         : "تم تجميد حسابك — راجع الإدارة",
     );
   }
-  if (staffRow.role !== ROLE_KITCHEN)
+  if (!effectiveStaffPermissions(staffRow).includes("kitchen"))
     throw new Error("هذا الحساب لم يعد حساب مطبخ");
   if (String(staffRow.pin ?? "") !== pin.trim())
     throw new Error("رمز PIN غير صحيح");

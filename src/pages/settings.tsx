@@ -1,12 +1,39 @@
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { Loader2, Trash2, Upload, UserPlus, X, Mail, Users, Calculator, Copy, Shuffle, Power, ChefHat, Palette, Check, Bike, RefreshCw, ShoppingBag, QrCode, Sparkles, Plus as PlusIcon, Image as ImageIcon, Video as VideoIcon, UtensilsCrossed, KeyRound, Eye, EyeOff, Settings, ShieldCheck } from "lucide-react";
+import {
+  Loader2,
+  Trash2,
+  Upload,
+  UserPlus,
+  X,
+  Users,
+  Copy,
+  Shuffle,
+  Power,
+  Palette,
+  Check,
+  Bike,
+  RefreshCw,
+  ShoppingBag,
+  QrCode,
+  Sparkles,
+  Plus as PlusIcon,
+  Image as ImageIcon,
+  Video as VideoIcon,
+  KeyRound,
+  Eye,
+  EyeOff,
+  Settings,
+  Pencil,
+} from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { getFirebaseDb } from "@/integrations/firebase/config";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { PermissionsSelect } from "@/components/permissions-select";
 import {
   Dialog,
   DialogContent,
@@ -16,22 +43,21 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useServerFn } from "@tanstack/react-start";
-import { setCashierPin, disableCashier, getCashierStatus } from "@/lib/cashier.functions";
 import {
-  listIndividualChefs,
-  addIndividualChef,
-  updateIndividualChefPin,
-  toggleIndividualChef,
-  deleteIndividualChef,
-} from "@/lib/individual-chef.functions";
+  listStaff,
+  addStaff,
+  updateStaff,
+  toggleStaff,
+  deleteStaff,
+  type StaffRecord,
+} from "@/lib/staff.functions";
+import { generateUniquePin } from "@/lib/staff-core";
+import { permissionLabel } from "@/lib/staff-permissions";
 import {
-  listWaiters,
-  addWaiter,
-  updateWaiterPin,
-  toggleWaiter,
-  deleteWaiter,
-} from "@/lib/waiter.functions";
-import { updateMenuTheme, getSplashSettings, updateSplashSettings, createStaffAccount, deleteStaffAccount, updateStaffPassword, listStaffAccounts } from "@/lib/settings.functions";
+  updateMenuTheme,
+  getSplashSettings,
+  updateSplashSettings,
+} from "@/lib/settings.functions";
 import {
   getDeliveryStatus,
   enableDelivery,
@@ -55,7 +81,6 @@ import {
   type MenuLayoutId,
   type MenuThemeId,
 } from "@/lib/menu-themes";
-import { areasForRole, ROLE_DESCRIPTIONS } from "@/lib/permissions";
 
 type Restaurant = {
   id: string;
@@ -65,17 +90,23 @@ type Restaurant = {
   activation_code?: string | null;
 };
 
-type ManagerRole = "staff" | "production_manager" | "operations_manager" | "hr_manager" | "purchasing_manager";
-type StaffMember = { id: string; user_id: string; role: string; email: string };
-
-const MANAGER_ROLE_LABELS: Record<ManagerRole, string> = {
-  staff: "موظف (وصول محدود)",
-  production_manager: "مسؤول الإنتاج",
-  operations_manager: "مسؤول التشغيل",
-  hr_manager: "مسؤول الموارد البشرية",
-  purchasing_manager: "مسؤول المشتريات",
+type EmployeeForm = {
+  name: string;
+  pin: string;
+  permissions: string[];
+  email: string;
+  password: string;
+  showWeb: boolean;
 };
 
+const EMPTY_FORM: EmployeeForm = {
+  name: "",
+  pin: "",
+  permissions: [],
+  email: "",
+  password: "",
+  showWeb: false,
+};
 
 function SettingsPage() {
   const navigate = useNavigate();
@@ -90,34 +121,34 @@ function SettingsPage() {
   const [confirmText, setConfirmText] = useState("");
   const [deleting, setDeleting] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
-  const [staff, setStaff] = useState<StaffMember[]>([]);
-  const [inviteEmail, setInviteEmail] = useState("");
-  const [invitePassword, setInvitePassword] = useState("");
-  const [showInvitePassword, setShowInvitePassword] = useState(false);
-  const [inviteRole, setInviteRole] = useState<ManagerRole>("staff");
-  const [inviting, setInviting] = useState(false);
-  const [staffPwEdit, setStaffPwEdit] = useState<{ userId: string; email: string } | null>(null);
-  const [staffToRemove, setStaffToRemove] = useState<string | null>(null);
-  const [staffNewPw, setStaffNewPw] = useState("");
-  const [savingStaffPw, setSavingStaffPw] = useState(false);
-  // Cashier
-  const setPin = useServerFn(setCashierPin);
-  const disable = useServerFn(disableCashier);
-  const getStatus = useServerFn(getCashierStatus);
-  const [cashierEnabled, setCashierEnabled] = useState(false);
-  const [pinInput, setPinInput] = useState("");
-  const [savingPin, setSavingPin] = useState(false);
-  const [showPinDialog, setShowPinDialog] = useState<string | null>(null);
-  const [confirmDisable, setConfirmDisable] = useState(false);
-  const createStaffFn = useServerFn(createStaffAccount);
-  const deleteStaffFn = useServerFn(deleteStaffAccount);
-  const updateStaffPwFn = useServerFn(updateStaffPassword);
-  const listStaffFn = useServerFn(listStaffAccounts);
+
+  // Employees (unified)
+  const listStaffFn = useServerFn(listStaff);
+  const addStaffFn = useServerFn(addStaff);
+  const updateStaffFn = useServerFn(updateStaff);
+  const toggleStaffFn = useServerFn(toggleStaff);
+  const deleteStaffFn = useServerFn(deleteStaff);
+  const [employees, setEmployees] = useState<StaffRecord[]>([]);
+  const [addOpen, setAddOpen] = useState(false);
+  const [addForm, setAddForm] = useState<EmployeeForm>(EMPTY_FORM);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editMember, setEditMember] = useState<StaffRecord | null>(null);
+  const [editForm, setEditForm] = useState<EmployeeForm>(EMPTY_FORM);
+  const [savingEmp, setSavingEmp] = useState(false);
+  const [addedCreds, setAddedCreds] = useState<{
+    serial: string;
+    pin: string;
+  } | null>(null);
+  const [showAddPw, setShowAddPw] = useState(false);
+  const [showEditPw, setShowEditPw] = useState(false);
+  const [deleteMember, setDeleteMember] = useState<StaffRecord | null>(null);
+
   // Menu theme
   const updateThemeFn = useServerFn(updateMenuTheme);
   const [menuTheme, setMenuTheme] = useState<MenuThemeId>(DEFAULT_MENU_THEME);
   const [menuColor, setMenuColor] = useState(DEFAULT_MENU_COLOR);
-  const [menuLayout, setMenuLayout] = useState<MenuLayoutId>(DEFAULT_MENU_LAYOUT);
+  const [menuLayout, setMenuLayout] =
+    useState<MenuLayoutId>(DEFAULT_MENU_LAYOUT);
   const [headerColor, setHeaderColor] = useState(DEFAULT_MENU_COLOR);
   const [categoryColor, setCategoryColor] = useState(DEFAULT_MENU_COLOR);
   const [buttonColor, setButtonColor] = useState(DEFAULT_MENU_COLOR);
@@ -140,34 +171,6 @@ function SettingsPage() {
   const [takeawayToken, setTakeawayToken] = useState<string | null>(null);
   const [takeawayBusy, setTakeawayBusy] = useState(false);
   const [confirmDisableTakeaway, setConfirmDisableTakeaway] = useState(false);
-  // Individual chef accounts
-  const listIndividualChefsFn = useServerFn(listIndividualChefs);
-  const addIndividualChefFn = useServerFn(addIndividualChef);
-  const updateIndividualChefPinFn = useServerFn(updateIndividualChefPin);
-  const toggleIndividualChefFn = useServerFn(toggleIndividualChef);
-  const deleteIndividualChefFn = useServerFn(deleteIndividualChef);
-  type IndividualChef = { id: string; name: string; is_active: boolean; employee_id: string | null; created_at: string };  const [individualChefs, setIndividualChefs] = useState<IndividualChef[]>([]);
-  const [newChefName, setNewChefName] = useState("");
-  const [newChefPin, setNewChefPin] = useState("");
-  const [addingChef, setAddingChef] = useState(false);
-  const [chefPinEdit, setChefPinEdit] = useState<{ id: string; pin: string } | null>(null);
-  const [savingChefPinEdit, setSavingChefPinEdit] = useState(false);
-  const [showChefPin, setShowChefPin] = useState<string | null>(null);
-
-  // Individual waiter accounts
-  const listWaitersFn = useServerFn(listWaiters);
-  const addWaiterFn = useServerFn(addWaiter);
-  const updateWaiterPinFn = useServerFn(updateWaiterPin);
-  const toggleWaiterFn = useServerFn(toggleWaiter);
-  const deleteWaiterFn = useServerFn(deleteWaiter);
-  type WaiterRow = { id: string; name: string; is_active: boolean; employee_id: string | null; created_at: string };
-  const [waiters, setWaiters] = useState<WaiterRow[]>([]);
-  const [newWaiterName, setNewWaiterName] = useState("");
-  const [newWaiterPin, setNewWaiterPin] = useState("");
-  const [addingWaiter, setAddingWaiter] = useState(false);
-  const [waiterPinEdit, setWaiterPinEdit] = useState<{ id: string; pin: string } | null>(null);
-  const [savingWaiterPinEdit, setSavingWaiterPinEdit] = useState(false);
-  const [showWaiterPin, setShowWaiterPin] = useState<string | null>(null);
 
   // Splash settings
   const getSplashFn = useServerFn(getSplashSettings);
@@ -225,7 +228,10 @@ function SettingsPage() {
       toast.error("الحد الأقصى 8 مميزات");
       return;
     }
-    setSplashFeatures([...splashFeatures, { icon: newFeatureIcon || "Sparkles", text }]);
+    setSplashFeatures([
+      ...splashFeatures,
+      { icon: newFeatureIcon || "Sparkles", text },
+    ]);
     setNewFeatureText("");
   }
 
@@ -249,7 +255,9 @@ function SettingsPage() {
         });
         upload = {
           name: coverFile.name,
-          type: coverFile.type || (coverType === "video" ? "video/mp4" : "image/jpeg"),
+          type:
+            coverFile.type ||
+            (coverType === "video" ? "video/mp4" : "image/jpeg"),
           base64,
         };
       }
@@ -272,8 +280,10 @@ function SettingsPage() {
         },
         headers,
       });
-      if (res?.cover_image_url !== undefined) setCoverImageUrl(res.cover_image_url);
-      if (res?.cover_video_url !== undefined) setCoverVideoUrl(res.cover_video_url);
+      if (res?.cover_image_url !== undefined)
+        setCoverImageUrl(res.cover_image_url);
+      if (res?.cover_video_url !== undefined)
+        setCoverVideoUrl(res.cover_video_url);
       setCoverFile(null);
       toast.success("تم حفظ صفحة الترحيب");
     } catch (e) {
@@ -283,229 +293,139 @@ function SettingsPage() {
     }
   }
 
-  async function refreshIndividualChefs() {
-    try {
-      const headers = await getServerAuthHeaders();
-      const res = await listIndividualChefsFn({ headers });
-      setIndividualChefs(res.chefs as IndividualChef[]);
-    } catch { /* ignore */ }
-  }
-
-  async function refreshWaiters() {
-    try {
-      const headers = await getServerAuthHeaders();
-      const res = await listWaitersFn({ headers });
-      setWaiters(res.waiters as WaiterRow[]);
-    } catch { /* ignore */ }
-  }
-
-  async function onAddIndividualChef() {
-    if (!newChefName.trim()) { toast.error("اكتب اسم الطاهي"); return; }
-    if (newChefPin.length < 4) { toast.error("PIN من 4 إلى 6 أرقام"); return; }
-    setAddingChef(true);
-    try {
-      const headers = await getServerAuthHeaders();
-      await addIndividualChefFn({ data: { name: newChefName.trim(), pin: newChefPin }, headers });
-      setNewChefName(""); setNewChefPin("");
-      await refreshIndividualChefs();
-      toast.success("تم إضافة الطاهي");
-    } catch (e) { toast.error((e as Error).message || "فشل"); }
-    finally { setAddingChef(false); }
-  }
-
-  async function onSaveChefPinEdit() {
-    if (!chefPinEdit || chefPinEdit.pin.length < 4) { toast.error("PIN من 4 إلى 6 أرقام"); return; }
-    setSavingChefPinEdit(true);
-    try {
-      const headers = await getServerAuthHeaders();
-      await updateIndividualChefPinFn({ data: { chefId: chefPinEdit.id, pin: chefPinEdit.pin }, headers });
-      setChefPinEdit(null);
-      toast.success("تم تحديث الرمز");
-    } catch (e) { toast.error((e as Error).message || "فشل"); }
-    finally { setSavingChefPinEdit(false); }
-  }
-
-  async function onToggleIndividualChef(chefId: string, is_active: boolean) {
-    try {
-      const headers = await getServerAuthHeaders();
-      await toggleIndividualChefFn({ data: { chefId, is_active }, headers });
-      setIndividualChefs((prev) => prev.map((c) => c.id === chefId ? { ...c, is_active } : c));
-    } catch (e) { toast.error((e as Error).message || "فشل"); }
-  }
-
-  async function onDeleteIndividualChef(chefId: string) {
-    try {
-      const headers = await getServerAuthHeaders();
-      await deleteIndividualChefFn({ data: { chefId }, headers });
-      setIndividualChefs((prev) => prev.filter((c) => c.id !== chefId));
-      toast.success("تم الحذف");
-    } catch (e) { toast.error((e as Error).message || "فشل"); }
-  }
-
-  async function onAddWaiter() {
-    if (!newWaiterName.trim()) { toast.error("اكتب اسم الويتر"); return; }
-    if (newWaiterPin.length < 4) { toast.error("PIN من 4 إلى 6 أرقام"); return; }
-    setAddingWaiter(true);
-    try {
-      const headers = await getServerAuthHeaders();
-      await addWaiterFn({ data: { name: newWaiterName.trim(), pin: newWaiterPin }, headers });
-      setNewWaiterName(""); setNewWaiterPin("");
-      await refreshWaiters();
-      toast.success("تم إضافة الويتر");
-    } catch (e) { toast.error((e as Error).message || "فشل"); }
-    finally { setAddingWaiter(false); }
-  }
-
-  async function onSaveWaiterPinEdit() {
-    if (!waiterPinEdit || waiterPinEdit.pin.length < 4) { toast.error("PIN من 4 إلى 6 أرقام"); return; }
-    setSavingWaiterPinEdit(true);
-    try {
-      const headers = await getServerAuthHeaders();
-      await updateWaiterPinFn({ data: { waiterId: waiterPinEdit.id, pin: waiterPinEdit.pin }, headers });
-      setWaiterPinEdit(null);
-      toast.success("تم تحديث الرمز");
-    } catch (e) { toast.error((e as Error).message || "فشل"); }
-    finally { setSavingWaiterPinEdit(false); }
-  }
-
-  async function onToggleWaiter(waiterId: string, is_active: boolean) {
-    try {
-      const headers = await getServerAuthHeaders();
-      await toggleWaiterFn({ data: { waiterId, is_active }, headers });
-      setWaiters((prev) => prev.map((w) => w.id === waiterId ? { ...w, is_active } : w));
-    } catch (e) { toast.error((e as Error).message || "فشل"); }
-  }
-
-  async function onDeleteWaiter(waiterId: string) {
-    try {
-      const headers = await getServerAuthHeaders();
-      await deleteWaiterFn({ data: { waiterId }, headers });
-      setWaiters((prev) => prev.filter((w) => w.id !== waiterId));
-      toast.success("تم الحذف");
-    } catch (e) { toast.error((e as Error).message || "فشل"); }
-  }
-
   useEffect(() => {
     (async () => {
       try {
-      const { data: u } = await supabase.auth.getUser();
-      if (!u.user) {
-        // Preview mode — try localStorage first, then mock
-        const saved = localStorage.getItem("sahl_dz_restaurant");
-        if (saved) {
-          try {
-            const parsed = JSON.parse(saved);
-            setR(parsed);
-            setName(parsed.name ?? "");
-            setGUrl(parsed.google_maps_review_url ?? "");
-            setLogoPreview(parsed.logo_url);
-            setLoading(false);
-            return;
-          } catch { /* ignore */ }
+        const { data: u } = await supabase.auth.getUser();
+        if (!u.user) {
+          // Preview mode — try localStorage first, then mock
+          const saved = localStorage.getItem("sahl_dz_restaurant");
+          if (saved) {
+            try {
+              const parsed = JSON.parse(saved);
+              setR(parsed);
+              setName(parsed.name ?? "");
+              setGUrl(parsed.google_maps_review_url ?? "");
+              setLogoPreview(parsed.logo_url);
+            } catch {
+              /* ignore */
+            }
+          } else {
+            setR({
+              id: "mock-id",
+              name: "مطعم السهل",
+              logo_url: null,
+              google_maps_review_url: "https://g.page/example",
+            });
+            setName("مطعم السهل");
+            setGUrl("https://g.page/example");
+            localStorage.setItem(
+              "sahl_dz_restaurant",
+              JSON.stringify({
+                id: "mock-id",
+                name: "مطعم السهل",
+                logo_url: null,
+                google_maps_review_url: "https://g.page/example",
+              }),
+            );
+          }
+          void refreshEmployees();
+          setLoading(false);
+          return;
         }
-        setR({ id: "mock-id", name: "مطعم السهل", logo_url: null, google_maps_review_url: "https://g.page/example" });
-        setName("مطعم السهل");
-        setGUrl("https://g.page/example");
-        setStaff([
-          { id: "s1", user_id: "u1", role: "staff", email: "ahmed@example.com" },
-          { id: "s2", user_id: "u2", role: "production_manager", email: "fatima@example.com" },
-          { id: "s3", user_id: "u3", role: "operations_manager", email: "karim@example.com" },
-        ]);
-        setLoading(false);
-        return;
-      }
-      const { data: rows, error } = await supabase
-        .from("restaurants")
-        .select("id, name, logo_url, google_maps_review_url, activation_code")
-        .eq("owner_id", u.user.id)
-        .limit(1);
-      const data = rows?.[0];
-      if (error) {
-        // In preview mode, treat as no restaurant (not an error)
-        setLoading(false);
-        return;
-      }
-      if (!data) {
-        // No restaurant in Firestore — try localStorage fallback
-        const saved = localStorage.getItem("sahl_dz_restaurant");
-        if (saved) {
-          try {
-            const parsed = JSON.parse(saved);
-            setR(parsed);
-            setName(parsed.name ?? "");
-            setGUrl(parsed.google_maps_review_url ?? "");
-            setLogoPreview(parsed.logo_url);
-            setLoading(false);
-            return;
-          } catch { /* ignore */ }
-        }
-        setLoading(false);
-        return;
-      }
-      setR(data);
-      setName(data.name);
-      setGUrl(data.google_maps_review_url ?? "");
-      setLogoPreview(data.logo_url);
-      void loadTeam(data.id);
-      // Load splash settings
-      try {
-        const headers = await getServerAuthHeaders();
-        const sp = await getSplashFn({ headers });
-        setSplashEnabled(sp.splash_enabled ?? true);
-        setSplashAlwaysShow(sp.splash_always_show ?? false);
-        setCoverType((sp.cover_type as "image" | "video") || "image");
-        setCoverImageUrl(sp.cover_image_url);
-        setCoverVideoUrl(sp.cover_video_url);
-        setCoverPreview(sp.cover_type === "video" ? sp.cover_video_url : sp.cover_image_url);
-        setTagline(sp.tagline ?? "");
-        setSplashDescription(sp.splash_description ?? "");
-        setSplashFeatures(sp.features ?? []);
-        setInstagramUrl(sp.instagram_url ?? "");
-        setFacebookUrl(sp.facebook_url ?? "");
-        setWhatsappNumber(sp.whatsapp_number ?? "");
-        setBrandColor(sp.brand_color || "#7c5cff");
-        setSplashLoaded(true);
-      } catch {
-        setSplashLoaded(true);
-      }
-      try {
-        const { data: rest } = await supabase
+        const { data: rows, error } = await supabase
           .from("restaurants")
-          .select("cashier_enabled, menu_theme")
-          .eq("id", data.id)
-          .maybeSingle();
-        setCashierEnabled(!!rest?.cashier_enabled);
-        if (rest?.menu_theme) {
-          const appearance = parseMenuAppearance(rest.menu_theme);
-          setMenuTheme(appearance.theme);
-          setMenuColor(appearance.color);
-          setMenuLayout(appearance.layout);
-          setHeaderColor(appearance.headerColor ?? appearance.color);
-          setCategoryColor(appearance.categoryColor ?? appearance.color);
-          setButtonColor(appearance.buttonColor ?? appearance.color);
+          .select("id, name, logo_url, google_maps_review_url, activation_code")
+          .eq("owner_id", u.user.id)
+          .limit(1);
+        const data = rows?.[0];
+        if (error) {
+          // In preview mode, treat as no restaurant (not an error)
+          setLoading(false);
+          return;
         }
-      } catch {
-        // ignore
-      }
-      try {
-        const headers = await getServerAuthHeaders();
-        const ds = await getDeliveryStatusFn({ headers });
-        setDeliveryEnabled(!!ds.enabled);
-        setDeliveryToken(ds.token ?? null);
-      } catch {
-        // ignore
-      }
-      try {
-        const headers = await getServerAuthHeaders();
-        const ts = await getTakeawayStatusFn({ headers });
-        setTakeawayEnabled(!!ts.enabled);
-        setTakeawayToken(ts.token ?? null);
-      } catch {
-        // ignore
-      }
-      void refreshIndividualChefs();
-      void refreshWaiters();
-      setLoading(false);
+        if (!data) {
+          // No restaurant in Firestore — try localStorage fallback
+          const saved = localStorage.getItem("sahl_dz_restaurant");
+          if (saved) {
+            try {
+              const parsed = JSON.parse(saved);
+              setR(parsed);
+              setName(parsed.name ?? "");
+              setGUrl(parsed.google_maps_review_url ?? "");
+              setLogoPreview(parsed.logo_url);
+              setLoading(false);
+              return;
+            } catch {
+              /* ignore */
+            }
+          }
+          setLoading(false);
+          return;
+        }
+        setR(data);
+        setName(data.name);
+        setGUrl(data.google_maps_review_url ?? "");
+        setLogoPreview(data.logo_url);
+        void refreshEmployees();
+        // Load splash settings
+        try {
+          const headers = await getServerAuthHeaders();
+          const sp = await getSplashFn({ headers });
+          setSplashEnabled(sp.splash_enabled ?? true);
+          setSplashAlwaysShow(sp.splash_always_show ?? false);
+          setCoverType((sp.cover_type as "image" | "video") || "image");
+          setCoverImageUrl(sp.cover_image_url);
+          setCoverVideoUrl(sp.cover_video_url);
+          setCoverPreview(
+            sp.cover_type === "video" ? sp.cover_video_url : sp.cover_image_url,
+          );
+          setTagline(sp.tagline ?? "");
+          setSplashDescription(sp.splash_description ?? "");
+          setSplashFeatures(sp.features ?? []);
+          setInstagramUrl(sp.instagram_url ?? "");
+          setFacebookUrl(sp.facebook_url ?? "");
+          setWhatsappNumber(sp.whatsapp_number ?? "");
+          setBrandColor(sp.brand_color || "#7c5cff");
+          setSplashLoaded(true);
+        } catch {
+          setSplashLoaded(true);
+        }
+        try {
+          const { data: rest } = await supabase
+            .from("restaurants")
+            .select("menu_theme")
+            .eq("id", data.id)
+            .maybeSingle();
+          if (rest?.menu_theme) {
+            const appearance = parseMenuAppearance(rest.menu_theme);
+            setMenuTheme(appearance.theme);
+            setMenuColor(appearance.color);
+            setMenuLayout(appearance.layout);
+            setHeaderColor(appearance.headerColor ?? appearance.color);
+            setCategoryColor(appearance.categoryColor ?? appearance.color);
+            setButtonColor(appearance.buttonColor ?? appearance.color);
+          }
+        } catch {
+          // ignore
+        }
+        try {
+          const headers = await getServerAuthHeaders();
+          const ds = await getDeliveryStatusFn({ headers });
+          setDeliveryEnabled(!!ds.enabled);
+          setDeliveryToken(ds.token ?? null);
+        } catch {
+          // ignore
+        }
+        try {
+          const headers = await getServerAuthHeaders();
+          const ts = await getTakeawayStatusFn({ headers });
+          setTakeawayEnabled(!!ts.enabled);
+          setTakeawayToken(ts.token ?? null);
+        } catch {
+          // ignore
+        }
+        setLoading(false);
       } catch (e) {
         toast.error((e as Error).message || "فشل تحميل الإعدادات");
         setLoading(false);
@@ -513,45 +433,148 @@ function SettingsPage() {
     })();
   }, [navigate]);
 
-  function genPin() {
-    const n = Math.floor(1000 + Math.random() * 9000).toString();
-    setPinInput(n);
+  async function refreshEmployees() {
+    try {
+      let headers: Record<string, string> = {};
+      if (getFirebaseDb()) headers = await getServerAuthHeaders();
+      const res = await listStaffFn({ headers });
+      setEmployees((res.staff ?? []) as StaffRecord[]);
+    } catch {
+      /* ignore */
+    }
   }
 
-  async function onSavePin() {
-    if (!/^\d{4}$/.test(pinInput)) {
-      toast.error("يجب أن يكون الرمز 4 أرقام");
+  const openAdd = () => {
+    setAddForm(EMPTY_FORM);
+    setAddedCreds(null);
+    setAddOpen(true);
+  };
+
+  async function submitAdd() {
+    const frm = addForm;
+    if (!frm.name.trim()) {
+      toast.error("أدخل اسم الموظف");
       return;
     }
-    setSavingPin(true);
+    if (frm.pin && !/^\d{4,6}$/.test(frm.pin)) {
+      toast.error("PIN من 4 إلى 6 أرقام");
+      return;
+    }
+    if (frm.showWeb) {
+      if (!frm.email.includes("@")) {
+        toast.error("بريد غير صالح");
+        return;
+      }
+      if (frm.password.length < 6) {
+        toast.error("كلمة السر 6 أحرف على الأقل");
+        return;
+      }
+    }
+    setSavingEmp(true);
     try {
       const headers = await getServerAuthHeaders();
-      await setPin({ data: { pin: pinInput }, headers });
-      setCashierEnabled(true);
-      setShowPinDialog(pinInput);
-      setPinInput("");
-      toast.success("تم حفظ رمز الكاشير");
+      const res = await addStaffFn({
+        headers,
+        data: {
+          name: frm.name.trim(),
+          pin: frm.pin.trim(),
+          permissions: frm.permissions,
+          email: frm.showWeb ? frm.email.trim().toLowerCase() : null,
+          password: frm.showWeb ? frm.password : null,
+        },
+      });
+      setAddOpen(false);
+      setAddedCreds({ serial: res.serial, pin: res.pin ?? frm.pin });
+      toast.success("تمت إضافة الموظف");
+      await refreshEmployees();
     } catch (e) {
-      toast.error((e as Error).message || "فشل الحفظ");
+      toast.error((e as Error).message || "فشل الإضافة");
     } finally {
-      setSavingPin(false);
+      setSavingEmp(false);
     }
   }
 
-  async function onDisableCashier() {
+  const openEdit = (m: StaffRecord) => {
+    setEditMember(m);
+    setEditForm({
+      name: m.name,
+      pin: "",
+      permissions: m.permissions ?? [],
+      email: m.email ?? "",
+      password: "",
+      showWeb: !!m.email,
+    });
+    setEditOpen(true);
+  };
+
+  async function submitEdit() {
+    if (!editMember) return;
+    if (!editForm.name.trim()) {
+      toast.error("أدخل اسم الموظف");
+      return;
+    }
+    if (editForm.pin && !/^\d{4,6}$/.test(editForm.pin)) {
+      toast.error("PIN من 4 إلى 6 أرقام");
+      return;
+    }
+    if (editForm.showWeb && !editMember.email) {
+      if (!editForm.email.includes("@")) {
+        toast.error("بريد غير صالح");
+        return;
+      }
+      if (editForm.password.length < 6) {
+        toast.error("كلمة السر 6 أحرف على الأقل");
+        return;
+      }
+    }
+    setSavingEmp(true);
     try {
       const headers = await getServerAuthHeaders();
-      await disable({ headers });
-      setCashierEnabled(false);
-      setConfirmDisable(false);
-      toast.success("تم تعطيل نظام الكاشير");
+      const input: Record<string, unknown> = {
+        name: editForm.name.trim(),
+        permissions: editForm.permissions,
+      };
+      if (editForm.pin) input.pin = editForm.pin;
+      if (editForm.showWeb && !editMember.email) {
+        input.email = editForm.email.trim().toLowerCase();
+        input.password = editForm.password;
+      }
+      await updateStaffFn({ headers, data: { staffId: editMember.id, input } });
+      setEditOpen(false);
+      toast.success("تم تعديل الموظف");
+      await refreshEmployees();
     } catch (e) {
-      toast.error((e as Error).message || "فشل التعطيل");
+      toast.error((e as Error).message || "فشل التعديل");
+    } finally {
+      setSavingEmp(false);
     }
   }
 
-  const cashierUrl =
-    typeof window !== "undefined" && r ? `${window.location.origin}/cashier-login?r=${r.id}` : "";
+  async function toggleEmp(m: StaffRecord, active: boolean) {
+    try {
+      const headers = await getServerAuthHeaders();
+      await toggleStaffFn({ headers, data: { staffId: m.id, active } });
+      setEmployees((prev) =>
+        prev.map((x) => (x.id === m.id ? { ...x, frozen: !active } : x)),
+      );
+      toast.success(active ? "تم تفعيل الحساب" : "تم تعطيل الحساب");
+    } catch (e) {
+      toast.error((e as Error).message || "فشل");
+    }
+  }
+
+  async function submitDelete() {
+    if (!deleteMember) return;
+    try {
+      const headers = await getServerAuthHeaders();
+      await deleteStaffFn({ headers, data: { staffId: deleteMember.id } });
+      setEmployees((prev) => prev.filter((x) => x.id !== deleteMember.id));
+      toast.success("تم حذف الموظف");
+      setDeleteMember(null);
+    } catch (e) {
+      toast.error((e as Error).message || "فشل الحذف");
+    }
+  }
 
   async function onEnableDelivery() {
     setDeliveryBusy(true);
@@ -653,22 +676,31 @@ function SettingsPage() {
     ? `https://api.qrserver.com/v1/create-qr-code/?size=320x320&margin=10&data=${encodeURIComponent(takeawayUrl)}`
     : "";
 
-  async function saveMenuAppearance(next: Partial<{
-    theme: MenuThemeId;
-    color: string;
-    layout: MenuLayoutId;
-    headerColor: string;
-    categoryColor: string;
-    buttonColor: string;
-    syncAll: boolean;
-  }>) {
+  async function saveMenuAppearance(
+    next: Partial<{
+      theme: MenuThemeId;
+      color: string;
+      layout: MenuLayoutId;
+      headerColor: string;
+      categoryColor: string;
+      buttonColor: string;
+      syncAll: boolean;
+    }>,
+  ) {
     const nextTheme = next.theme ?? menuTheme;
     const nextColor = (next.color ?? menuColor).toUpperCase();
     const nextLayout = next.layout ?? menuLayout;
-    const sync = next.syncAll || next.color !== undefined || next.theme !== undefined;
-    const nextHeader = (next.headerColor ?? (sync ? nextColor : headerColor)).toUpperCase();
-    const nextCategory = (next.categoryColor ?? (sync ? nextColor : categoryColor)).toUpperCase();
-    const nextButton = (next.buttonColor ?? (sync ? nextColor : buttonColor)).toUpperCase();
+    const sync =
+      next.syncAll || next.color !== undefined || next.theme !== undefined;
+    const nextHeader = (
+      next.headerColor ?? (sync ? nextColor : headerColor)
+    ).toUpperCase();
+    const nextCategory = (
+      next.categoryColor ?? (sync ? nextColor : categoryColor)
+    ).toUpperCase();
+    const nextButton = (
+      next.buttonColor ?? (sync ? nextColor : buttonColor)
+    ).toUpperCase();
     setSavingAppearance(true);
     try {
       const headers = await getServerAuthHeaders();
@@ -698,60 +730,6 @@ function SettingsPage() {
       setSavingAppearance(false);
     }
   }
-
-  async function loadTeam(_rid?: string) {
-    const headers = await getServerAuthHeaders();
-    const res = await listStaffFn({ headers });
-    setStaff(res.staff as StaffMember[]);
-  }
-
-  const onCreateStaff = async () => {
-    if (!r) return;
-    const email = inviteEmail.trim().toLowerCase();
-    if (!email || !email.includes("@")) { toast.error("البريد غير صالح"); return; }
-    if (invitePassword.length < 6) { toast.error("كلمة السر 6 أحرف على الأقل"); return; }
-    setInviting(true);
-    try {
-      const headers = await getServerAuthHeaders();
-      await createStaffFn({ data: { email, password: invitePassword, role: inviteRole }, headers });
-      toast.success(`تم إنشاء حساب ${MANAGER_ROLE_LABELS[inviteRole]} ✅`);
-      setInviteEmail("");
-      setInvitePassword("");
-      await loadTeam();
-    } catch (e) {
-      toast.error((e as Error).message || "فشل الإنشاء");
-    } finally {
-      setInviting(false);
-    }
-  };
-
-  const onRemoveStaff = async (userId: string) => {
-    try {
-      const headers = await getServerAuthHeaders();
-      await deleteStaffFn({ data: { staffUserId: userId }, headers });
-      setStaff((x) => x.filter((s) => s.user_id !== userId));
-      toast.success("تم حذف الحساب");
-    } catch (e) {
-      toast.error((e as Error).message || "فشل الحذف");
-    }
-  };
-
-  const onUpdateStaffPw = async () => {
-    if (!staffPwEdit) return;
-    if (staffNewPw.length < 6) { toast.error("كلمة السر 6 أحرف على الأقل"); return; }
-    setSavingStaffPw(true);
-    try {
-      const headers = await getServerAuthHeaders();
-      await updateStaffPwFn({ data: { staffUserId: staffPwEdit.userId, newPassword: staffNewPw }, headers });
-      toast.success("تم تغيير كلمة السر");
-      setStaffPwEdit(null);
-      setStaffNewPw("");
-    } catch (e) {
-      toast.error((e as Error).message || "فشل التغيير");
-    } finally {
-      setSavingStaffPw(false);
-    }
-  };
 
   const onPickLogo = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
@@ -785,7 +763,9 @@ function SettingsPage() {
         const ext = (logoFile.name.split(".").pop() || "png").toLowerCase();
         const path = `${r.id}/logo-${Date.now()}.${ext}`;
         const dataUrl = `data:${logoFile.type || "image/png"};base64,${base64}`;
-        const up = await supabase.storage.from("restaurant-logos").upload(path, dataUrl);
+        const up = await supabase.storage
+          .from("restaurant-logos")
+          .upload(path, dataUrl);
         if (up.error) {
           logoWarning = true;
         } else {
@@ -808,11 +788,16 @@ function SettingsPage() {
         name: name.trim(),
         logo_url: logoUrl,
         google_maps_review_url: gUrl.trim() || null,
-      };      setR(updatedR);
+      };
+      setR(updatedR);
       localStorage.setItem("sahl_dz_restaurant", JSON.stringify(updatedR));
       window.dispatchEvent(new Event("restaurant-updated"));
       setLogoFile(null);
-      toast.success(logoWarning ? "تم حفظ التغييرات، لكن فشل رفع الشعار" : "تم حفظ التغييرات بنجاح");
+      toast.success(
+        logoWarning
+          ? "تم حفظ التغييرات، لكن فشل رفع الشعار"
+          : "تم حفظ التغييرات بنجاح",
+      );
     } catch (e) {
       toast.error((e as Error).message || "فشل الحفظ");
     } finally {
@@ -838,7 +823,10 @@ function SettingsPage() {
       await supabase.from("menu_items").delete().eq("restaurant_id", r.id);
       await supabase.from("categories").delete().eq("restaurant_id", r.id);
       await supabase.from("tables").delete().eq("restaurant_id", r.id);
-      const { error } = await supabase.from("restaurants").delete().eq("id", r.id);
+      const { error } = await supabase
+        .from("restaurants")
+        .delete()
+        .eq("id", r.id);
       if (error) throw new Error(error.message);
       await supabase.auth.signOut();
       toast.success("تم حذف الحساب");
@@ -865,7 +853,9 @@ function SettingsPage() {
             <Settings className="w-8 h-8 text-[var(--primary)]" />
           </div>
           <h1 className="text-xl font-bold">إنشاء مطعمك</h1>
-          <p className="text-sm text-muted-foreground">أضف بيانات مطعمك للبدء</p>
+          <p className="text-sm text-muted-foreground">
+            أضف بيانات مطعمك للبدء
+          </p>
         </div>
         <div className="glass shadow-glass rounded-2xl border border-border/60 p-6 space-y-4">
           <div className="space-y-2">
@@ -888,7 +878,10 @@ function SettingsPage() {
           </div>
           <Button
             onClick={async () => {
-              if (!name.trim()) { toast.error("أدخل اسم المطعم"); return; }
+              if (!name.trim()) {
+                toast.error("أدخل اسم المطعم");
+                return;
+              }
               setSaving(true);
               try {
                 const { data: u } = await supabase.auth.getUser();
@@ -903,25 +896,40 @@ function SettingsPage() {
                       const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
                       let c = "REST-";
                       for (let i = 0; i < 8; i++) {
-                        c += chars.charAt(Math.floor(Math.random() * chars.length));
+                        c += chars.charAt(
+                          Math.floor(Math.random() * chars.length),
+                        );
                         if (i === 3) c += "-";
                       }
                       return c;
                     })(),
                     created_at: new Date().toISOString(),
                   })
-                  .select("id, name, logo_url, google_maps_review_url, activation_code")
+                  .select(
+                    "id, name, logo_url, google_maps_review_url, activation_code",
+                  )
                   .single();
                 if (error) throw error;
                 setR(data);
-                localStorage.setItem("sahl_dz_restaurant", JSON.stringify(data));
+                localStorage.setItem(
+                  "sahl_dz_restaurant",
+                  JSON.stringify(data),
+                );
                 window.dispatchEvent(new Event("restaurant-updated"));
                 toast.success("تم إنشاء المطعم بنجاح");
-              } catch (e: any) {
+              } catch {
                 // Fallback for preview mode — use local state + localStorage
-                const mockR = { id: "mock-" + Date.now(), name: name.trim(), logo_url: null, google_maps_review_url: gUrl || null };
+                const mockR = {
+                  id: "mock-" + Date.now(),
+                  name: name.trim(),
+                  logo_url: null,
+                  google_maps_review_url: gUrl || null,
+                };
                 setR(mockR);
-                localStorage.setItem("sahl_dz_restaurant", JSON.stringify(mockR));
+                localStorage.setItem(
+                  "sahl_dz_restaurant",
+                  JSON.stringify(mockR),
+                );
                 window.dispatchEvent(new Event("restaurant-updated"));
                 toast.success("تم إنشاء المطعم (وضع المعاينة)");
               } finally {
@@ -947,7 +955,9 @@ function SettingsPage() {
           <Settings className="w-6 h-6" />
         </div>
         <div className="min-w-0">
-          <h1 className="text-xl md:text-2xl font-bold text-foreground tracking-tight">إعدادات المطعم</h1>
+          <h1 className="text-xl md:text-2xl font-bold text-foreground tracking-tight">
+            إعدادات المطعم
+          </h1>
           <p className="text-xs md:text-sm text-muted-foreground mt-0.5">
             عدّل معلومات مطعمك في أي وقت
           </p>
@@ -959,13 +969,19 @@ function SettingsPage() {
         <div className="glass shadow-glass rounded-2xl border-2 border-primary/30 p-6 space-y-4 bg-gradient-to-br from-primary/5 to-transparent">
           <div className="flex items-center gap-2">
             <KeyRound className="w-5 h-5 text-primary" />
-            <h3 className="text-lg font-bold">رقم تسجيل (تسجيل الدخول على الأجهزة)</h3>
+            <h3 className="text-lg font-bold">
+              رقم تسجيل (تسجيل الدخول على الأجهزة)
+            </h3>
           </div>
           <p className="text-sm text-muted-foreground">
-            هذا الرمز مطلوب عند فتح تطبيق سطح المكتب / تسجيل دخول الموظفين من أجهزة جديدة. شاركه مع موظفيك أو احتفظ به.
+            هذا الرمز مطلوب عند فتح تطبيق سطح المكتب / تسجيل دخول الموظفين من
+            أجهزة جديدة. شاركه مع موظفيك أو احتفظ به.
           </p>
           <div className="flex items-center gap-2 rounded-xl bg-muted/40 border p-3">
-            <div dir="ltr" className="font-mono text-lg md:text-2xl font-bold tracking-widest text-primary">
+            <div
+              dir="ltr"
+              className="font-mono text-lg md:text-2xl font-bold tracking-widest text-primary"
+            >
               {r.activation_code}
             </div>
             <Button
@@ -983,12 +999,16 @@ function SettingsPage() {
             </Button>
           </div>
           <div className="rounded-xl bg-blue-50 border border-blue-200 p-3 text-xs text-blue-900">
-            💡 استخدم هذا الرمز مع رقم الموظف (السيريال) ورمز PIN عند تسجيل الدخول من تطبيق سطح المكتب.
+            💡 استخدم هذا الرمز مع رقم الموظف (السيريال) ورمز PIN عند تسجيل
+            الدخول من تطبيق سطح المكتب.
           </div>
         </div>
       ) : null}
 
-      <div data-annotate="settings-info" className="glass shadow-glass rounded-2xl border border-border/60 p-6 space-y-5">
+      <div
+        data-annotate="settings-info"
+        className="glass shadow-glass rounded-2xl border border-border/60 p-6 space-y-5"
+      >
         {/* Logo */}
         <div className="space-y-2">
           <Label>شعار المطعم</Label>
@@ -1048,10 +1068,134 @@ function SettingsPage() {
         </div>
 
         <div className="pt-2">
-          <Button onClick={onSave} disabled={saving} className="w-full sm:w-auto">
+          <Button
+            onClick={onSave}
+            disabled={saving}
+            className="w-full sm:w-auto"
+          >
             {saving && <Loader2 className="w-4 h-4 ml-2 animate-spin" />}
             حفظ التغييرات
           </Button>
+        </div>
+      </div>
+
+      {/* ─── الموظفون (unified) ─────────────────────────────── */}
+      <div
+        data-annotate="settings-staff"
+        className="glass shadow-glass rounded-2xl border border-border/60 p-6 space-y-4"
+      >
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-2">
+            <Users className="w-5 h-5 text-primary" />
+            <h3 className="text-lg font-bold">الموظفون</h3>
+          </div>
+          <Button onClick={openAdd} className="gap-1.5">
+            <UserPlus className="w-4 h-4" />
+            إضافة موظف
+          </Button>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          مكان واحد لكل الموظفين: الاسم + PIN + الصلاحيات (مطبخ، نادل، كاشير،
+          وأقسام الإدارة). الموظف الذي له أكثر من صلاحية يجدها تبويبات في تطبيق
+          سطح المكتب.
+        </p>
+
+        {employees.length === 0 ? (
+          <div className="rounded-xl bg-muted/40 p-6 text-center text-sm text-muted-foreground">
+            لا يوجد موظفون بعد — أضف أول موظف
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {employees.map((emp) => (
+              <div
+                key={emp.id}
+                className="flex items-center justify-between gap-2 rounded-xl bg-muted/40 px-3 py-2.5"
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="flex flex-col min-w-0">
+                    <span className="font-medium truncate">{emp.name}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(emp.serial ?? "");
+                        toast.success("تم نسخ رقم الموظف");
+                      }}
+                      className="text-[11px] font-mono text-muted-foreground hover:text-primary underline decoration-dotted text-left"
+                      dir="ltr"
+                      title="نسخ رقم الموظف"
+                    >
+                      {emp.serial ?? ""} ⧉
+                    </button>
+                    {!emp.frozen && (
+                      <span className="text-xs text-muted-foreground">نشط</span>
+                    )}
+                    {emp.frozen && (
+                      <span className="text-xs text-red-500">موقوف</span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5 shrink-0 flex-wrap max-w-[45%] justify-end">
+                  {(emp.permissions ?? []).slice(0, 3).map((p) => (
+                    <span
+                      key={p}
+                      className="text-[10px] px-2 py-0.5 rounded-full bg-[var(--primary)]/10 text-[var(--primary)] border border-[var(--primary)]/20"
+                    >
+                      {permissionLabel(p)}
+                    </span>
+                  ))}
+                  {(emp.permissions ?? []).length > 3 && (
+                    <span className="text-[10px] text-muted-foreground">
+                      +{(emp.permissions ?? []).length - 3}
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-1 shrink-0">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => openEdit(emp)}
+                    title="تعديل"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => void toggleEmp(emp, emp.frozen)}
+                    title={emp.frozen ? "تفعيل" : "تعطيل"}
+                  >
+                    <Power
+                      className={`w-3.5 h-3.5 ${emp.frozen ? "text-muted-foreground" : "text-green-600"}`}
+                    />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setDeleteMember(emp)}
+                    className="text-red-500 hover:text-red-700"
+                    title="حذف"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {r && (
+          <p className="text-xs text-muted-foreground">
+            تسجيل الدخول على سطح المكتب: رقم الموظف (السيريال) + PIN. الموظفون
+            ذوو صلاحيات واجهات (مطبخ/نادل/كاشير) وأقسام إدارة يفتحونها من
+            تبويبات التطبيق.
+          </p>
+        )}
+
+        <div className="rounded-xl bg-blue-50 border border-blue-200 p-3 text-xs text-blue-900">
+          إدارة تفصيلية للموظفين (تجميد بسبب، سجل الأداء) موجودة في قسم الموظفين
+          من لوحة التشغيل.
         </div>
       </div>
 
@@ -1060,7 +1204,9 @@ function SettingsPage() {
         <div className="flex items-center gap-2">
           <Sparkles className="w-5 h-5 text-primary" />
           <h3 className="text-lg font-bold">صفحة الترحيب (Splash)</h3>
-          {!splashLoaded && <Loader2 className="w-4 h-4 animate-spin text-primary" />}
+          {!splashLoaded && (
+            <Loader2 className="w-4 h-4 animate-spin text-primary" />
+          )}
         </div>
         <p className="text-sm text-muted-foreground">
           أول ما يراه العميل عند مسح QR. يظهر مرة واحدة كل 24 ساعة.
@@ -1072,7 +1218,8 @@ function SettingsPage() {
             <div className="space-y-0.5">
               <div className="font-semibold">تفعيل صفحة الترحيب</div>
               <p className="text-xs text-muted-foreground">
-                إذا أوقفتها، سيدخل العميل مباشرة إلى المنيو دون رؤية صفحة الترحيب.
+                إذا أوقفتها، سيدخل العميل مباشرة إلى المنيو دون رؤية صفحة
+                الترحيب.
               </p>
             </div>
             <input
@@ -1082,11 +1229,16 @@ function SettingsPage() {
               onChange={(e) => setSplashEnabled(e.target.checked)}
             />
           </label>
-          <label className={`flex items-start justify-between gap-4 cursor-pointer ${!splashEnabled ? "opacity-50" : ""}`}>
+          <label
+            className={`flex items-start justify-between gap-4 cursor-pointer ${!splashEnabled ? "opacity-50" : ""}`}
+          >
             <div className="space-y-0.5">
-              <div className="font-semibold">إظهار الصفحة في كل زيارة (24 ساعة)</div>
+              <div className="font-semibold">
+                إظهار الصفحة في كل زيارة (24 ساعة)
+              </div>
               <p className="text-xs text-muted-foreground">
-                عند التفعيل، تظهر صفحة الترحيب للعميل في كل مرة يفتح فيها المنيو حتى خلال نفس اليوم. عند الإيقاف، تظهر مرة واحدة فقط كل 24 ساعة.
+                عند التفعيل، تظهر صفحة الترحيب للعميل في كل مرة يفتح فيها المنيو
+                حتى خلال نفس اليوم. عند الإيقاف، تظهر مرة واحدة فقط كل 24 ساعة.
               </p>
             </div>
             <input
@@ -1126,14 +1278,24 @@ function SettingsPage() {
 
         {/* Cover preview */}
         <div className="space-y-2">
-          <Label>{coverType === "video" ? "فيديو الغلاف" : "صورة الغلاف"}</Label>
+          <Label>
+            {coverType === "video" ? "فيديو الغلاف" : "صورة الغلاف"}
+          </Label>
           <div className="flex items-center gap-4">
             <div className="w-32 h-24 rounded-xl overflow-hidden bg-muted border flex items-center justify-center">
               {coverPreview ? (
                 coverType === "video" ? (
-                  <video src={coverPreview} muted className="w-full h-full object-cover" />
+                  <video
+                    src={coverPreview}
+                    muted
+                    className="w-full h-full object-cover"
+                  />
                 ) : (
-                  <img src={coverPreview} alt="cover" className="w-full h-full object-cover" />
+                  <img
+                    src={coverPreview}
+                    alt="cover"
+                    className="w-full h-full object-cover"
+                  />
                 )
               ) : (
                 <span className="text-xs text-muted-foreground">لا يوجد</span>
@@ -1147,7 +1309,12 @@ function SettingsPage() {
                 className="hidden"
                 onChange={onPickCover}
               />
-              <Button type="button" variant="outline" size="sm" onClick={() => coverFileRef.current?.click()}>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => coverFileRef.current?.click()}
+              >
                 <Upload className="w-4 h-4 ml-2" />
                 اختر ملف
               </Button>
@@ -1205,10 +1372,16 @@ function SettingsPage() {
           <Label>المميزات (حد أقصى 8)</Label>
           <div className="flex flex-wrap gap-2">
             {splashFeatures.map((f, idx) => (
-              <div key={idx} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-muted text-sm">
+              <div
+                key={idx}
+                className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-muted text-sm"
+              >
                 <span className="text-xs text-muted-foreground">{f.icon}</span>
                 <span>{f.text}</span>
-                <button onClick={() => removeFeature(idx)} className="text-muted-foreground hover:text-destructive">
+                <button
+                  onClick={() => removeFeature(idx)}
+                  className="text-muted-foreground hover:text-destructive"
+                >
                   <X className="w-3.5 h-3.5" />
                 </button>
               </div>
@@ -1233,13 +1406,27 @@ function SettingsPage() {
                 }
               }}
             />
-            <Button type="button" variant="outline" size="sm" onClick={addFeature}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={addFeature}
+            >
               <PlusIcon className="w-4 h-4 ml-1" />
               إضافة
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">
-            اسم الأيقونة من <a href="https://lucide.dev/icons" target="_blank" rel="noopener noreferrer" className="underline">lucide</a> (مثل: Sparkles, Leaf, Award).
+            اسم الأيقونة من{" "}
+            <a
+              href="https://lucide.dev/icons"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline"
+            >
+              lucide
+            </a>{" "}
+            (مثل: Sparkles, Leaf, Award).
           </p>
         </div>
 
@@ -1269,7 +1456,11 @@ function SettingsPage() {
         </div>
 
         <div className="pt-2">
-          <Button onClick={onSaveSplash} disabled={splashSaving || !splashLoaded} className="w-full sm:w-auto">
+          <Button
+            onClick={onSaveSplash}
+            disabled={splashSaving || !splashLoaded}
+            className="w-full sm:w-auto"
+          >
             {splashSaving && <Loader2 className="w-4 h-4 ml-2 animate-spin" />}
             حفظ صفحة الترحيب
           </Button>
@@ -1280,10 +1471,13 @@ function SettingsPage() {
         <div className="flex items-center gap-2">
           <Palette className="w-5 h-5 text-primary" />
           <h3 className="text-lg font-bold">شكل منيو العميل</h3>
-          {savingAppearance && <Loader2 className="w-4 h-4 animate-spin text-primary" />}
+          {savingAppearance && (
+            <Loader2 className="w-4 h-4 animate-spin text-primary" />
+          )}
         </div>
         <p className="text-sm text-muted-foreground">
-          اختر لون رئيسي يطبّق على كل العناصر، أو خصّص لون كل قسم على حدة (الهيدر، الفئات، أزرار +).
+          اختر لون رئيسي يطبّق على كل العناصر، أو خصّص لون كل قسم على حدة
+          (الهيدر، الفئات، أزرار +).
         </p>
 
         <div className="space-y-3">
@@ -1302,11 +1496,17 @@ function SettingsPage() {
                 key={t.id}
                 type="button"
                 disabled={savingAppearance}
-                onClick={() => saveMenuAppearance({ theme: t.id, color: t.primary })}
+                onClick={() =>
+                  saveMenuAppearance({ theme: t.id, color: t.primary })
+                }
                 className={`h-10 min-w-10 rounded-full border-2 transition ${
-                  menuTheme === t.id && menuColor === t.primary ? "border-primary scale-105" : "border-border"
+                  menuTheme === t.id && menuColor === t.primary
+                    ? "border-primary scale-105"
+                    : "border-border"
                 }`}
-                style={{ background: `linear-gradient(135deg, ${t.preview[0]}, ${t.preview[1]}, ${t.preview[2]})` }}
+                style={{
+                  background: `linear-gradient(135deg, ${t.preview[0]}, ${t.preview[1]}, ${t.preview[2]})`,
+                }}
                 aria-label={t.label}
                 title={t.label}
               />
@@ -1315,15 +1515,32 @@ function SettingsPage() {
         </div>
 
         <div className="space-y-3 rounded-2xl border border-dashed p-4">
-          <Label className="text-sm font-bold">تخصيص متقدّم — لون لكل قسم</Label>
+          <Label className="text-sm font-bold">
+            تخصيص متقدّم — لون لكل قسم
+          </Label>
           <p className="text-xs text-muted-foreground">
             ضع لون مختلف لكل عنصر تشاهده في صفحة العميل.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
             {[
-              { key: "header", label: "لون الهيدر العلوي", value: headerColor, setter: (v: string) => saveMenuAppearance({ headerColor: v }) },
-              { key: "category", label: "لون الفئات", value: categoryColor, setter: (v: string) => saveMenuAppearance({ categoryColor: v }) },
-              { key: "button", label: "لون أزرار + والسلة", value: buttonColor, setter: (v: string) => saveMenuAppearance({ buttonColor: v }) },
+              {
+                key: "header",
+                label: "لون الهيدر العلوي",
+                value: headerColor,
+                setter: (v: string) => saveMenuAppearance({ headerColor: v }),
+              },
+              {
+                key: "category",
+                label: "لون الفئات",
+                value: categoryColor,
+                setter: (v: string) => saveMenuAppearance({ categoryColor: v }),
+              },
+              {
+                key: "button",
+                label: "لون أزرار + والسلة",
+                value: buttonColor,
+                setter: (v: string) => saveMenuAppearance({ buttonColor: v }),
+              },
             ].map((slot) => (
               <div key={slot.key} className="space-y-2">
                 <Label className="text-xs">{slot.label}</Label>
@@ -1338,7 +1555,9 @@ function SettingsPage() {
                   />
                   <div
                     className="flex-1 h-10 rounded-lg border"
-                    style={{ background: `linear-gradient(135deg, ${slot.value}, ${slot.value}cc)` }}
+                    style={{
+                      background: `linear-gradient(135deg, ${slot.value}, ${slot.value}cc)`,
+                    }}
                   />
                 </div>
               </div>
@@ -1358,17 +1577,28 @@ function SettingsPage() {
                   onClick={() => saveMenuAppearance({ layout: layout.id })}
                   disabled={savingAppearance}
                   className={`relative text-right rounded-2xl border-2 p-3 transition-all ${
-                    active ? "border-primary shadow-md" : "border-border hover:border-primary/40"
+                    active
+                      ? "border-primary shadow-md"
+                      : "border-border hover:border-primary/40"
                   } ${savingAppearance ? "opacity-70" : ""}`}
                 >
-                  <div className={`grid ${layout.previewClass} gap-2 h-20 mb-3`}>
-                    <span className="rounded-xl" style={{ background: menuColor }} />
+                  <div
+                    className={`grid ${layout.previewClass} gap-2 h-20 mb-3`}
+                  >
+                    <span
+                      className="rounded-xl"
+                      style={{ background: menuColor }}
+                    />
                     <span className="rounded-xl bg-muted" />
                     <span className="rounded-xl bg-muted/70" />
                   </div>
                   <div className="space-y-1">
-                    <span className="block font-bold text-sm">{layout.label}</span>
-                    <span className="block text-xs text-muted-foreground">{layout.description}</span>
+                    <span className="block font-bold text-sm">
+                      {layout.label}
+                    </span>
+                    <span className="block text-xs text-muted-foreground">
+                      {layout.description}
+                    </span>
                   </div>
                   {active && (
                     <div className="absolute top-2 left-2 bg-primary text-primary-foreground rounded-full w-6 h-6 flex items-center justify-center shadow">
@@ -1384,375 +1614,14 @@ function SettingsPage() {
 
       <div className="glass shadow-glass rounded-2xl border border-border/60 p-6 space-y-4">
         <div className="flex items-center gap-2">
-          <Calculator className="w-5 h-5 text-primary" />
-          <h3 className="text-lg font-bold">نظام الكاشير</h3>
-        </div>
-        <p className="text-sm text-muted-foreground">
-          فعّل شاشة كاشير منفصلة بـ PIN — يستخدمها الموظف على تابلت الكاشير
-        </p>
-
-        {cashierEnabled ? (
-          <>
-            <div className="rounded-xl bg-green-50 border border-green-200 p-3 flex items-center gap-2 text-sm text-green-800">
-              <Power className="w-4 h-4" />
-              نظام الكاشير مفعّل
-            </div>
-
-            {r && (
-              <div className="space-y-2">
-                <Label>رابط الكاشير المخصص</Label>
-                <div className="flex gap-2">
-                  <Input value={cashierUrl} readOnly dir="ltr" className="font-mono text-xs" />
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => {
-                      navigator.clipboard.writeText(cashierUrl);
-                      toast.success("تم نسخ الرابط");
-                    }}
-                    aria-label="copy"
-                  >
-                    <Copy className="w-4 h-4" />
-                  </Button>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  افتحه على تابلت الكاشير واحفظه في bookmarks
-                </p>
-              </div>
-            )}
-
-            <div className="space-y-2">
-              <Label>تغيير PIN</Label>
-              <div className="flex gap-2">
-                <Input
-                  type="text"
-                  inputMode="numeric"
-                  maxLength={4}
-                  value={pinInput}
-                  onChange={(e) => setPinInput(e.target.value.replace(/\D/g, "").slice(0, 4))}
-                  placeholder="• • • •"
-                  className="text-center text-2xl tracking-[0.5em] font-bold"
-                />
-                <Button variant="outline" onClick={genPin} aria-label="random">
-                  <Shuffle className="w-4 h-4" />
-                </Button>
-                <Button onClick={onSavePin} disabled={savingPin || pinInput.length !== 4}>
-                  {savingPin && <Loader2 className="w-4 h-4 animate-spin ms-2" />}
-                  تحديث
-                </Button>
-              </div>
-            </div>
-
-            <Button
-              variant="outline"
-              onClick={() => setConfirmDisable(true)}
-              className="border-red-300 text-red-700 hover:bg-red-50"
-            >
-              <Power className="w-4 h-4 ms-2" />
-              تعطيل النظام
-            </Button>
-          </>
-        ) : (
-          <div className="space-y-2">
-            <Label>أدخل PIN لتفعيل النظام</Label>
-            <div className="flex gap-2">
-              <Input
-                type="text"
-                inputMode="numeric"
-                maxLength={4}
-                value={pinInput}
-                onChange={(e) => setPinInput(e.target.value.replace(/\D/g, "").slice(0, 4))}
-                placeholder="4 أرقام"
-                className="text-center text-2xl tracking-[0.5em] font-bold"
-              />
-              <Button variant="outline" onClick={genPin} aria-label="random">
-                <Shuffle className="w-4 h-4" />
-              </Button>
-              <Button onClick={onSavePin} disabled={savingPin || pinInput.length !== 4}>
-                {savingPin && <Loader2 className="w-4 h-4 animate-spin ms-2" />}
-                تفعيل
-              </Button>
-            </div>
-          </div>
-        )}
-      </div>
-
-      <Dialog open={!!showPinDialog} onOpenChange={(o) => !o && setShowPinDialog(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>احفظ هذا الرمز</DialogTitle>
-            <DialogDescription>
-              لن تتمكن من رؤيته مرة أخرى. غيّره من الإعدادات إذا فقدته.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="text-center py-6">
-            <div className="text-6xl font-bold tracking-widest text-primary">
-              {showPinDialog}
-            </div>
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                if (showPinDialog) {
-                  navigator.clipboard.writeText(showPinDialog);
-                  toast.success("تم النسخ");
-                }
-              }}
-            >
-              <Copy className="w-4 h-4 ms-2" />
-              نسخ
-            </Button>
-            <Button onClick={() => setShowPinDialog(null)}>تم</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={confirmDisable} onOpenChange={setConfirmDisable}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>تعطيل نظام الكاشير؟</DialogTitle>
-            <DialogDescription>
-              سيتم حذف الـ PIN وكل جلسات الكاشير النشطة. تقدر تفعّله مرة ثانية في أي وقت.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirmDisable(false)}>
-              إلغاء
-            </Button>
-            <Button
-              className="bg-red-600 hover:bg-red-700 text-white"
-              onClick={onDisableCashier}
-            >
-              تعطيل
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* ─── Individual Chef Accounts ─────────────────────────────── */}
-      <div className="glass shadow-glass rounded-2xl border border-border/60 p-6 space-y-4">
-        <div className="flex items-center gap-2">
-          <ChefHat className="w-5 h-5 text-orange-500" />
-          <h3 className="text-lg font-bold">حسابات الطهاة الفردية</h3>
-        </div>
-        <p className="text-sm text-muted-foreground">
-          كل طاهي بحسابه الخاص — يسجّل دخوله بـ PIN ويرى أوامر المطبخ. تتبع إنتاجية كل واحد.
-          عند دخوله من تطبيق سطح المكتب يستخدم رقم الموظف (السيريال) المعروض بجانب الاسم + الـ PIN.
-        </p>
-
-        <div className="flex gap-2 flex-wrap">
-          <Input
-            placeholder="اسم الطاهي"
-            value={newChefName}
-            onChange={(e) => setNewChefName(e.target.value)}
-            className="flex-1 min-w-0"
-          />
-          <Input
-            type="text"
-            inputMode="numeric"
-            placeholder="PIN (4–6 أرقام)"
-            maxLength={6}
-            value={newChefPin}
-            onChange={(e) => setNewChefPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
-            className="w-36 text-center font-mono tracking-widest"
-          />
-          <Button onClick={onAddIndividualChef} disabled={addingChef}>
-            {addingChef ? <Loader2 className="w-4 h-4 animate-spin" /> : <PlusIcon className="w-4 h-4" />}
-            <span className="mr-1">إضافة</span>
-          </Button>
-        </div>
-
-        {individualChefs.length > 0 && (
-          <div className="space-y-2">
-            {individualChefs.map((chef) => (
-              <div key={chef.id} className="flex items-center justify-between bg-muted/40 rounded-xl px-3 py-2 gap-2">
-                <div className="flex items-center gap-2 min-w-0">
-                  <ChefHat className="w-4 h-4 text-orange-400 shrink-0" />
-                  <div className="flex flex-col min-w-0">
-                    <span className="font-medium truncate">{chef.name}</span>
-                    {chef.employee_id && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          navigator.clipboard.writeText(chef.employee_id!);
-                          toast.success("تم نسخ رقم الموظف");
-                        }}
-                        className="text-[11px] font-mono text-muted-foreground hover:text-primary underline decoration-dotted text-left"
-                        dir="ltr"
-                        title="نسخ رقم الموظف"
-                      >
-                        {chef.employee_id} ⧉
-                      </button>
-                    )}
-                    {!chef.is_active && <span className="text-xs text-muted-foreground">(موقوف)</span>}
-                  </div>
-                </div>
-                <div className="flex items-center gap-1 shrink-0">
-                  {chefPinEdit?.id === chef.id ? (
-                    <>
-                      <Input
-                        type="text"
-                        inputMode="numeric"
-                        maxLength={6}
-                        value={chefPinEdit.pin}
-                        onChange={(e) => setChefPinEdit({ ...chefPinEdit, pin: e.target.value.replace(/\D/g, "").slice(0, 6) })}
-                        className="w-28 text-center font-mono h-8 text-sm"
-                        placeholder="PIN جديد"
-                        autoFocus
-                      />
-                      <Button size="sm" onClick={onSaveChefPinEdit} disabled={savingChefPinEdit}>
-                        {savingChefPinEdit ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
-                      </Button>
-                      <Button size="sm" variant="ghost" onClick={() => setChefPinEdit(null)}>
-                        <X className="w-3 h-3" />
-                      </Button>
-                    </>
-                  ) : (
-                    <Button size="sm" variant="ghost" onClick={() => setChefPinEdit({ id: chef.id, pin: "" })} title="تغيير PIN">
-                      <KeyRound className="w-3 h-3" />
-                    </Button>
-                  )}
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => onToggleIndividualChef(chef.id, !chef.is_active)}
-                    title={chef.is_active ? "تعطيل" : "تفعيل"}
-                  >
-                    <Power className={`w-3 h-3 ${chef.is_active ? "text-green-600" : "text-muted-foreground"}`} />
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={() => onDeleteIndividualChef(chef.id)} className="text-red-500 hover:text-red-700">
-                    <Trash2 className="w-3 h-3" />
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {r && (
-          <p className="text-xs text-muted-foreground">
-            رابط دخول المطبخ:{" "}
-            <span className="font-mono">{`${window.location.origin}/kitchen-login?rid=${r.id}`}</span>
-          </p>
-        )}
-      </div>
-
-      {/* ─── Individual Waiter Accounts ───────────────────────────── */}
-      <div className="glass shadow-glass rounded-2xl border border-border/60 p-6 space-y-4">
-        <div className="flex items-center gap-2">
-          <UtensilsCrossed className="w-5 h-5 text-blue-500" />
-          <h3 className="text-lg font-bold">حسابات الويترات</h3>
-        </div>
-        <p className="text-sm text-muted-foreground">
-          كل ويتر بحسابه الخاص — يرى الطلبات الجاهزة ويعلّم الطلب كمُسلَّم. تتبع أداء كل واحد.
-          عند دخوله من تطبيق سطح المكتب يستخدم رقم الموظف (السيريال) المعروض بجانب الاسم + الـ PIN.
-        </p>
-
-        <div className="flex gap-2 flex-wrap">
-          <Input
-            placeholder="اسم الويتر"
-            value={newWaiterName}
-            onChange={(e) => setNewWaiterName(e.target.value)}
-            className="flex-1 min-w-0"
-          />
-          <Input
-            type="text"
-            inputMode="numeric"
-            placeholder="PIN (4–6 أرقام)"
-            maxLength={6}
-            value={newWaiterPin}
-            onChange={(e) => setNewWaiterPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
-            className="w-36 text-center font-mono tracking-widest"
-          />
-          <Button onClick={onAddWaiter} disabled={addingWaiter}>
-            {addingWaiter ? <Loader2 className="w-4 h-4 animate-spin" /> : <PlusIcon className="w-4 h-4" />}
-            <span className="mr-1">إضافة</span>
-          </Button>
-        </div>
-
-        {waiters.length > 0 && (
-          <div className="space-y-2">
-            {waiters.map((w) => (
-              <div key={w.id} className="flex items-center justify-between bg-muted/40 rounded-xl px-3 py-2 gap-2">
-                <div className="flex items-center gap-2 min-w-0">
-                  <UtensilsCrossed className="w-4 h-4 text-blue-400 shrink-0" />
-                  <div className="flex flex-col min-w-0">
-                    <span className="font-medium truncate">{w.name}</span>
-                    {w.employee_id && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          navigator.clipboard.writeText(w.employee_id!);
-                          toast.success("تم نسخ رقم الموظف");
-                        }}
-                        className="text-[11px] font-mono text-muted-foreground hover:text-primary underline decoration-dotted text-left"
-                        dir="ltr"
-                        title="نسخ رقم الموظف"
-                      >
-                        {w.employee_id} ⧉
-                      </button>
-                    )}
-                    {!w.is_active && <span className="text-xs text-muted-foreground">(موقوف)</span>}
-                  </div>
-                </div>
-                <div className="flex items-center gap-1 shrink-0">
-                  {waiterPinEdit?.id === w.id ? (
-                    <>
-                      <Input
-                        type="text"
-                        inputMode="numeric"
-                        maxLength={6}
-                        value={waiterPinEdit.pin}
-                        onChange={(e) => setWaiterPinEdit({ ...waiterPinEdit, pin: e.target.value.replace(/\D/g, "").slice(0, 6) })}
-                        className="w-28 text-center font-mono h-8 text-sm"
-                        placeholder="PIN جديد"
-                        autoFocus
-                      />
-                      <Button size="sm" onClick={onSaveWaiterPinEdit} disabled={savingWaiterPinEdit}>
-                        {savingWaiterPinEdit ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
-                      </Button>
-                      <Button size="sm" variant="ghost" onClick={() => setWaiterPinEdit(null)}>
-                        <X className="w-3 h-3" />
-                      </Button>
-                    </>
-                  ) : (
-                    <Button size="sm" variant="ghost" onClick={() => setWaiterPinEdit({ id: w.id, pin: "" })} title="تغيير PIN">
-                      <KeyRound className="w-3 h-3" />
-                    </Button>
-                  )}
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => onToggleWaiter(w.id, !w.is_active)}
-                    title={w.is_active ? "تعطيل" : "تفعيل"}
-                  >
-                    <Power className={`w-3 h-3 ${w.is_active ? "text-green-600" : "text-muted-foreground"}`} />
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={() => onDeleteWaiter(w.id)} className="text-red-500 hover:text-red-700">
-                    <Trash2 className="w-3 h-3" />
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {r && (
-          <p className="text-xs text-muted-foreground">
-            رابط دخول الويتر:{" "}
-            <span className="font-mono">{`${window.location.origin}/waiter-login?rid=${r.id}`}</span>
-          </p>
-        )}
-      </div>
-
-      <div className="glass shadow-glass rounded-2xl border border-border/60 p-6 space-y-4">
-        <div className="flex items-center gap-2">
           <ShoppingBag className="w-5 h-5 text-primary" />
           <h3 className="text-lg font-bold">الطلب السريع عبر QR (Takeaway)</h3>
         </div>
         <p className="text-sm text-muted-foreground">
-          ضع رمز QR على طاولة الكاشير. العميل يمسح الرمز، يطلب الأكل، يدخل اسمه ورقمه، ويأخذ رمز طلبه (مثلاً <span className="font-mono font-bold">007</span>) لمتابعته. الرمز يُعاد ترقيمه تلقائياً كل يوم الساعة 6 صباحاً.
+          ضع رمز QR على طاولة الكاشير. العميل يمسح الرمز، يطلب الأكل، يدخل اسمه
+          ورقمه، ويأخذ رمز طلبه (مثلاً{" "}
+          <span className="font-mono font-bold">007</span>) لمتابعته. الرمز
+          يُعاد ترقيمه تلقائياً كل يوم الساعة 6 صباحاً.
         </p>
 
         {takeawayEnabled ? (
@@ -1776,7 +1645,9 @@ function SettingsPage() {
                     onClick={() => {
                       const w = window.open("", "_blank");
                       if (w) {
-                        w.document.write(`<html dir="rtl"><head><title>QR الطلب السريع</title></head><body style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;margin:0;"><h2>${name || "اطلب من هنا"}</h2><img src="${takeawayQrUrl.replace("320x320", "600x600")}" style="width:480px;height:480px;"/><p style="font-size:14px;color:#555;">امسح الرمز للطلب</p><script>window.onload=()=>setTimeout(()=>window.print(),300)</script></body></html>`);
+                        w.document.write(
+                          `<html dir="rtl"><head><title>QR الطلب السريع</title></head><body style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;margin:0;"><h2>${name || "اطلب من هنا"}</h2><img src="${takeawayQrUrl.replace("320x320", "600x600")}" style="width:480px;height:480px;"/><p style="font-size:14px;color:#555;">امسح الرمز للطلب</p><script>window.onload=()=>setTimeout(()=>window.print(),300)</script></body></html>`,
+                        );
                         w.document.close();
                       }
                     }}
@@ -1784,7 +1655,10 @@ function SettingsPage() {
                     <QrCode className="w-4 h-4 ms-2" />
                     طباعة الرمز
                   </Button>
-                  <a href={takeawayQrUrl.replace("320x320", "800x800")} download="takeaway-qr.png">
+                  <a
+                    href={takeawayQrUrl.replace("320x320", "800x800")}
+                    download="takeaway-qr.png"
+                  >
                     <Button variant="outline" size="sm">
                       <Upload className="w-4 h-4 ms-2 rotate-180" />
                       تنزيل
@@ -1797,7 +1671,12 @@ function SettingsPage() {
             <div className="space-y-2">
               <Label>الرابط</Label>
               <div className="flex gap-2">
-                <Input value={takeawayUrl} readOnly dir="ltr" className="font-mono text-xs" />
+                <Input
+                  value={takeawayUrl}
+                  readOnly
+                  dir="ltr"
+                  className="font-mono text-xs"
+                />
                 <Button
                   variant="outline"
                   size="icon"
@@ -1815,8 +1694,16 @@ function SettingsPage() {
             </div>
 
             <div className="flex flex-wrap gap-2">
-              <Button variant="outline" onClick={onRegenTakeaway} disabled={takeawayBusy}>
-                {takeawayBusy ? <Loader2 className="w-4 h-4 animate-spin ms-2" /> : <RefreshCw className="w-4 h-4 ms-2" />}
+              <Button
+                variant="outline"
+                onClick={onRegenTakeaway}
+                disabled={takeawayBusy}
+              >
+                {takeawayBusy ? (
+                  <Loader2 className="w-4 h-4 animate-spin ms-2" />
+                ) : (
+                  <RefreshCw className="w-4 h-4 ms-2" />
+                )}
                 توليد رابط جديد
               </Button>
               <Button
@@ -1838,7 +1725,10 @@ function SettingsPage() {
         )}
       </div>
 
-      <Dialog open={confirmDisableTakeaway} onOpenChange={setConfirmDisableTakeaway}>
+      <Dialog
+        open={confirmDisableTakeaway}
+        onOpenChange={setConfirmDisableTakeaway}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>تعطيل الطلب السريع؟</DialogTitle>
@@ -1847,10 +1737,16 @@ function SettingsPage() {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirmDisableTakeaway(false)}>
+            <Button
+              variant="outline"
+              onClick={() => setConfirmDisableTakeaway(false)}
+            >
               إلغاء
             </Button>
-            <Button className="bg-red-600 hover:bg-red-700 text-white" onClick={onDisableTakeaway}>
+            <Button
+              className="bg-red-600 hover:bg-red-700 text-white"
+              onClick={onDisableTakeaway}
+            >
               تعطيل
             </Button>
           </DialogFooter>
@@ -1863,7 +1759,9 @@ function SettingsPage() {
           <h3 className="text-lg font-bold">نظام التوصيل (Delivery)</h3>
         </div>
         <p className="text-sm text-muted-foreground">
-          فعّل رابطًا مخصصًا للطلب من البيت — انسخه وضعه في Bio على Instagram أو شاركه عبر WhatsApp. سيظهر الطلب لدى الطباخ مع اسم العميل ورقم الهاتف وعنوان التوصيل.
+          فعّل رابطًا مخصصًا للطلب من البيت — انسخه وضعه في Bio على Instagram أو
+          شاركه عبر WhatsApp. سيظهر الطلب لدى الطباخ مع اسم العميل ورقم الهاتف
+          وعنوان التوصيل.
         </p>
 
         {deliveryEnabled ? (
@@ -1876,7 +1774,12 @@ function SettingsPage() {
             <div className="space-y-2">
               <Label>رابط التوصيل المخصص</Label>
               <div className="flex gap-2">
-                <Input value={deliveryUrl} readOnly dir="ltr" className="font-mono text-xs" />
+                <Input
+                  value={deliveryUrl}
+                  readOnly
+                  dir="ltr"
+                  className="font-mono text-xs"
+                />
                 <Button
                   variant="outline"
                   size="icon"
@@ -1902,7 +1805,11 @@ function SettingsPage() {
                 onClick={onRegenDelivery}
                 disabled={deliveryBusy}
               >
-                {deliveryBusy ? <Loader2 className="w-4 h-4 animate-spin ms-2" /> : <RefreshCw className="w-4 h-4 ms-2" />}
+                {deliveryBusy ? (
+                  <Loader2 className="w-4 h-4 animate-spin ms-2" />
+                ) : (
+                  <RefreshCw className="w-4 h-4 ms-2" />
+                )}
                 توليد رابط جديد
               </Button>
               <Button
@@ -1924,179 +1831,34 @@ function SettingsPage() {
         )}
       </div>
 
-      <Dialog open={confirmDisableDelivery} onOpenChange={setConfirmDisableDelivery}>
+      <Dialog
+        open={confirmDisableDelivery}
+        onOpenChange={setConfirmDisableDelivery}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>تعطيل نظام التوصيل؟</DialogTitle>
             <DialogDescription>
-              لن يتمكن العملاء من إرسال طلبات توصيل جديدة عبر الرابط حتى تعيد التفعيل.
+              لن يتمكن العملاء من إرسال طلبات توصيل جديدة عبر الرابط حتى تعيد
+              التفعيل.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirmDisableDelivery(false)}>
+            <Button
+              variant="outline"
+              onClick={() => setConfirmDisableDelivery(false)}
+            >
               إلغاء
             </Button>
-            <Button className="bg-red-600 hover:bg-red-700 text-white" onClick={onDisableDelivery}>
+            <Button
+              className="bg-red-600 hover:bg-red-700 text-white"
+              onClick={onDisableDelivery}
+            >
               تعطيل
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      <div data-annotate="settings-staff" className="glass shadow-glass rounded-2xl border border-border/60 p-6 space-y-4">
-        <div className="flex items-center gap-2">
-          <Users className="w-5 h-5 text-primary" />
-          <h3 className="text-lg font-bold">إدارة الفريق (مديرون)</h3>
-        </div>
-        <p className="text-sm text-muted-foreground">
-          أنشئ حسابات للمديرين مباشرة — كل دور يرى فقط ما يخصه في لوحة التحكم
-        </p>
-
-        <div className="flex flex-col gap-3">
-          {/* Role selection */}
-          <div className="flex flex-wrap gap-1">
-            {(Object.entries(MANAGER_ROLE_LABELS) as [ManagerRole, string][]).map(([role, label]) => (
-              <button
-                key={role}
-                onClick={() => setInviteRole(role)}
-                className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
-                  inviteRole === role
-                    ? "bg-primary text-primary-foreground border-primary"
-                    : "bg-muted/40 text-muted-foreground border-transparent hover:border-primary/30"
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-          {/* Role permissions summary */}
-          <div className="rounded-xl border border-border/60 bg-muted/30 p-4 space-y-2">
-            <div className="flex items-center gap-2">
-              <ShieldCheck className="w-4 h-4 text-primary" />
-              <span className="text-sm font-bold">صلاحيات {MANAGER_ROLE_LABELS[inviteRole]}</span>
-            </div>
-            <p className="text-xs text-muted-foreground">{ROLE_DESCRIPTIONS[inviteRole]}</p>
-            <div className="flex flex-wrap gap-1">
-              {areasForRole(inviteRole).map((a) => (
-                <span
-                  key={a.area}
-                  className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border ${
-                    a.write
-                      ? "bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 border-green-200 dark:border-green-700/40"
-                      : "bg-muted text-muted-foreground border-border/60"
-                  }`}
-                >
-                  {a.label}
-                  <span className="opacity-80">{a.write ? "تحرير" : "اطّلاع"}</span>
-                </span>
-              ))}
-            </div>
-          </div>
-          {/* Email */}
-          <Input
-            type="email"
-            placeholder="manager@example.com"
-            value={inviteEmail}
-            onChange={(e) => setInviteEmail(e.target.value)}
-            dir="ltr"
-          />
-          {/* Password */}
-          <div className="relative">
-            <Input
-              type={showInvitePassword ? "text" : "password"}
-              placeholder="كلمة السر (6 أحرف على الأقل)"
-              value={invitePassword}
-              onChange={(e) => setInvitePassword(e.target.value)}
-              dir="ltr"
-              className="pl-10"
-            />
-            <button
-              type="button"
-              onClick={() => setShowInvitePassword((v) => !v)}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-            >
-              {showInvitePassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-            </button>
-          </div>
-          <Button onClick={onCreateStaff} disabled={inviting} className="w-full">
-            {inviting ? <Loader2 className="w-4 h-4 animate-spin ml-2" /> : <UserPlus className="w-4 h-4 ml-2" />}
-            إنشاء حساب {MANAGER_ROLE_LABELS[inviteRole]}
-          </Button>
-        </div>
-
-        {staff.length > 0 && (
-          <div>
-            <h4 className="text-sm font-bold mb-2 text-muted-foreground">أعضاء الفريق ({staff.length})</h4>
-            <ul className="space-y-2">
-              {staff.map((s) => (
-                <li key={s.user_id} className="flex items-center justify-between bg-muted/40 rounded-xl px-3 py-2 gap-2 flex-wrap">
-                  <div className="flex flex-col min-w-0">
-                    <span className="text-sm font-mono truncate" dir="ltr">{s.email}</span>
-                    <span className="text-xs text-primary mt-0.5">{MANAGER_ROLE_LABELS[s.role as ManagerRole] ?? s.role}</span>
-                  </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-7 px-2 text-xs"
-                      onClick={() => { setStaffPwEdit({ userId: s.user_id, email: s.email }); setStaffNewPw(""); }}
-                    >
-                      <KeyRound className="w-3 h-3 ml-1" />
-                      تغيير الباسورد
-                    </Button>
-                    <button
-                      onClick={() => setStaffToRemove(s.user_id)}
-                      className="text-muted-foreground hover:text-red-600 p-1"
-                      aria-label="remove"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-      </div>
-
-      {/* Change staff password dialog */}
-      <Dialog open={!!staffPwEdit} onOpenChange={(o) => { if (!o) setStaffPwEdit(null); }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>تغيير كلمة السر</DialogTitle>
-            <DialogDescription dir="ltr">{staffPwEdit?.email}</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3 py-2">
-            <Label>كلمة السر الجديدة</Label>
-            <Input
-              type="text"
-              placeholder="6 أحرف على الأقل"
-              value={staffNewPw}
-              onChange={(e) => setStaffNewPw(e.target.value)}
-              dir="ltr"
-            />
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setStaffPwEdit(null)}>إلغاء</Button>
-            <Button onClick={onUpdateStaffPw} disabled={savingStaffPw}>
-              {savingStaffPw && <Loader2 className="w-4 h-4 animate-spin ml-2" />}
-              حفظ
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <ConfirmDialog
-        open={staffToRemove !== null}
-        onOpenChange={(o) => { if (!o) setStaffToRemove(null); }}
-        title="هل تريد حذف هذا الحساب نهائياً؟"
-        confirmLabel="حذف"
-        destructive
-        onConfirm={() => {
-          if (staffToRemove) void onRemoveStaff(staffToRemove);
-          setStaffToRemove(null);
-        }}
-      />
 
       <div className="glass shadow-glass rounded-2xl border-2 border-red-200 p-6 space-y-3">
         <h3 className="text-lg font-bold text-red-700">المنطقة الحساسة</h3>
@@ -2115,6 +1877,328 @@ function SettingsPage() {
           حذف الحساب
         </Button>
       </div>
+
+      {/* ─── Add employee dialog ─────────────────────────────── */}
+      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>إضافة موظف جديد</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>الاسم</Label>
+              <Input
+                value={addForm.name}
+                onChange={(e) =>
+                  setAddForm({ ...addForm, name: e.target.value })
+                }
+                placeholder="مثال: أحمد بلحاج"
+                autoFocus
+              />
+            </div>
+
+            <div>
+              <Label>رمز PIN للدخول</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  dir="ltr"
+                  inputMode="numeric"
+                  value={addForm.pin}
+                  onChange={(e) =>
+                    setAddForm({
+                      ...addForm,
+                      pin: e.target.value.replace(/\D/g, "").slice(0, 6),
+                    })
+                  }
+                  placeholder="4–6 أرقام (اتركه فارغاً للتوليد)"
+                  className="font-mono tracking-widest text-center"
+                />
+                <Button
+                  variant="outline"
+                  size="icon"
+                  title="توليد PIN"
+                  onClick={() =>
+                    void generateUniquePin().then((p) =>
+                      setAddForm((f) => ({ ...f, pin: p })),
+                    )
+                  }
+                >
+                  <Shuffle className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+
+            <div>
+              <Label>الصلاحيات</Label>
+              <PermissionsSelect
+                value={addForm.permissions}
+                onChange={(perms) =>
+                  setAddForm({ ...addForm, permissions: perms })
+                }
+              />
+            </div>
+
+            <div className="rounded-xl border border-border/60 bg-muted/30 p-3 space-y-2">
+              <label className="flex items-center justify-between gap-3 cursor-pointer">
+                <span className="text-sm font-semibold">
+                  الدخول من الويب (بريد + كلمة سر) — اختياري
+                </span>
+                <input
+                  type="checkbox"
+                  className="accent-primary"
+                  checked={addForm.showWeb}
+                  onChange={(e) =>
+                    setAddForm({ ...addForm, showWeb: e.target.checked })
+                  }
+                />
+              </label>
+              {addForm.showWeb && (
+                <div className="space-y-2 pt-1">
+                  <Input
+                    type="email"
+                    dir="ltr"
+                    placeholder="employee@restaurant.com"
+                    value={addForm.email}
+                    onChange={(e) =>
+                      setAddForm({ ...addForm, email: e.target.value })
+                    }
+                  />
+                  <div className="relative">
+                    <Input
+                      type={showAddPw ? "text" : "password"}
+                      dir="ltr"
+                      placeholder="كلمة السر (6 أحرف على الأقل)"
+                      value={addForm.password}
+                      onChange={(e) =>
+                        setAddForm({ ...addForm, password: e.target.value })
+                      }
+                      className="pl-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowAddPw((v) => !v)}
+                      className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    >
+                      {showAddPw ? (
+                        <EyeOff className="w-4 h-4" />
+                      ) : (
+                        <Eye className="w-4 h-4" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddOpen(false)}>
+              إلغاء
+            </Button>
+            <Button onClick={() => void submitAdd()} disabled={savingEmp}>
+              {savingEmp && <Loader2 className="w-4 h-4 animate-spin ms-2" />}
+              حفظ
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── Added credentials dialog ────────────────────────── */}
+      <Dialog
+        open={!!addedCreds}
+        onOpenChange={(o) => {
+          if (!o) setAddedCreds(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>احفظ بيانات الموظف</DialogTitle>
+            <DialogDescription>
+              سلّمها للموظف — لن تظهر له بيانات الدخول داخل شاشات التطبيق.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>رقم الموظف (السيريال)</Label>
+              <div className="flex gap-2">
+                <Input
+                  value={addedCreds?.serial ?? ""}
+                  readOnly
+                  dir="ltr"
+                  className="font-mono text-center"
+                />
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => {
+                    navigator.clipboard.writeText(addedCreds?.serial ?? "");
+                    toast.success("تم النسخ");
+                  }}
+                >
+                  <Copy className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+            <div>
+              <Label>رمز PIN</Label>
+              <div className="flex gap-2">
+                <Input
+                  value={addedCreds?.pin ?? ""}
+                  readOnly
+                  dir="ltr"
+                  className="font-mono text-center"
+                />
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => {
+                    navigator.clipboard.writeText(addedCreds?.pin ?? "");
+                    toast.success("تم النسخ");
+                  }}
+                >
+                  <Copy className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setAddedCreds(null)}>تم</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── Edit employee dialog ────────────────────────────── */}
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>تعديل الموظف — {editMember?.name}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>الاسم</Label>
+              <Input
+                value={editForm.name}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, name: e.target.value })
+                }
+              />
+            </div>
+
+            <div>
+              <Label>الصلاحيات</Label>
+              <PermissionsSelect
+                value={editForm.permissions}
+                onChange={(perms) =>
+                  setEditForm({ ...editForm, permissions: perms })
+                }
+              />
+            </div>
+
+            <div>
+              <Label>تغيير PIN (اختياري)</Label>
+              <Input
+                dir="ltr"
+                inputMode="numeric"
+                value={editForm.pin}
+                onChange={(e) =>
+                  setEditForm({
+                    ...editForm,
+                    pin: e.target.value.replace(/\D/g, "").slice(0, 6),
+                  })
+                }
+                placeholder={
+                  editMember?.pin_changed
+                    ? "اتركه فارغاً لعدم التغيير"
+                    : "اتركه فارغاً لعدم التغيير"
+                }
+                className="font-mono tracking-widest text-center"
+              />
+            </div>
+
+            {!editMember?.user_id && (
+              <div className="rounded-xl border border-border/60 bg-muted/30 p-3 space-y-2">
+                <label className="flex items-center justify-between gap-3 cursor-pointer">
+                  <span className="text-sm font-semibold">
+                    تفعيل الدخول من الويب (بريد + كلمة سر)
+                  </span>
+                  <input
+                    type="checkbox"
+                    className="accent-primary"
+                    checked={editForm.showWeb}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, showWeb: e.target.checked })
+                    }
+                  />
+                </label>
+                {editForm.showWeb && (
+                  <div className="space-y-2 pt-1">
+                    <Input
+                      type="email"
+                      dir="ltr"
+                      placeholder="employee@restaurant.com"
+                      value={editForm.email}
+                      onChange={(e) =>
+                        setEditForm({ ...editForm, email: e.target.value })
+                      }
+                    />
+                    <div className="relative">
+                      <Input
+                        type={showEditPw ? "text" : "password"}
+                        dir="ltr"
+                        placeholder="كلمة السر (6 أحرف على الأقل)"
+                        value={editForm.password}
+                        onChange={(e) =>
+                          setEditForm({ ...editForm, password: e.target.value })
+                        }
+                        className="pl-10"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowEditPw((v) => !v)}
+                        className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      >
+                        {showEditPw ? (
+                          <EyeOff className="w-4 h-4" />
+                        ) : (
+                          <Eye className="w-4 h-4" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+            {editMember?.email && (
+              <p className="text-xs text-muted-foreground">
+                الدخول من الويب مفعّل:{" "}
+                <span dir="ltr" className="font-mono">
+                  {editMember.email}
+                </span>
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditOpen(false)}>
+              إلغاء
+            </Button>
+            <Button onClick={() => void submitEdit()} disabled={savingEmp}>
+              {savingEmp && <Loader2 className="w-4 h-4 animate-spin ms-2" />}
+              حفظ
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <ConfirmDialog
+        open={deleteMember !== null}
+        onOpenChange={(o) => {
+          if (!o) setDeleteMember(null);
+        }}
+        title={`حذف الموظف "${deleteMember?.name}"؟`}
+        description="الحذف نهائي ولا يمكن التراجع عنه. سيُحرم الموظف من الدخول نهائياً."
+        confirmLabel="نعم، احذف"
+        destructive
+        onConfirm={() => void submitDelete()}
+      />
 
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <DialogContent>

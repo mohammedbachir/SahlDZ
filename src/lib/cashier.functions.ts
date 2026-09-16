@@ -498,6 +498,7 @@ export type CashierMenuItem = {
   category_id: string | null;
   image_url: string | null;
   is_available: boolean;
+  created_at?: string;
 };
 
 export type CashierCategory = {
@@ -538,32 +539,38 @@ export async function cashierGetMenuCore(token: string) {
     supabase
       .from("categories")
       .select("id,name,display_order")
-      .eq("restaurant_id", restaurantId)
-      .order("display_order", { ascending: true }),
+      .eq("restaurant_id", restaurantId),
     supabase
       .from("menu_items")
       .select("id,name,description,price,category_id,image_url,is_available")
-      .eq("restaurant_id", restaurantId)
-      .order("created_at", { ascending: true }),
+      .eq("restaurant_id", restaurantId),
     supabase
       .from("tables")
       .select("id,table_number")
-      .eq("restaurant_id", restaurantId)
-      .order("table_number", { ascending: true }),
+      .eq("restaurant_id", restaurantId),
   ]);
   if (catRes.error) throw new Error(catRes.error.message);
   if (itemRes.error) throw new Error(itemRes.error.message);
   if (tableRes.error) throw new Error(tableRes.error.message);
 
-  const items = (itemRes.data ?? []) as CashierMenuItem[];
+  const categories = ((catRes.data ?? []) as CashierCategory[]).sort(
+    (a, b) => (a.display_order ?? 0) - (b.display_order ?? 0),
+  );
+  const items = ((itemRes.data ?? []) as CashierMenuItem[]).sort((a, b) =>
+    String(a.created_at ?? "").localeCompare(String(b.created_at ?? "")),
+  );
+  const tables = ((tableRes.data ?? []) as CashierTableInfo[]).sort(
+    (a, b) => (a.table_number ?? 0) - (b.table_number ?? 0),
+  );
+
   const { optionsByItem } = await getMenuOptionsForItemsCore(
     items.map((i) => i.id),
   );
 
   return {
-    categories: (catRes.data ?? []) as CashierCategory[],
+    categories,
     items,
-    tables: (tableRes.data ?? []) as CashierTableInfo[],
+    tables,
     optionsByItem,
   };
 }

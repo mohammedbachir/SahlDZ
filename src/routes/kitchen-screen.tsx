@@ -39,6 +39,8 @@ import { decrementStockForOrder } from "@/lib/stock-consumption";
 import { isPreviewToken, PREVIEW_RESTAURANT } from "@/lib/preview-mode";
 import { tx } from "@/lib/ops-tx";
 import { clearKioskRole } from "@/lib/kiosk-session";
+import { staffLoginFailPath } from "@/lib/staff-session";
+import { StaffTabs } from "@/components/staff-tabs";
 
 export const Route = createFileRoute("/kitchen-screen")({
   component: Page,
@@ -206,7 +208,7 @@ function Page() {
       const rid = r ? (JSON.parse(r) as Restaurant).id : "";
       localStorage.removeItem("individual_chef_token");
       localStorage.removeItem("individual_chef_expires");
-      navigate({ to: "/kitchen-login", search: { rid } });
+      navigate(staffLoginFailPath(rid, "/kitchen-login"));
     };
     const it = localStorage.getItem("individual_chef_token");
     const iexp = localStorage.getItem("individual_chef_expires");
@@ -261,7 +263,7 @@ function Page() {
         localStorage.removeItem("individual_chef_expires");
         localStorage.removeItem("individual_chef_name");
         localStorage.removeItem("individual_chef_id");
-        navigate({ to: "/kitchen-login", search: { rid } });
+        navigate(staffLoginFailPath(rid, "/kitchen-login"));
       }
     }, 60_000);
     return () => clearInterval(id);
@@ -387,7 +389,7 @@ function Page() {
     localStorage.removeItem("individual_chef_name");
     localStorage.removeItem("individual_chef_id");
     clearKioskRole("chef");
-    navigate({ to: "/kitchen-login", search: { rid } });
+    navigate(staffLoginFailPath(rid, "/kitchen-login"));
   }
 
   if (!restaurant) {
@@ -421,6 +423,7 @@ function Page() {
       className="min-h-screen bg-[var(--background)] flex flex-col"
       dir="rtl"
     >
+      <StaffTabs />
       {/* Header */}
       <header className="h-14 bg-[var(--card)] border-b border-[var(--border)] flex items-center justify-between px-4 md:px-6 sticky top-0 z-20">
         <div className="flex items-center gap-3 min-w-0">

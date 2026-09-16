@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { loadUnifiedStaffSession } from "@/lib/staff-session";
 
 const PREVIEW_RESTAURANT_ID = "mock-restaurant-id";
 
@@ -24,6 +25,14 @@ export function useRestaurantId(): {
     async function resolve() {
       try {
         if (typeof window === "undefined") return;
+
+        // Fast path: unified staff session carries the restaurant directly.
+        const staffSession = loadUnifiedStaffSession();
+        if (staffSession?.restaurant?.id) {
+          if (!cancelled) setRestaurantId(staffSession.restaurant.id);
+          return;
+        }
+
         const { data } = await supabase.auth.getUser();
         const userId = data.user?.id;
         if (!userId) {

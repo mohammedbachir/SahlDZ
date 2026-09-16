@@ -25,6 +25,8 @@ import {
 import { isPreviewToken } from "@/lib/preview-mode";
 import { tx } from "@/lib/ops-tx";
 import { clearKioskRole } from "@/lib/kiosk-session";
+import { staffLoginFailPath } from "@/lib/staff-session";
+import { StaffTabs } from "@/components/staff-tabs";
 
 export const Route = createFileRoute("/waiter-screen")({
   component: Page,
@@ -185,6 +187,10 @@ function clearWaiterSession() {
   clearKioskRole("waiter");
 }
 
+function waiterFailPath(): { to: string; search: { rid: string } } {
+  return staffLoginFailPath(waiterLoginSearch().rid, "/waiter-login");
+}
+
 function Page() {
   const navigate = useNavigate();
   const getContext = useServerFn(getWaiterContext);
@@ -288,7 +294,7 @@ function Page() {
       (Date.now() >= Number(token.split(".")[2]) || !token.startsWith("stf."))
     ) {
       localStorage.removeItem("waiter_token");
-      navigate({ to: "/waiter-login", search: waiterLoginSearch() });
+      navigate(waiterFailPath());
       return;
     }
     if (isPreviewToken(token)) {
@@ -319,7 +325,7 @@ function Page() {
       })
       .catch(() => {
         localStorage.removeItem("waiter_token");
-        navigate({ to: "/waiter-login", search: waiterLoginSearch() });
+        navigate(waiterFailPath());
       });
     fetchOrders();
     pollRef.current = setInterval(fetchOrders, 6000);
@@ -335,21 +341,20 @@ function Page() {
       const exp = localStorage.getItem("waiter_expires");
       if (!exp || new Date(exp) < new Date()) {
         clearWaiterSession();
-        navigate({ to: "/waiter-login", search: waiterLoginSearch() });
+        navigate(waiterFailPath());
       }
     }, 60_000);
     return () => clearInterval(id);
   }, [token]);
 
   async function handleLogout() {
-    const search = waiterLoginSearch();
     try {
       await logout({ data: { token } });
     } catch {
       /* ignore */
     }
     clearWaiterSession();
-    navigate({ to: "/waiter-login", search });
+    navigate(waiterFailPath());
   }
 
   async function handleClaim(orderId: string) {
@@ -431,6 +436,7 @@ function Page() {
       className="min-h-screen bg-[var(--background)] flex flex-col"
       dir="rtl"
     >
+      <StaffTabs />
       {/* Header */}
       <header className="h-14 bg-[var(--card)] border-b border-[var(--border)] flex items-center justify-between px-4 md:px-6 sticky top-0 z-20">
         <div className="flex items-center gap-3 min-w-0">

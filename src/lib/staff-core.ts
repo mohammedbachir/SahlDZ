@@ -1,4 +1,3 @@
-import { supabase } from "@/integrations/supabase/client";
 import { getFirebaseDb } from "@/integrations/firebase/config";
 import {
   doc,
@@ -8,7 +7,21 @@ import {
   where,
   getDocs,
 } from "firebase/firestore";
+import {
+  normalizePermissions,
+  derivePermissionsFromRole,
+  type StaffPermission,
+} from "@/lib/staff-permissions";
 
+// ─── Staff roles (legacy single-role labels) ───────────────────
+// Kept here and re-exported for backward compatibility; the canonical
+// definition lives in staff-permissions.ts (catalog + helpers).
+export {
+  ROLE_CASHIER,
+  ROLE_WAITER,
+  ROLE_KITCHEN,
+  GLOBAL_ROLES,
+} from "@/lib/staff-permissions";
 // ─── HMAC signing for session tokens ───────────────────────────
 // In production, set STAFF_TOKEN_SECRET as an env variable.
 // Fallback is used only in preview/development mode.
@@ -39,13 +52,6 @@ export async function hmacVerify(
   const expected = await hmacSign(data);
   return expected === signature;
 }
-
-// ─── Staff roles (Arabic, stored free-text in `staff.role`) ────
-export const ROLE_CASHIER = "كاشير";
-export const ROLE_WAITER = "نادل";
-export const ROLE_KITCHEN = "مطبخ";
-
-export const GLOBAL_ROLES: string[] = [ROLE_CASHIER, ROLE_WAITER, ROLE_KITCHEN];
 
 // ─── Serial / PIN generation (shared by ops UI and server fns) ─
 const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -132,6 +138,7 @@ export async function resolveStaffFromToken(token: string): Promise<{
   staffRow: any;
   restaurantId: string;
   staffId: string;
+  permissions: StaffPermission[];
 }> {
   const parsed = await parseStaffSessionToken(token);
   if (!parsed) throw new Error("الجلسة منتهية — سجّل دخولك من جديد");
@@ -142,11 +149,22 @@ export async function resolveStaffFromToken(token: string): Promise<{
   const staffSnap = await getDoc(doc(db, "staff", parsed.staffId));
   if (!staffSnap.exists()) throw new Error("الحساب غير موجود");
   const staffData = staffSnap.data() as Record<string, any>;
-  const staffRow = { id: staffSnap.id, ...staffData };
+  const permissions = effectiveStaffPermissions(staffData);
+  const staffRow = { id: staffSnap.id, ...staffData, permissions };
 
   return {
     staffRow,
     restaurantId: staffData.restaurant_id as string,
     staffId: parsed.staffId,
+    permissions,
   };
+}
+
+/** Normalize the permissions of a staff row, falling back to the legacy role. */
+export function effectiveStaffPermissions(
+  row: Record<string, any>,
+): StaffPermission[] {
+  const stored = normalizePermissions(row.permissions);
+  if (stored.length > 0) return stored as StaffPermission[];
+  return derivePermissionsFromRole(row.role) as StaffPermission[];
 }

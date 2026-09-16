@@ -1,16 +1,11 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState, useEffect, type FormEvent } from "react";
 import {
-  Eye,
-  EyeOff,
-  Loader2,
-  Mail,
-  Lock,
-  KeyRound,
-  ChefHat,
-  ReceiptText,
-  UserCircle,
-} from "lucide-react";
+  createFileRoute,
+  Link,
+  useNavigate,
+  redirect,
+} from "@tanstack/react-router";
+import { useState, useEffect, type FormEvent } from "react";
+import { Eye, EyeOff, Loader2, Mail, Lock } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { AuthShell } from "@/components/AuthShell";
 import {
@@ -32,75 +27,14 @@ const IS_PREVIEW = !getFirebaseDb();
 const IS_DESKTOP = typeof window !== "undefined" && window.__ELECTRON__;
 
 export const Route = createFileRoute("/login")({
-  beforeLoad: async () => {
-    if (typeof window !== "undefined" && window.__ELECTRON__) return;
-    await redirectIfAuthed();
+  beforeLoad: () => {
+    if (typeof window !== "undefined" && window.__ELECTRON__) {
+      throw redirect({ to: "/staff-login", search: { rid: "" } });
+    }
+    return redirectIfAuthed();
   },
   component: LoginPage,
 });
-
-const ROLE_TABS = [
-  { key: "owner", label: "المدير", icon: UserCircle, to: "/login" },
-  {
-    key: "waiter",
-    label: "نادل",
-    icon: KeyRound,
-    to: "/waiter-login",
-    search: { rid: "" },
-  },
-  {
-    key: "kitchen",
-    label: "مطبخ",
-    icon: ChefHat,
-    to: "/kitchen-login",
-    search: { rid: "" },
-  },
-  {
-    key: "cashier",
-    label: "كاشير",
-    icon: ReceiptText,
-    to: "/cashier-login",
-    search: { r: "" },
-  },
-] as const;
-
-function RoleTabs() {
-  const tabs = IS_DESKTOP
-    ? ROLE_TABS
-    : ROLE_TABS.filter((tab) => tab.key === "owner");
-  const cols = IS_DESKTOP ? "grid-cols-4" : "grid-cols-1";
-  return (
-    <div className={`grid ${cols} gap-2 rounded-xl bg-[var(--muted)] p-1`}>
-      {tabs.map((tab) => {
-        const Icon = tab.icon;
-        const active = tab.to === "/login";
-        const inner = (
-          <>
-            <Icon className="w-4 h-4" />
-            <span>{tab.label}</span>
-          </>
-        );
-        return active ? (
-          <div
-            key={tab.key}
-            className="flex flex-col items-center justify-center gap-1 rounded-lg bg-[var(--card)] border border-[var(--border)] py-2 text-xs font-semibold text-[var(--foreground)] shadow-sm"
-          >
-            {inner}
-          </div>
-        ) : (
-          <Link
-            key={tab.key}
-            to={tab.to}
-            search={tab.search}
-            className="flex flex-col items-center justify-center gap-1 rounded-lg py-2 text-xs font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--card)]/60 transition-colors"
-          >
-            {inner}
-          </Link>
-        );
-      })}
-    </div>
-  );
-}
 
 function LoginPage() {
   const { t } = useTranslation();
@@ -113,13 +47,17 @@ function LoginPage() {
   const [previewRole, setPreviewRole] = useState<"owner" | null>(null);
 
   useEffect(() => {
+    if (typeof window !== "undefined" && window.__ELECTRON__) {
+      navigate({ to: "/staff-login", search: { rid: "" } });
+      return;
+    }
     if (IS_PREVIEW) {
       const stored = localStorage.getItem("sahl_dz_preview_role");
       if (stored === "owner") {
         setPreviewRole("owner");
       }
     }
-  }, []);
+  }, [navigate]);
 
   function enterPreviewMode() {
     cacheSession("preview-owner-id", "/dashboard");
@@ -228,7 +166,6 @@ function LoginPage() {
         }
       >
         <div className="space-y-5">
-          <RoleTabs />
           <form onSubmit={onSubmit} className="space-y-5">
             {/* Email field */}
             <div className="relative">

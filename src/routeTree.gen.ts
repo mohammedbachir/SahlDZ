@@ -23,6 +23,7 @@ import { Route as MobileRouteImport } from './routes/mobile'
 import { Route as OpsRouteImport } from './routes/ops'
 import { Route as SetupRouteImport } from './routes/setup'
 import { Route as SignupRouteImport } from './routes/signup'
+import { Route as StaffLoginRouteImport } from './routes/staff-login'
 import { Route as WaiterLoginRouteImport } from './routes/waiter-login'
 import { Route as WaiterScreenRouteImport } from './routes/waiter-screen'
 import { Route as AccountIndexRouteImport } from './routes/account/index'
@@ -50,6 +51,7 @@ import { Route as OpsEmployeesRouteImport } from './routes/ops.employees'
 import { Route as OpsExpensesRouteImport } from './routes/ops.expenses'
 import { Route as OpsInventoryRouteImport } from './routes/ops.inventory'
 import { Route as OpsInventoryCountRouteImport } from './routes/ops.inventory-count'
+import { Route as OpsMenuRouteImport } from './routes/ops.menu'
 import { Route as OpsRecipesRouteImport } from './routes/ops.recipes'
 import { Route as OpsReportArchiveRouteImport } from './routes/ops.report-archive'
 import { Route as OpsReportsRouteImport } from './routes/ops.reports'
@@ -129,6 +131,11 @@ const SetupRoute = SetupRouteImport.update({
 const SignupRoute = SignupRouteImport.update({
   id: '/signup',
   path: '/signup',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StaffLoginRoute = StaffLoginRouteImport.update({
+  id: '/staff-login',
+  path: '/staff-login',
   getParentRoute: () => rootRouteImport,
 } as any)
 const WaiterLoginRoute = WaiterLoginRouteImport.update({
@@ -266,6 +273,11 @@ const OpsInventoryCountRoute = OpsInventoryCountRouteImport.update({
   path: '/inventory-count',
   getParentRoute: () => OpsRoute,
 } as any)
+const OpsMenuRoute = OpsMenuRouteImport.update({
+  id: '/menu',
+  path: '/menu',
+  getParentRoute: () => OpsRoute,
+} as any)
 const OpsRecipesRoute = OpsRecipesRouteImport.update({
   id: '/recipes',
   path: '/recipes',
@@ -332,6 +344,7 @@ export interface FileRoutesByFullPath {
   '/ops': typeof OpsRouteWithChildren
   '/setup': typeof SetupRoute
   '/signup': typeof SignupRoute
+  '/staff-login': typeof StaffLoginRoute
   '/waiter-login': typeof WaiterLoginRoute
   '/waiter-screen': typeof WaiterScreenRoute
   '/account/settings': typeof AccountSettingsRoute
@@ -356,6 +369,7 @@ export interface FileRoutesByFullPath {
   '/ops/expenses': typeof OpsExpensesRoute
   '/ops/inventory': typeof OpsInventoryRoute
   '/ops/inventory-count': typeof OpsInventoryCountRoute
+  '/ops/menu': typeof OpsMenuRoute
   '/ops/recipes': typeof OpsRecipesRoute
   '/ops/report-archive': typeof OpsReportArchiveRoute
   '/ops/reports': typeof OpsReportsRoute
@@ -383,6 +397,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/setup': typeof SetupRoute
   '/signup': typeof SignupRoute
+  '/staff-login': typeof StaffLoginRoute
   '/waiter-login': typeof WaiterLoginRoute
   '/waiter-screen': typeof WaiterScreenRoute
   '/account/settings': typeof AccountSettingsRoute
@@ -406,6 +421,7 @@ export interface FileRoutesByTo {
   '/ops/expenses': typeof OpsExpensesRoute
   '/ops/inventory': typeof OpsInventoryRoute
   '/ops/inventory-count': typeof OpsInventoryCountRoute
+  '/ops/menu': typeof OpsMenuRoute
   '/ops/recipes': typeof OpsRecipesRoute
   '/ops/report-archive': typeof OpsReportArchiveRoute
   '/ops/reports': typeof OpsReportsRoute
@@ -436,6 +452,7 @@ export interface FileRoutesById {
   '/ops': typeof OpsRouteWithChildren
   '/setup': typeof SetupRoute
   '/signup': typeof SignupRoute
+  '/staff-login': typeof StaffLoginRoute
   '/waiter-login': typeof WaiterLoginRoute
   '/waiter-screen': typeof WaiterScreenRoute
   '/account/settings': typeof AccountSettingsRoute
@@ -460,6 +477,7 @@ export interface FileRoutesById {
   '/ops/expenses': typeof OpsExpensesRoute
   '/ops/inventory': typeof OpsInventoryRoute
   '/ops/inventory-count': typeof OpsInventoryCountRoute
+  '/ops/menu': typeof OpsMenuRoute
   '/ops/recipes': typeof OpsRecipesRoute
   '/ops/report-archive': typeof OpsReportArchiveRoute
   '/ops/reports': typeof OpsReportsRoute
@@ -491,6 +509,7 @@ export interface FileRouteTypes {
     | '/ops'
     | '/setup'
     | '/signup'
+    | '/staff-login'
     | '/waiter-login'
     | '/waiter-screen'
     | '/account/settings'
@@ -515,6 +534,7 @@ export interface FileRouteTypes {
     | '/ops/expenses'
     | '/ops/inventory'
     | '/ops/inventory-count'
+    | '/ops/menu'
     | '/ops/recipes'
     | '/ops/report-archive'
     | '/ops/reports'
@@ -542,6 +562,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/setup'
     | '/signup'
+    | '/staff-login'
     | '/waiter-login'
     | '/waiter-screen'
     | '/account/settings'
@@ -565,6 +586,7 @@ export interface FileRouteTypes {
     | '/ops/expenses'
     | '/ops/inventory'
     | '/ops/inventory-count'
+    | '/ops/menu'
     | '/ops/recipes'
     | '/ops/report-archive'
     | '/ops/reports'
@@ -594,6 +616,7 @@ export interface FileRouteTypes {
     | '/ops'
     | '/setup'
     | '/signup'
+    | '/staff-login'
     | '/waiter-login'
     | '/waiter-screen'
     | '/account/settings'
@@ -618,6 +641,7 @@ export interface FileRouteTypes {
     | '/ops/expenses'
     | '/ops/inventory'
     | '/ops/inventory-count'
+    | '/ops/menu'
     | '/ops/recipes'
     | '/ops/report-archive'
     | '/ops/reports'
@@ -648,6 +672,7 @@ export interface RootRouteChildren {
   OpsRoute: typeof OpsRouteWithChildren
   SetupRoute: typeof SetupRoute
   SignupRoute: typeof SignupRoute
+  StaffLoginRoute: typeof StaffLoginRoute
   WaiterLoginRoute: typeof WaiterLoginRoute
   WaiterScreenRoute: typeof WaiterScreenRoute
   AccountSettingsRoute: typeof AccountSettingsRoute
@@ -755,6 +780,13 @@ declare module '@tanstack/react-router' {
       path: '/signup'
       fullPath: '/signup'
       preLoaderRoute: typeof SignupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/staff-login': {
+      id: '/staff-login'
+      path: '/staff-login'
+      fullPath: '/staff-login'
+      preLoaderRoute: typeof StaffLoginRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/waiter-login': {
@@ -946,6 +978,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OpsInventoryCountRouteImport
       parentRoute: typeof OpsRoute
     }
+    '/ops/menu': {
+      id: '/ops/menu'
+      path: '/menu'
+      fullPath: '/ops/menu'
+      preLoaderRoute: typeof OpsMenuRouteImport
+      parentRoute: typeof OpsRoute
+    }
     '/ops/recipes': {
       id: '/ops/recipes'
       path: '/recipes'
@@ -1089,6 +1128,7 @@ interface OpsRouteChildren {
   OpsExpensesRoute: typeof OpsExpensesRoute
   OpsInventoryRoute: typeof OpsInventoryRoute
   OpsInventoryCountRoute: typeof OpsInventoryCountRoute
+  OpsMenuRoute: typeof OpsMenuRoute
   OpsRecipesRoute: typeof OpsRecipesRoute
   OpsReportArchiveRoute: typeof OpsReportArchiveRoute
   OpsReportsRoute: typeof OpsReportsRoute
@@ -1105,6 +1145,7 @@ const OpsRouteChildren: OpsRouteChildren = {
   OpsExpensesRoute: OpsExpensesRoute,
   OpsInventoryRoute: OpsInventoryRoute,
   OpsInventoryCountRoute: OpsInventoryCountRoute,
+  OpsMenuRoute: OpsMenuRoute,
   OpsRecipesRoute: OpsRecipesRoute,
   OpsReportArchiveRoute: OpsReportArchiveRoute,
   OpsReportsRoute: OpsReportsRoute,
@@ -1131,6 +1172,7 @@ const rootRouteChildren: RootRouteChildren = {
   OpsRoute: OpsRouteWithChildren,
   SetupRoute: SetupRoute,
   SignupRoute: SignupRoute,
+  StaffLoginRoute: StaffLoginRoute,
   WaiterLoginRoute: WaiterLoginRoute,
   WaiterScreenRoute: WaiterScreenRoute,
   AccountSettingsRoute: AccountSettingsRoute,
