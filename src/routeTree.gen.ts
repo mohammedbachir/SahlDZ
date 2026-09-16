@@ -27,7 +27,7 @@ import { Route as StaffLoginRouteImport } from './routes/staff-login'
 import { Route as WaiterLoginRouteImport } from './routes/waiter-login'
 import { Route as WaiterScreenRouteImport } from './routes/waiter-screen'
 import { Route as AccountIndexRouteImport } from './routes/account/index'
-import { Route as AccountSettingsRouteImport } from './routes/account/settings'
+import { Route as AccountSettingsRouteImport } from './routes/account.settings'
 import { Route as DashboardAnalyticsRouteImport } from './routes/dashboard.analytics'
 import { Route as DashboardDownloadRouteImport } from './routes/dashboard.download'
 import { Route as DashboardMenuRouteImport } from './routes/dashboard.menu'
@@ -60,6 +60,20 @@ import { Route as OpsSuppliersRouteImport } from './routes/ops.suppliers'
 import { Route as OpsWasteRouteImport } from './routes/ops.waste'
 import { Route as RTokenRouteImport } from './routes/r.$token'
 import { Route as TTokenRouteImport } from './routes/t.$token'
+import { Route as AccountSettingsIndexRouteImport } from './routes/account.settings.index'
+import { Route as AccountSettingsAppearanceRouteImport } from './routes/account.settings.appearance'
+import { Route as AccountSettingsDeliveryRouteImport } from './routes/account.settings.delivery'
+import { Route as AccountSettingsEmployeesRouteImport } from './routes/account.settings.employees'
+import { Route as AccountSettingsRestaurantRouteImport } from './routes/account.settings.restaurant'
+import { Route as AccountSettingsTakeawayRouteImport } from './routes/account.settings.takeaway'
+import { Route as AccountSettingsWelcomeRouteImport } from './routes/account.settings.welcome'
+import { Route as DashboardSettingsIndexRouteImport } from './routes/dashboard.settings.index'
+import { Route as DashboardSettingsAppearanceRouteImport } from './routes/dashboard.settings.appearance'
+import { Route as DashboardSettingsDeliveryRouteImport } from './routes/dashboard.settings.delivery'
+import { Route as DashboardSettingsEmployeesRouteImport } from './routes/dashboard.settings.employees'
+import { Route as DashboardSettingsRestaurantRouteImport } from './routes/dashboard.settings.restaurant'
+import { Route as DashboardSettingsTakeawayRouteImport } from './routes/dashboard.settings.takeaway'
+import { Route as DashboardSettingsWelcomeRouteImport } from './routes/dashboard.settings.welcome'
 import { Route as OpsEmployeesIndexRouteImport } from './routes/ops.employees.index'
 import { Route as OpsEmployeesEmployeeIdRouteImport } from './routes/ops.employees.$employeeId'
 
@@ -318,6 +332,85 @@ const TTokenRoute = TTokenRouteImport.update({
   path: '/t/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AccountSettingsIndexRoute = AccountSettingsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AccountSettingsRoute,
+} as any)
+const AccountSettingsAppearanceRoute =
+  AccountSettingsAppearanceRouteImport.update({
+    id: '/appearance',
+    path: '/appearance',
+    getParentRoute: () => AccountSettingsRoute,
+  } as any)
+const AccountSettingsDeliveryRoute = AccountSettingsDeliveryRouteImport.update({
+  id: '/delivery',
+  path: '/delivery',
+  getParentRoute: () => AccountSettingsRoute,
+} as any)
+const AccountSettingsEmployeesRoute =
+  AccountSettingsEmployeesRouteImport.update({
+    id: '/employees',
+    path: '/employees',
+    getParentRoute: () => AccountSettingsRoute,
+  } as any)
+const AccountSettingsRestaurantRoute =
+  AccountSettingsRestaurantRouteImport.update({
+    id: '/restaurant',
+    path: '/restaurant',
+    getParentRoute: () => AccountSettingsRoute,
+  } as any)
+const AccountSettingsTakeawayRoute = AccountSettingsTakeawayRouteImport.update({
+  id: '/takeaway',
+  path: '/takeaway',
+  getParentRoute: () => AccountSettingsRoute,
+} as any)
+const AccountSettingsWelcomeRoute = AccountSettingsWelcomeRouteImport.update({
+  id: '/welcome',
+  path: '/welcome',
+  getParentRoute: () => AccountSettingsRoute,
+} as any)
+const DashboardSettingsIndexRoute = DashboardSettingsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => DashboardSettingsRoute,
+} as any)
+const DashboardSettingsAppearanceRoute =
+  DashboardSettingsAppearanceRouteImport.update({
+    id: '/appearance',
+    path: '/appearance',
+    getParentRoute: () => DashboardSettingsRoute,
+  } as any)
+const DashboardSettingsDeliveryRoute =
+  DashboardSettingsDeliveryRouteImport.update({
+    id: '/delivery',
+    path: '/delivery',
+    getParentRoute: () => DashboardSettingsRoute,
+  } as any)
+const DashboardSettingsEmployeesRoute =
+  DashboardSettingsEmployeesRouteImport.update({
+    id: '/employees',
+    path: '/employees',
+    getParentRoute: () => DashboardSettingsRoute,
+  } as any)
+const DashboardSettingsRestaurantRoute =
+  DashboardSettingsRestaurantRouteImport.update({
+    id: '/restaurant',
+    path: '/restaurant',
+    getParentRoute: () => DashboardSettingsRoute,
+  } as any)
+const DashboardSettingsTakeawayRoute =
+  DashboardSettingsTakeawayRouteImport.update({
+    id: '/takeaway',
+    path: '/takeaway',
+    getParentRoute: () => DashboardSettingsRoute,
+  } as any)
+const DashboardSettingsWelcomeRoute =
+  DashboardSettingsWelcomeRouteImport.update({
+    id: '/welcome',
+    path: '/welcome',
+    getParentRoute: () => DashboardSettingsRoute,
+  } as any)
 const OpsEmployeesIndexRoute = OpsEmployeesIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -347,13 +440,13 @@ export interface FileRoutesByFullPath {
   '/staff-login': typeof StaffLoginRoute
   '/waiter-login': typeof WaiterLoginRoute
   '/waiter-screen': typeof WaiterScreenRoute
-  '/account/settings': typeof AccountSettingsRoute
+  '/account/settings': typeof AccountSettingsRouteWithChildren
   '/dashboard/analytics': typeof DashboardAnalyticsRoute
   '/dashboard/download': typeof DashboardDownloadRoute
   '/dashboard/menu': typeof DashboardMenuRoute
   '/dashboard/orders': typeof DashboardOrdersRoute
   '/dashboard/reviews': typeof DashboardReviewsRoute
-  '/dashboard/settings': typeof DashboardSettingsRoute
+  '/dashboard/settings': typeof DashboardSettingsRouteWithChildren
   '/dashboard/tables': typeof DashboardTablesRoute
   '/internal/managers': typeof InternalManagersRoute
   '/mobile/daily-summary': typeof MobileDailySummaryRoute
@@ -381,7 +474,21 @@ export interface FileRoutesByFullPath {
   '/account/': typeof AccountIndexRoute
   '/mobile/': typeof MobileIndexRoute
   '/ops/': typeof OpsIndexRoute
+  '/account/settings/appearance': typeof AccountSettingsAppearanceRoute
+  '/account/settings/delivery': typeof AccountSettingsDeliveryRoute
+  '/account/settings/employees': typeof AccountSettingsEmployeesRoute
+  '/account/settings/restaurant': typeof AccountSettingsRestaurantRoute
+  '/account/settings/takeaway': typeof AccountSettingsTakeawayRoute
+  '/account/settings/welcome': typeof AccountSettingsWelcomeRoute
+  '/dashboard/settings/appearance': typeof DashboardSettingsAppearanceRoute
+  '/dashboard/settings/delivery': typeof DashboardSettingsDeliveryRoute
+  '/dashboard/settings/employees': typeof DashboardSettingsEmployeesRoute
+  '/dashboard/settings/restaurant': typeof DashboardSettingsRestaurantRoute
+  '/dashboard/settings/takeaway': typeof DashboardSettingsTakeawayRoute
+  '/dashboard/settings/welcome': typeof DashboardSettingsWelcomeRoute
   '/ops/employees/$employeeId': typeof OpsEmployeesEmployeeIdRoute
+  '/account/settings/': typeof AccountSettingsIndexRoute
+  '/dashboard/settings/': typeof DashboardSettingsIndexRoute
   '/ops/employees/': typeof OpsEmployeesIndexRoute
 }
 export interface FileRoutesByTo {
@@ -400,13 +507,11 @@ export interface FileRoutesByTo {
   '/staff-login': typeof StaffLoginRoute
   '/waiter-login': typeof WaiterLoginRoute
   '/waiter-screen': typeof WaiterScreenRoute
-  '/account/settings': typeof AccountSettingsRoute
   '/dashboard/analytics': typeof DashboardAnalyticsRoute
   '/dashboard/download': typeof DashboardDownloadRoute
   '/dashboard/menu': typeof DashboardMenuRoute
   '/dashboard/orders': typeof DashboardOrdersRoute
   '/dashboard/reviews': typeof DashboardReviewsRoute
-  '/dashboard/settings': typeof DashboardSettingsRoute
   '/dashboard/tables': typeof DashboardTablesRoute
   '/internal/managers': typeof InternalManagersRoute
   '/mobile/daily-summary': typeof MobileDailySummaryRoute
@@ -433,7 +538,21 @@ export interface FileRoutesByTo {
   '/account': typeof AccountIndexRoute
   '/mobile': typeof MobileIndexRoute
   '/ops': typeof OpsIndexRoute
+  '/account/settings/appearance': typeof AccountSettingsAppearanceRoute
+  '/account/settings/delivery': typeof AccountSettingsDeliveryRoute
+  '/account/settings/employees': typeof AccountSettingsEmployeesRoute
+  '/account/settings/restaurant': typeof AccountSettingsRestaurantRoute
+  '/account/settings/takeaway': typeof AccountSettingsTakeawayRoute
+  '/account/settings/welcome': typeof AccountSettingsWelcomeRoute
+  '/dashboard/settings/appearance': typeof DashboardSettingsAppearanceRoute
+  '/dashboard/settings/delivery': typeof DashboardSettingsDeliveryRoute
+  '/dashboard/settings/employees': typeof DashboardSettingsEmployeesRoute
+  '/dashboard/settings/restaurant': typeof DashboardSettingsRestaurantRoute
+  '/dashboard/settings/takeaway': typeof DashboardSettingsTakeawayRoute
+  '/dashboard/settings/welcome': typeof DashboardSettingsWelcomeRoute
   '/ops/employees/$employeeId': typeof OpsEmployeesEmployeeIdRoute
+  '/account/settings': typeof AccountSettingsIndexRoute
+  '/dashboard/settings': typeof DashboardSettingsIndexRoute
   '/ops/employees': typeof OpsEmployeesIndexRoute
 }
 export interface FileRoutesById {
@@ -455,13 +574,13 @@ export interface FileRoutesById {
   '/staff-login': typeof StaffLoginRoute
   '/waiter-login': typeof WaiterLoginRoute
   '/waiter-screen': typeof WaiterScreenRoute
-  '/account/settings': typeof AccountSettingsRoute
+  '/account/settings': typeof AccountSettingsRouteWithChildren
   '/dashboard/analytics': typeof DashboardAnalyticsRoute
   '/dashboard/download': typeof DashboardDownloadRoute
   '/dashboard/menu': typeof DashboardMenuRoute
   '/dashboard/orders': typeof DashboardOrdersRoute
   '/dashboard/reviews': typeof DashboardReviewsRoute
-  '/dashboard/settings': typeof DashboardSettingsRoute
+  '/dashboard/settings': typeof DashboardSettingsRouteWithChildren
   '/dashboard/tables': typeof DashboardTablesRoute
   '/internal/managers': typeof InternalManagersRoute
   '/mobile/daily-summary': typeof MobileDailySummaryRoute
@@ -489,7 +608,21 @@ export interface FileRoutesById {
   '/account/': typeof AccountIndexRoute
   '/mobile/': typeof MobileIndexRoute
   '/ops/': typeof OpsIndexRoute
+  '/account/settings/appearance': typeof AccountSettingsAppearanceRoute
+  '/account/settings/delivery': typeof AccountSettingsDeliveryRoute
+  '/account/settings/employees': typeof AccountSettingsEmployeesRoute
+  '/account/settings/restaurant': typeof AccountSettingsRestaurantRoute
+  '/account/settings/takeaway': typeof AccountSettingsTakeawayRoute
+  '/account/settings/welcome': typeof AccountSettingsWelcomeRoute
+  '/dashboard/settings/appearance': typeof DashboardSettingsAppearanceRoute
+  '/dashboard/settings/delivery': typeof DashboardSettingsDeliveryRoute
+  '/dashboard/settings/employees': typeof DashboardSettingsEmployeesRoute
+  '/dashboard/settings/restaurant': typeof DashboardSettingsRestaurantRoute
+  '/dashboard/settings/takeaway': typeof DashboardSettingsTakeawayRoute
+  '/dashboard/settings/welcome': typeof DashboardSettingsWelcomeRoute
   '/ops/employees/$employeeId': typeof OpsEmployeesEmployeeIdRoute
+  '/account/settings/': typeof AccountSettingsIndexRoute
+  '/dashboard/settings/': typeof DashboardSettingsIndexRoute
   '/ops/employees/': typeof OpsEmployeesIndexRoute
 }
 export interface FileRouteTypes {
@@ -546,7 +679,21 @@ export interface FileRouteTypes {
     | '/account/'
     | '/mobile/'
     | '/ops/'
+    | '/account/settings/appearance'
+    | '/account/settings/delivery'
+    | '/account/settings/employees'
+    | '/account/settings/restaurant'
+    | '/account/settings/takeaway'
+    | '/account/settings/welcome'
+    | '/dashboard/settings/appearance'
+    | '/dashboard/settings/delivery'
+    | '/dashboard/settings/employees'
+    | '/dashboard/settings/restaurant'
+    | '/dashboard/settings/takeaway'
+    | '/dashboard/settings/welcome'
     | '/ops/employees/$employeeId'
+    | '/account/settings/'
+    | '/dashboard/settings/'
     | '/ops/employees/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -565,13 +712,11 @@ export interface FileRouteTypes {
     | '/staff-login'
     | '/waiter-login'
     | '/waiter-screen'
-    | '/account/settings'
     | '/dashboard/analytics'
     | '/dashboard/download'
     | '/dashboard/menu'
     | '/dashboard/orders'
     | '/dashboard/reviews'
-    | '/dashboard/settings'
     | '/dashboard/tables'
     | '/internal/managers'
     | '/mobile/daily-summary'
@@ -598,7 +743,21 @@ export interface FileRouteTypes {
     | '/account'
     | '/mobile'
     | '/ops'
+    | '/account/settings/appearance'
+    | '/account/settings/delivery'
+    | '/account/settings/employees'
+    | '/account/settings/restaurant'
+    | '/account/settings/takeaway'
+    | '/account/settings/welcome'
+    | '/dashboard/settings/appearance'
+    | '/dashboard/settings/delivery'
+    | '/dashboard/settings/employees'
+    | '/dashboard/settings/restaurant'
+    | '/dashboard/settings/takeaway'
+    | '/dashboard/settings/welcome'
     | '/ops/employees/$employeeId'
+    | '/account/settings'
+    | '/dashboard/settings'
     | '/ops/employees'
   id:
     | '__root__'
@@ -653,7 +812,21 @@ export interface FileRouteTypes {
     | '/account/'
     | '/mobile/'
     | '/ops/'
+    | '/account/settings/appearance'
+    | '/account/settings/delivery'
+    | '/account/settings/employees'
+    | '/account/settings/restaurant'
+    | '/account/settings/takeaway'
+    | '/account/settings/welcome'
+    | '/dashboard/settings/appearance'
+    | '/dashboard/settings/delivery'
+    | '/dashboard/settings/employees'
+    | '/dashboard/settings/restaurant'
+    | '/dashboard/settings/takeaway'
+    | '/dashboard/settings/welcome'
     | '/ops/employees/$employeeId'
+    | '/account/settings/'
+    | '/dashboard/settings/'
     | '/ops/employees/'
   fileRoutesById: FileRoutesById
 }
@@ -675,7 +848,7 @@ export interface RootRouteChildren {
   StaffLoginRoute: typeof StaffLoginRoute
   WaiterLoginRoute: typeof WaiterLoginRoute
   WaiterScreenRoute: typeof WaiterScreenRoute
-  AccountSettingsRoute: typeof AccountSettingsRoute
+  AccountSettingsRoute: typeof AccountSettingsRouteWithChildren
   InternalManagersRoute: typeof InternalManagersRoute
   RTokenRoute: typeof RTokenRoute
   TTokenRoute: typeof TTokenRoute
@@ -1041,6 +1214,104 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/account/settings/': {
+      id: '/account/settings/'
+      path: '/'
+      fullPath: '/account/settings/'
+      preLoaderRoute: typeof AccountSettingsIndexRouteImport
+      parentRoute: typeof AccountSettingsRoute
+    }
+    '/account/settings/appearance': {
+      id: '/account/settings/appearance'
+      path: '/appearance'
+      fullPath: '/account/settings/appearance'
+      preLoaderRoute: typeof AccountSettingsAppearanceRouteImport
+      parentRoute: typeof AccountSettingsRoute
+    }
+    '/account/settings/delivery': {
+      id: '/account/settings/delivery'
+      path: '/delivery'
+      fullPath: '/account/settings/delivery'
+      preLoaderRoute: typeof AccountSettingsDeliveryRouteImport
+      parentRoute: typeof AccountSettingsRoute
+    }
+    '/account/settings/employees': {
+      id: '/account/settings/employees'
+      path: '/employees'
+      fullPath: '/account/settings/employees'
+      preLoaderRoute: typeof AccountSettingsEmployeesRouteImport
+      parentRoute: typeof AccountSettingsRoute
+    }
+    '/account/settings/restaurant': {
+      id: '/account/settings/restaurant'
+      path: '/restaurant'
+      fullPath: '/account/settings/restaurant'
+      preLoaderRoute: typeof AccountSettingsRestaurantRouteImport
+      parentRoute: typeof AccountSettingsRoute
+    }
+    '/account/settings/takeaway': {
+      id: '/account/settings/takeaway'
+      path: '/takeaway'
+      fullPath: '/account/settings/takeaway'
+      preLoaderRoute: typeof AccountSettingsTakeawayRouteImport
+      parentRoute: typeof AccountSettingsRoute
+    }
+    '/account/settings/welcome': {
+      id: '/account/settings/welcome'
+      path: '/welcome'
+      fullPath: '/account/settings/welcome'
+      preLoaderRoute: typeof AccountSettingsWelcomeRouteImport
+      parentRoute: typeof AccountSettingsRoute
+    }
+    '/dashboard/settings/': {
+      id: '/dashboard/settings/'
+      path: '/'
+      fullPath: '/dashboard/settings/'
+      preLoaderRoute: typeof DashboardSettingsIndexRouteImport
+      parentRoute: typeof DashboardSettingsRoute
+    }
+    '/dashboard/settings/appearance': {
+      id: '/dashboard/settings/appearance'
+      path: '/appearance'
+      fullPath: '/dashboard/settings/appearance'
+      preLoaderRoute: typeof DashboardSettingsAppearanceRouteImport
+      parentRoute: typeof DashboardSettingsRoute
+    }
+    '/dashboard/settings/delivery': {
+      id: '/dashboard/settings/delivery'
+      path: '/delivery'
+      fullPath: '/dashboard/settings/delivery'
+      preLoaderRoute: typeof DashboardSettingsDeliveryRouteImport
+      parentRoute: typeof DashboardSettingsRoute
+    }
+    '/dashboard/settings/employees': {
+      id: '/dashboard/settings/employees'
+      path: '/employees'
+      fullPath: '/dashboard/settings/employees'
+      preLoaderRoute: typeof DashboardSettingsEmployeesRouteImport
+      parentRoute: typeof DashboardSettingsRoute
+    }
+    '/dashboard/settings/restaurant': {
+      id: '/dashboard/settings/restaurant'
+      path: '/restaurant'
+      fullPath: '/dashboard/settings/restaurant'
+      preLoaderRoute: typeof DashboardSettingsRestaurantRouteImport
+      parentRoute: typeof DashboardSettingsRoute
+    }
+    '/dashboard/settings/takeaway': {
+      id: '/dashboard/settings/takeaway'
+      path: '/takeaway'
+      fullPath: '/dashboard/settings/takeaway'
+      preLoaderRoute: typeof DashboardSettingsTakeawayRouteImport
+      parentRoute: typeof DashboardSettingsRoute
+    }
+    '/dashboard/settings/welcome': {
+      id: '/dashboard/settings/welcome'
+      path: '/welcome'
+      fullPath: '/dashboard/settings/welcome'
+      preLoaderRoute: typeof DashboardSettingsWelcomeRouteImport
+      parentRoute: typeof DashboardSettingsRoute
+    }
     '/ops/employees/': {
       id: '/ops/employees/'
       path: '/'
@@ -1058,13 +1329,36 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface DashboardSettingsRouteChildren {
+  DashboardSettingsAppearanceRoute: typeof DashboardSettingsAppearanceRoute
+  DashboardSettingsDeliveryRoute: typeof DashboardSettingsDeliveryRoute
+  DashboardSettingsEmployeesRoute: typeof DashboardSettingsEmployeesRoute
+  DashboardSettingsRestaurantRoute: typeof DashboardSettingsRestaurantRoute
+  DashboardSettingsTakeawayRoute: typeof DashboardSettingsTakeawayRoute
+  DashboardSettingsWelcomeRoute: typeof DashboardSettingsWelcomeRoute
+  DashboardSettingsIndexRoute: typeof DashboardSettingsIndexRoute
+}
+
+const DashboardSettingsRouteChildren: DashboardSettingsRouteChildren = {
+  DashboardSettingsAppearanceRoute: DashboardSettingsAppearanceRoute,
+  DashboardSettingsDeliveryRoute: DashboardSettingsDeliveryRoute,
+  DashboardSettingsEmployeesRoute: DashboardSettingsEmployeesRoute,
+  DashboardSettingsRestaurantRoute: DashboardSettingsRestaurantRoute,
+  DashboardSettingsTakeawayRoute: DashboardSettingsTakeawayRoute,
+  DashboardSettingsWelcomeRoute: DashboardSettingsWelcomeRoute,
+  DashboardSettingsIndexRoute: DashboardSettingsIndexRoute,
+}
+
+const DashboardSettingsRouteWithChildren =
+  DashboardSettingsRoute._addFileChildren(DashboardSettingsRouteChildren)
+
 interface DashboardRouteChildren {
   DashboardAnalyticsRoute: typeof DashboardAnalyticsRoute
   DashboardDownloadRoute: typeof DashboardDownloadRoute
   DashboardMenuRoute: typeof DashboardMenuRoute
   DashboardOrdersRoute: typeof DashboardOrdersRoute
   DashboardReviewsRoute: typeof DashboardReviewsRoute
-  DashboardSettingsRoute: typeof DashboardSettingsRoute
+  DashboardSettingsRoute: typeof DashboardSettingsRouteWithChildren
   DashboardTablesRoute: typeof DashboardTablesRoute
 }
 
@@ -1074,7 +1368,7 @@ const DashboardRouteChildren: DashboardRouteChildren = {
   DashboardMenuRoute: DashboardMenuRoute,
   DashboardOrdersRoute: DashboardOrdersRoute,
   DashboardReviewsRoute: DashboardReviewsRoute,
-  DashboardSettingsRoute: DashboardSettingsRoute,
+  DashboardSettingsRoute: DashboardSettingsRouteWithChildren,
   DashboardTablesRoute: DashboardTablesRoute,
 }
 
@@ -1157,6 +1451,30 @@ const OpsRouteChildren: OpsRouteChildren = {
 
 const OpsRouteWithChildren = OpsRoute._addFileChildren(OpsRouteChildren)
 
+interface AccountSettingsRouteChildren {
+  AccountSettingsAppearanceRoute: typeof AccountSettingsAppearanceRoute
+  AccountSettingsDeliveryRoute: typeof AccountSettingsDeliveryRoute
+  AccountSettingsEmployeesRoute: typeof AccountSettingsEmployeesRoute
+  AccountSettingsRestaurantRoute: typeof AccountSettingsRestaurantRoute
+  AccountSettingsTakeawayRoute: typeof AccountSettingsTakeawayRoute
+  AccountSettingsWelcomeRoute: typeof AccountSettingsWelcomeRoute
+  AccountSettingsIndexRoute: typeof AccountSettingsIndexRoute
+}
+
+const AccountSettingsRouteChildren: AccountSettingsRouteChildren = {
+  AccountSettingsAppearanceRoute: AccountSettingsAppearanceRoute,
+  AccountSettingsDeliveryRoute: AccountSettingsDeliveryRoute,
+  AccountSettingsEmployeesRoute: AccountSettingsEmployeesRoute,
+  AccountSettingsRestaurantRoute: AccountSettingsRestaurantRoute,
+  AccountSettingsTakeawayRoute: AccountSettingsTakeawayRoute,
+  AccountSettingsWelcomeRoute: AccountSettingsWelcomeRoute,
+  AccountSettingsIndexRoute: AccountSettingsIndexRoute,
+}
+
+const AccountSettingsRouteWithChildren = AccountSettingsRoute._addFileChildren(
+  AccountSettingsRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ActivateRoute: ActivateRoute,
@@ -1175,7 +1493,7 @@ const rootRouteChildren: RootRouteChildren = {
   StaffLoginRoute: StaffLoginRoute,
   WaiterLoginRoute: WaiterLoginRoute,
   WaiterScreenRoute: WaiterScreenRoute,
-  AccountSettingsRoute: AccountSettingsRoute,
+  AccountSettingsRoute: AccountSettingsRouteWithChildren,
   InternalManagersRoute: InternalManagersRoute,
   RTokenRoute: RTokenRoute,
   TTokenRoute: TTokenRoute,

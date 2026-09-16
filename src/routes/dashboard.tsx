@@ -42,6 +42,7 @@ import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { NotificationsBell } from "@/components/NotificationsBell";
 import { useTranslation } from "react-i18next";
+import { Outlet } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/dashboard")({
   beforeLoad: requireAuth,
@@ -55,7 +56,6 @@ const TablesPage = lazy(() => import("@/pages/tables"));
 const AnalyticsPage = lazy(() => import("@/pages/analytics"));
 const AccountingPage = lazy(() => import("@/pages/accounting"));
 const ReviewsPage = lazy(() => import("@/pages/reviews"));
-const SettingsPage = lazy(() => import("@/pages/settings"));
 
 type TabId =
   | "orders"
@@ -83,7 +83,7 @@ const TABS: TabItem[] = [
   { id: "accounting", key: "accounting", icon: Calculator, gradient: "from-teal-500 to-cyan-600", component: AccountingPage },
   { id: "ops", key: "ops", icon: Boxes, gradient: "from-rose-500 to-red-500" },
   { id: "reviews", key: "reviews", icon: Star, gradient: "from-yellow-500 to-amber-500", component: ReviewsPage },
-  { id: "settings", key: "settings", icon: Settings, gradient: "from-slate-500 to-gray-500", component: SettingsPage },
+  { id: "settings", key: "settings", icon: Settings, gradient: "from-slate-500 to-gray-500" },
 ];
 
 type Restaurant = { name: string; logo_url: string | null };
@@ -137,9 +137,13 @@ function DashboardLayout() {
     } else if (!hasCompletedOnboarding()) {
       setShowOnboarding(true);
     } else {
-      // Onboarding done — no tour, just set the tab
+      // Onboarding done — no tour, check pathname for settings
       setTourActive(false);
-      setActiveTab(validTab ? tabParam : "orders");
+      if (window.location.pathname.startsWith("/dashboard/settings")) {
+        setActiveTab("settings");
+      } else {
+        setActiveTab(validTab ? tabParam : "orders");
+      }
     }
 
     (async () => {
@@ -291,6 +295,17 @@ function DashboardLayout() {
       navigate({ to: "/ops" });
       return;
     }
+    if (tabId === "settings") {
+      navigate({ to: "/dashboard/settings" });
+      return;
+    }
+    
+    // For other tabs, if we are in settings, we must navigate back to dashboard
+    if (window.location.pathname.startsWith("/dashboard/settings")) {
+      navigate({ to: "/dashboard", search: { tab: tabId } });
+      return;
+    }
+    
     setActiveTab(tabId);
     window.history.replaceState(null, "", `/dashboard?tab=${tabId}`);
   };
@@ -355,6 +370,11 @@ function DashboardLayout() {
   // Render active tab content
   const renderContent = () => {
     const tab = TABS.find((t) => t.id === activeTab);
+    
+    if (activeTab === "settings") {
+      return <Outlet />;
+    }
+    
     if (!tab?.component) {
       return (
         <div className="flex items-center justify-center py-20 text-sm text-[var(--muted-foreground)]">
