@@ -133,7 +133,7 @@ export function AppearanceSettingsPageView() {
         {savingAppearance && <Loader2 className="w-4 h-4 animate-spin text-primary" />}
       </div>
 
-      <div className="glass shadow-glass rounded-2xl border border-border/60 p-6 space-y-6">
+      <div className="bg-card border border-border rounded-xl p-6 space-y-6">
         <p className="text-sm text-muted-foreground">
           اختر لون رئيسي يطبّق على كل العناصر، أو خصّص لون كل قسم على حدة (الهيدر، الفئات، أزرار +).
         </p>

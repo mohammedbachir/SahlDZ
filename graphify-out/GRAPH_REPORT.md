@@ -1,18 +1,20 @@
-# Graph Report - /home/raider/Desktop/SahelDZ/SahlDZ (2026-08-02)
+# Graph Report - SahlDZ  (2026-09-17)
 
 ## Corpus Check
-
-- 108 files · ~61,667 words
+- 224 files · ~191,276 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
+- 1683 nodes · 3802 edges · 185 communities (86 shown, 99 thin omitted)
+- Extraction: 98% EXTRACTED · 2% INFERRED · 0% AMBIGUOUS · INFERRED: 77 edges (avg confidence: 0.67)
+- Token cost: 0 input · 0 output
 
-- 824 nodes · 1454 edges · 118 communities (29 shown, 89 thin omitted)
-- Extraction: 95% EXTRACTED · 5% INFERRED · 0% AMBIGUOUS · INFERRED: 70 edges (avg confidence: 0.71)
-- Token cost: 9,420 input · 7,230 output
+## Graph Freshness
+- Built from commit: `30484a22`
+- Run `git rev-parse HEAD` and compare to check if the graph is stale.
+- Run `graphify update .` after code changes (no API cost).
 
 ## Community Hubs (Navigation)
-
 - UI Dialog Components
 - Daily Summary Server Functions
 - Shared UI & PDF Helpers
@@ -129,201 +131,443 @@
 - Vite Bundler
 - Vite React Plugin
 - Auth Design & Primitives
+- Vite Configuration
+- default-menu.ts
+- manager-db.functions.ts
+- mobile-inventory.tsx
+- preview-server.mjs
+- summary-bot.functions.ts
+- seed-cloud-data.mjs
+- start-emulators.js
+- DeliverySettingsPageView
+- account.settings.index.tsx
+- TakeawaySettingsPageView
+- WelcomeSettingsPageView
+- EmployeesSettingsPageView
+- account.settings.restaurant.tsx
+- push-env.sh
+- seed-auth-emulator.js
+- qrcode
+- dashboard.settings.tsx
+- ops.accounting.tsx
+- r.$token.tsx
+- t.$token.tsx
+- class-variance-authority
+- eslint-config-prettier
+- eslint-plugin-react-hooks
+- eslint-plugin-react-refresh
+- firebase-tools
+- framer-motion
+- i18next-browser-languagedetector
+- @radix-ui/react-slider
+- @radix-ui/react-toggle-group
+- react-i18next
+- sonner
+- vite-plugin-pwa
+- workbox-window
+- @types/react
+- typescript
+- electron-env.d.ts
+- dashboard.menu.tsx
+- dashboard.orders.tsx
+- mobile.index.tsx
+- mobile.inventory.tsx
+- mobile.reports.tsx
+- mobile-inventory.tsx
+- vercel.json
+- @radix-ui/react-dropdown-menu
+- @radix-ui/react-popover
+- telegram.functions.ts
+- @tanstack/react-query
+- delivery.functions.ts
+- appOrigin
+- session-cache.ts
+- allowedStaffPaths
+- mobile.daily-summary.tsx
+- eslint-config-prettier
+- exceljs
+- activate.tsx
+- dashboard.analytics.tsx
+- dashboard.orders.tsx
+- dashboard.reviews.tsx
+- mobile.index.tsx
+- mobile.inventory.tsx
+- mobile.login.tsx
+- Route
 
 ## God Nodes (most connected - your core abstractions)
-
-1. `FileRoutesByPath` - 32 edges
-2. `Button` - 26 edges
-3. `cn()` - 25 edges
-4. `supabase` - 20 edges
-5. `compilerOptions` - 20 edges
-6. `useRestaurantId()` - 17 edges
-7. `Card` - 14 edges
-8. `formatDZD()` - 13 edges
-9. `tx()` - 11 edges
-10. `previewExpiry()` - 10 edges
+1. `getFirebaseDb()` - 87 edges
+2. `supabase` - 73 edges
+3. `FileRoutesByPath` - 69 edges
+4. `tx()` - 63 edges
+5. `useRestaurantId()` - 55 edges
+6. `formatDZD()` - 46 edges
+7. `Button` - 37 edges
+8. `cn()` - 28 edges
+9. `Input` - 25 edges
+10. `requireOpsAccess()` - 20 edges
 
 ## Surprising Connections (you probably didn't know these)
-
-- `Preview (Mock) Mode` --semantically_similar_to--> `Backend-Free Preview Mode` [INFERRED] [semantically similar]
+- `Preview (Mock) Mode` --semantically_similar_to--> `Backend-Free Preview Mode`  [INFERRED] [semantically similar]
   README.md → CLAUDE.md
-- `Supabase-Compatible Firebase Adapter` --conceptually_related_to--> `Firebase Adapter Redesign` [INFERRED]
+- `useCountUp()` --indirect_call--> `tick()`  [INFERRED]
+  src/pages/analytics.tsx → scripts/delivery-bot-poll.mjs
+- `Supabase-Compatible Firebase Adapter` --conceptually_related_to--> `Firebase Adapter Redesign`  [INFERRED]
   CLAUDE.md → Docs/website-solutions.md
-- `Firebase Adapter Social-Auth Cleanup` --conceptually_related_to--> `Supabase-Compatible Firebase Adapter` [INFERRED]
+- `Firebase Adapter Social-Auth Cleanup` --conceptually_related_to--> `Supabase-Compatible Firebase Adapter`  [INFERRED]
   Docs/remove-social-login-prompt.md → CLAUDE.md
-- `Backend-Free Preview Mode` --conceptually_related_to--> `Authenticated Preview Fallback` [INFERRED]
-  CLAUDE.md → Docs/website-issues.md
-- `Backend-Free Preview Mode` --conceptually_related_to--> `Predictable Preview Tokens` [INFERRED]
+- `Backend-Free Preview Mode` --conceptually_related_to--> `Authenticated Preview Fallback`  [INFERRED]
   CLAUDE.md → Docs/website-issues.md
 
 ## Import Cycles
-
 - None detected.
 
 ## Hyperedges (group relationships)
-
 - **Google/Apple Social Login Removal Decision** — docs_remove_social_login_prompt_prompt, docs_remove_social_login_prompt_email_password_auth, docs_remove_social_login_prompt_signinwithoauth_removal, docs_website_issues_oauth_not_implemented, docs_website_issues_oauth_callback_missing, docs_website_solutions_oauth_realtime [EXTRACTED 1.00]
 - **Backend-Free Preview Mode Architecture and Risks** — claude_preview_mode, readme_preview_mode, docs_website_issues_authenticated_preview_fallback, docs_website_issues_static_preview_tokens, docs_website_solutions_preview_separation, docs_website_solutions_preview_token_security [INFERRED 0.85]
 - **Supabase-Compatible Firebase Adapter Boundary** — claude_supabase_firebase_adapter, docs_website_issues_supabase_compat_naming, docs_website_issues_firebase_adapter_query_semantics, docs_website_issues_any_usage, docs_website_solutions_adapter_redesign, docs_website_solutions_backend_decision [INFERRED 0.85]
 
-## Communities (118 total, 89 thin omitted)
+## Communities (185 total, 99 thin omitted)
 
 ### Community 0 - "UI Dialog Components"
-
-Cohesion: 0.05
-Nodes (69): ConfirmDialog(), ConfirmDialogProps, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter(), AlertDialogHeader() (+61 more)
+Cohesion: 0.20
+Nodes (16): ConfirmDialogProps, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter(), AlertDialogHeader(), AlertDialogOverlay (+8 more)
 
 ### Community 1 - "Daily Summary Server Functions"
-
-Cohesion: 0.06
-Nodes (49): DialogDescription, getDailySummaryStatus, sendDailySummaryNow, setDailySummaryEnabled, addDeliveryDriver, listDeliveryDrivers, removeDeliveryDriver, toggleDeliveryDriver (+41 more)
+Cohesion: 0.10
+Nodes (22): getDailySummaryStatus, sendDailySummaryNow, setDailySummaryEnabled, bearerOf(), FIREBASE_API_KEY, getAuthedUserId(), getAuthedUserIdFromToken(), identityToolkitBase() (+14 more)
 
 ### Community 2 - "Shared UI & PDF Helpers"
-
-Cohesion: 0.07
-Nodes (36): jspdf, jspdf, buttonVariants, Calendar(), CalendarProps, PopoverContent, beep(), useNewOrderNotifications() (+28 more)
+Cohesion: 0.05
+Nodes (61): jspdf, jspdf, PopoverContent, AccountingPeriod, AccountingReport, ChannelStat, chunkIds(), DailyRow (+53 more)
 
 ### Community 3 - "Project Architecture Docs"
-
 Cohesion: 0.05
 Nodes (44): Arabic RTL i18n, Auth Guards and Post-Auth Routing, Dashboard and Operations Surfaces, Domain Operations Modules, Backend-Free Preview Mode, SahlDZ/Resto Hub, Supabase-Compatible Firebase Adapter, React 19 / TanStack Start / Vite / Tailwind / Radix Stack (+36 more)
 
 ### Community 4 - "Route Modules & Tree"
-
-Cohesion: 0.05
-Nodes (40): CashierLoginRoute, CashierRoute, DashboardAnalyticsRoute, DashboardMenuRoute, DashboardOrdersRoute, DashboardReviewsRoute, DashboardRoute, DashboardRouteChildren (+32 more)
+Cohesion: 0.02
+Nodes (85): AccountIndexRoute, AccountSettingsAppearanceRoute, AccountSettingsDeliveryRoute, AccountSettingsEmployeesRoute, AccountSettingsIndexRoute, AccountSettingsRestaurantRoute, AccountSettingsRoute, AccountSettingsRouteChildren (+77 more)
 
 ### Community 5 - "Auth Shell & QR Codes"
-
-Cohesion: 0.10
-Nodes (28): qrcode, qrcode, AuthShell(), supabase, appOrigin(), getPostAuthRedirect(), redirectIfAuthed(), requireAuth() (+20 more)
+Cohesion: 0.24
+Nodes (9): analyzeReceipt, ReceiptItem, emptyReceiptMeta, Ingredient, OpsInventory(), ReceiptMeta, UNIT_OPTIONS, unitOptions() (+1 more)
 
 ### Community 6 - "TypeScript Lib Types"
-
 Cohesion: 0.07
 Nodes (27): DOM, DOM.Iterable, ES2022, src, vite/client, vite.config.ts, compilerOptions, allowImportingTsExtensions (+19 more)
 
 ### Community 7 - "App Bar Controls"
-
-Cohesion: 0.11
-Nodes (23): LANGS, LanguageSwitcher(), NotificationsBell(), DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioItem (+15 more)
+Cohesion: 0.06
+Nodes (41): DashboardOnboarding(), hasCompletedOnboarding(), OnboardingStep, steps, Annotation, DashboardTour(), TourStep, tourSteps (+33 more)
 
 ### Community 8 - "Shared Hooks & Utilities"
-
 Cohesion: 0.10
-Nodes (9): AnimatedCounter(), getAuthSessionWaitMs(), waitForAuthSession(), faqs, features, plans, Route, steps (+1 more)
+Nodes (8): DownloadBanner(), AnimatedCounter(), faqs, features, plans, Route, steps, testimonials
 
 ### Community 9 - "Cashier Server Functions"
-
-Cohesion: 0.15
-Nodes (18): cashierListReady, cashierLogout, cashierLookupTable, cashierMarkPaid, cashierZReport, disableCashier, getCashierContext, getCashierStatus (+10 more)
+Cohesion: 0.10
+Nodes (25): CashierCategory, cashierCreateOrder, cashierGetMenu, cashierListActiveOrders, cashierListReady, cashierLogout, cashierLookupTable, CashierMenuItem (+17 more)
 
 ### Community 10 - "Role Auth & Preview Mode"
-
-Cohesion: 0.16
-Nodes (13): verifyCashierPin, getPublicChefList, verifyIndividualChefPin, PREVIEW_RESTAURANT, previewExpiry(), PreviewRestaurant, getPublicWaiterList, Page() (+5 more)
+Cohesion: 0.08
+Nodes (51): RestaurantCodeStep(), BackHomeLink(), LoginLogo(), PinBackButton(), RestaurantPill(), StaffAccountButton(), StaffAvatar(), StaffPinInput() (+43 more)
 
 ### Community 11 - "Chef Server Functions"
-
 Cohesion: 0.15
-Nodes (17): addIndividualChef, deleteIndividualChef, getIndividualChefContext, individualChefListActive, individualChefLogout, individualChefMarkReady, individualChefStartPreparing, listIndividualChefs (+9 more)
+Nodes (20): getFirebaseDb(), getIndividualChefContextCore(), individualChefMarkReadyCore(), individualChefStartPreparingCore(), IngredientRow, RestaurantRow, sendLowStockAlert(), sendLowStockAlertFn (+12 more)
 
 ### Community 12 - "Waiter Server Functions"
-
-Cohesion: 0.15
-Nodes (17): addWaiter, deleteWaiter, getWaiterContext, listWaiters, toggleWaiter, updateWaiterPin, verifyWaiterPin, waiterClaimOrder (+9 more)
-
-### Community 13 - "Key Runtime Dependencies"
-
 Cohesion: 0.12
-Nodes (17): class-variance-authority, framer-motion, i18next-browser-languagedetector, dependencies, class-variance-authority, framer-motion, i18next-browser-languagedetector, @radix-ui/react-slider (+9 more)
+Nodes (20): addWaiter, addWaiterCore(), assertOwnedStaff(), deleteWaiter, deleteWaiterCore(), getPublicWaiterList, getPublicWaiterListCore(), getWaiterContextCore() (+12 more)
 
 ### Community 14 - "Dashboard Route Modules"
-
-Cohesion: 0.12
-Nodes (14): Route, Route, Route, Route, Route, Route, Route, Route (+6 more)
+Cohesion: 0.06
+Nodes (27): Route, Route, Route, Route, Route, Route, Route, Route (+19 more)
 
 ### Community 15 - "Dashboard Onboarding Tour"
-
-Cohesion: 0.14
-Nodes (13): Annotation, DashboardTour(), TourStep, tourSteps, Annotation, OPS_PATHS, OpsPath, OpsTour() (+5 more)
+Cohesion: 0.13
+Nodes (25): ConfirmDialog(), Button, ButtonProps, DialogContent, DialogDescription, DialogFooter(), DialogHeader(), DialogOverlay (+17 more)
 
 ### Community 16 - "ESLint Dev Dependencies"
-
-Cohesion: 0.15
-Nodes (13): eslint, eslint-config-prettier, eslint-plugin-react-hooks, eslint-plugin-react-refresh, devDependencies, eslint, eslint-config-prettier, eslint-plugin-react-hooks (+5 more)
+Cohesion: 0.13
+Nodes (15): eslint, eslint-plugin-prettier, firebase-tools, devDependencies, eslint, eslint-plugin-prettier, firebase-tools, @types/qrcode (+7 more)
 
 ### Community 17 - "Firebase Adapter Core"
-
-Cohesion: 0.37
-Nodes (11): authWrapper(), buildQuery(), createFirebaseClient(), createStubProxy(), firestoreQueryChain(), storageChain(), firebaseConfig, getFirebaseApp() (+3 more)
+Cohesion: 0.28
+Nodes (14): authWrapper(), buildQuery(), createFirebaseClient(), createRealtimeChannel(), createStubProxy(), executeFilterChain(), firestoreQueryChain(), makeDeleteChain() (+6 more)
 
 ### Community 18 - "UI Card Components"
-
-Cohesion: 0.36
-Nodes (6): Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle
+Cohesion: 0.28
+Nodes (10): Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle, createRestaurant, ForgotPassword() (+2 more)
 
 ### Community 19 - "Package Metadata"
-
 Cohesion: 0.20
 Nodes (9): engines, node, name, entities, pnpm, overrides, private, sideEffects (+1 more)
 
 ### Community 20 - "Social Login Removal"
-
 Cohesion: 0.28
 Nodes (9): Email/Password Authentication, Remove Google and Apple Login Prompt, signInWithOAuth Removal, Lint/tsc/Build Validation, Missing OAuth Callback Route (Closed), OAuth Not Implemented (Closed), Realtime Not Implemented, OAuth Callback Fix (Obsolete) (+1 more)
 
 ### Community 21 - "Chatbot & Theme Controls"
-
-Cohesion: 0.28
-Nodes (6): AdminChatBot(), BOT_REPLIES, Message, ThemeToggle(), Button, ButtonProps
+Cohesion: 0.13
+Nodes (21): CanWrite(), Checkbox, requireOpsAccess(), useAreaPermission(), formatDZD(), ItemCard(), CountItem, CountRow (+13 more)
 
 ### Community 22 - "TanStack Router Setup"
-
-Cohesion: 0.25
-Nodes (6): getRouter(), Register, @tanstack/react-router, Register, routeTree, startInstance
+Cohesion: 0.33
+Nodes (5): getRouter(), Register, @tanstack/react-router, Register, routeTree
 
 ### Community 23 - "NPM Scripts"
-
-Cohesion: 0.29
-Nodes (7): scripts, build, build:dev, dev, format, lint, preview
+Cohesion: 0.15
+Nodes (13): scripts, bot:poll, build, build:apk, build:dev, dev, dev:emulators, format (+5 more)
 
 ### Community 24 - "Onboarding Flow"
-
-Cohesion: 0.29
-Nodes (6): DashboardOnboarding(), hasCompletedOnboarding(), OnboardingStep, steps, DashboardLayout(), TABS
+Cohesion: 0.12
+Nodes (29): AdminChatBot(), BotMessage, fallbackReply(), AiConfig, askAssistantAI, AFFIXES, AssistantMatch, bestMatches() (+21 more)
 
 ### Community 25 - "i18n & Root Layout"
-
-Cohesion: 0.29
-Nodes (3): ar, Route, FileRoutesById
+Cohesion: 0.12
+Nodes (16): SahlDZ Web Design System, الأزرار, البطاقات والملخصات, التنقل, الجداول, الخط والمسافات, الرموز البصرية المقترحة, الشخصية (+8 more)
 
 ### Community 26 - "Ops Overview KPIs"
+Cohesion: 0.12
+Nodes (15): disableCashierCore(), setCashierPinCore(), getPublicChefListCore(), listIndividualChefsCore(), createStaffAccount, createStaffAccountCore(), deleteStaffAccount, deleteStaffAccountCore() (+7 more)
 
-Cohesion: 0.38
-Nodes (6): fmt(), HIDDEN_KPIS, Kpis, OpsOverview(), resolveRestaurantId(), Route
+### Community 27 - "FloatingInput Primitive"
+Cohesion: 0.08
+Nodes (25): getPublicOrderStatus, getTableMenu, getTakeawayMenu, PlaceOrderContext, placeTableOrder, PlaceTableOrderInput, placeTakeawayOrder, PlaceTakeawayOrderInput (+17 more)
+
+### Community 28 - "GlowButton Primitive"
+Cohesion: 0.14
+Nodes (22): hasArea(), hasInterface(), hasWrite(), INTERFACE_ICONS, PermissionsSelect(), Props, baseOfPermission(), canAccessOpsArea() (+14 more)
+
+### Community 29 - "GradientText Primitive"
+Cohesion: 0.12
+Nodes (30): requireAuth(), ALL, AREA_LABELS, AREA_PATHS, AreaAccess, areasForRole(), build(), canViewArea() (+22 more)
+
+### Community 30 - "SectionHeader Primitive"
+Cohesion: 0.10
+Nodes (27): addIndividualChef, assertOwnedKitchenStaff(), ChefListRow, deleteIndividualChef, deleteIndividualChefCore(), getIndividualChefContext, getPublicChefList, individualChefListActive (+19 more)
+
+### Community 32 - "Reviews Route"
+Cohesion: 0.23
+Nodes (21): finalize(), findRestaurantByName(), findStaffByChat(), fromFields(), fsAdd(), fsDelete(), fsGet(), fsQuery() (+13 more)
+
+### Community 33 - "Ops Complaints Route"
+Cohesion: 0.10
+Nodes (34): HIDDEN_KPIS, Kpis, RecentEntry, Table, TableBody, TableCaption, TableCell, TableFooter (+26 more)
+
+### Community 35 - "Ops Expenses Route"
+Cohesion: 0.22
+Nodes (10): MENU_LAYOUTS, MENU_THEMES, MenuAppearance, MenuLayoutId, MenuThemeId, parseMenuAppearance(), serializeMenuAppearance(), AppearanceSettingsPageView() (+2 more)
+
+### Community 36 - "Ops Reports Route"
+Cohesion: 0.10
+Nodes (19): numberFormat, useRestaurantId(), DownloadPage(), DailyReport, MobileDailySummary(), TypeRow(), KPIs, MobileDashboard() (+11 more)
+
+### Community 37 - "Ops Staff Performance Route"
+Cohesion: 0.22
+Nodes (10): beep(), useNewOrderNotifications(), ColumnDef, COLUMNS, getNextStatus(), Order, OrderCard(), OrderItem (+2 more)
+
+### Community 38 - "Ops Suppliers Route"
+Cohesion: 0.33
+Nodes (4): getServerAuthHeaders(), WelcomeSettingsPageView(), Route, Route
+
+### Community 39 - "Ops Waste Route"
+Cohesion: 0.31
+Nodes (9): verifyIndividualChefPinCore(), effectiveStaffPermissions(), makeStaffSessionToken(), staffSessionExpiry(), getPublicStaffList, PublicStaffItem, verifyStaffPin, verifyStaffPinCore() (+1 more)
+
+### Community 42 - "Cloudflare Vite Plugin"
+Cohesion: 0.21
+Nodes (11): AuthShell(), translateAuthError(), checkRateLimit(), clearRateLimit(), RateLimitEntry, read(), recordFailedAttempt(), write() (+3 more)
+
+### Community 49 - "ESLint Prettier Plugin"
+Cohesion: 0.17
+Nodes (11): SahlDZ — موجز إعادة تصميم واجهة الويب, الشخصية المعتمدة: SahlDZ Administrative Ledger, القرار, المستخدم والسياق, الهدف, تفويض إعادة التأليف البنيوي, خارج النطاق, قرار V4 — استبدال الواجهة لا تطويرها (+3 more)
+
+### Community 50 - "exceljs Dependency"
+Cohesion: 0.22
+Nodes (18): createFirebaseUser(), addStaffCore(), assertOwnedStaff(), cleanPermissions(), deleteStaffCore(), deriveOpsRoleForPermissions(), grantedAreas(), listStaffCore() (+10 more)
+
+### Community 61 - "Lovable Webhooks"
+Cohesion: 0.20
+Nodes (15): grantedInterfaces(), clearAllStaffSessions(), hasActivePreviewStaffSession(), hasUnifiedStaffSessionEver(), individualChefTokenKey(), lastOpenTab(), LEGACY_KEYS, LegacyKeys (+7 more)
+
+### Community 64 - "Radix Alert Dialog"
+Cohesion: 0.15
+Nodes (12): 1. الملخص التنفيذي (Executive Summary), 2. النظام البصري «SahlDZ Administrative Ledger», 3. إعادة هندسة الهيكل والتنقل الإداري (Application Frame), 4. إعادة بناء صفحة المدير `/ops` المرجعية (Information Architecture), 5. تعميم نمط الأدوات والجداول على الصفحات التشغيلية, 6. قائمة الملفات المعدلة بدقة (Exact Files Changed), 7. نتائج الفحص والتحقق الفني والبصري (Verification Results), 8. الخلاصة (+4 more)
+
+### Community 65 - "Radix Aspect Ratio"
+Cohesion: 0.14
+Nodes (11): supabase, addDeliveryDriver, listDeliveryDrivers, notifyDriversForOrder, removeDeliveryDriver, StaffRow, toggleDeliveryDriver, CsvMenuRow (+3 more)
+
+### Community 68 - "Radix Collapsible"
+Cohesion: 0.12
+Nodes (17): class-variance-authority, dependencies, class-variance-authority, @radix-ui/react-collapsible, @radix-ui/react-dialog, @radix-ui/react-progress, @radix-ui/react-slider, react-email (+9 more)
+
+### Community 70 - "Radix Dialog"
+Cohesion: 0.08
+Nodes (24): المرحلة 2 — التحول إلى SahlDZ Administrative Ledger [مكتملة بنجاح ✅], المرحلة 3 — إعادة تأليف الواجهة بالكامل [مكتملة بنجاح ومحققة بصرياً ✅], المرحلة 4 — واجهة جديدة من الصفر [المهمة الحالية], المهمة 0 — حصر أثر التنفيذ [مكتملة], المهمة 1 — أساس التصميم المشترك [مكتملة], المهمة 2.1 — إطار برنامج ERP مكتبي [مكتملة], المهمة 2.2 — إعادة بناء `/ops` كصفحة متابعة ودفتر أستاذ [مكتملة], المهمة 2.3 — تعميم نمط الأدوات والجداول [مكتملة] (+16 more)
+
+### Community 71 - "Radix Dropdown Menu"
+Cohesion: 0.11
+Nodes (30): cashierCreateOrderCore(), cashierListActiveOrdersCore(), cashierListReadyCore(), cashierLookupTableCore(), cashierMarkPaid, cashierMarkPaidCore(), CashierNewOrderInput, cashierUpdateOrderStatus (+22 more)
+
+### Community 76 - "Radix Popover"
+Cohesion: 0.29
+Nodes (11): DriverSession, finalizeDriver(), findRestaurantByName(), findStaffByChat(), getDeliveryBotStatus, linkedDriverReply(), nextDriverSerial(), processDeliveryBotUpdates (+3 more)
+
+### Community 77 - "Radix Progress"
+Cohesion: 0.27
+Nodes (8): Badge(), BadgeProps, badgeVariants, buttonVariants, Calendar(), CalendarProps, Switch, cn()
+
+### Community 81 - "Radix Separator"
+Cohesion: 0.20
+Nodes (9): cashierGetMenuCore(), getMenuOptionsForItem, getMenuOptionsForItemsCore(), MenuOption, OptionChoice, saveMenuOptions, fetchMenu(), buildMenuImagePath() (+1 more)
+
+### Community 90 - "React Email"
+Cohesion: 0.21
+Nodes (11): addIndividualChefCore(), generateUniquePin(), generateUniqueSerial(), isStaffSessionExpired(), parseStaffSessionToken(), randomPin(), randomSerial(), derivePermissionsFromRole() (+3 more)
+
+### Community 91 - "React Email Components"
+Cohesion: 0.22
+Nodes (8): الحالة التقنية الحالية, الحدود الوظيفية, تفويض V4 التقني, ثوابت لا تمس, حدود إعادة الهيكلة المصرح بها, خريطة الواجهة المعمارية — SahlDZ, طبقات التغيير المسموح بها, ملاحظات تقنية ظاهرة قبل التنفيذ
+
+### Community 98 - "Tailwind Vite Plugin"
+Cohesion: 0.31
+Nodes (5): activateRestaurant(), activateStaff(), generateActivationCode(), saveActivationConfig(), verifyActivationCode()
+
+### Community 100 - "React Start Dependency"
+Cohesion: 0.22
+Nodes (8): fs, hubContent, newHub, path, routesDir, srcDir, views, viewsDir
+
+### Community 104 - "Vite TS Config Paths"
+Cohesion: 0.32
+Nodes (8): NotificationManager(), firebaseConfig, getFirebaseApp(), initializeFCM(), onForegroundMessage(), removeFCMToken(), saveFCMToken(), MobileLayout()
+
+### Community 109 - "QRCode Types"
+Cohesion: 0.22
+Nodes (8): fs, hubContent, newHub, path, routesDir, srcDir, views, viewsDir
+
+### Community 111 - "WS Types"
+Cohesion: 0.15
+Nodes (9): AccountShell(), Restaurant, fmt(), OpsOverview(), resolveRestaurantId(), requireOwner(), Route, Route (+1 more)
+
+### Community 112 - "TypeScript ESLint"
+Cohesion: 0.25
+Nodes (6): clientDir, config, configPath, out, root, staticDir
+
+### Community 113 - "Vite Bundler"
+Cohesion: 0.29
+Nodes (10): INTERFACE_TAB_DEFS, OPS_AREA_ICONS, StaffTabs(), TabDef, allowedOpsAreaPaths(), grantedOpsAreas(), opsAreaLabel(), opsAreaPath() (+2 more)
+
+### Community 118 - "default-menu.ts"
+Cohesion: 0.25
+Nodes (8): buildDefaultCashierMenu(), DEFAULT_CATEGORIES, DEFAULT_MENU_ITEMS, DefaultCategory, DefaultMenuItem, DefaultOption, DefaultOptionChoice, NewOrderView()
+
+### Community 119 - "manager-db.functions.ts"
+Cohesion: 0.32
+Nodes (3): listRestaurantManagers, RestaurantManagerRow, Route
+
+### Community 121 - "preview-server.mjs"
+Cohesion: 0.29
+Nodes (5): CLIENT_DIR, __dirname, MIME, PORT, server
+
+### Community 123 - "seed-cloud-data.mjs"
+Cohesion: 0.47
+Nodes (5): fieldValue(), main(), NOW, putDoc(), tokenPath
+
+### Community 124 - "start-emulators.js"
+Cohesion: 0.53
+Nodes (5): __dirname, isPortOpen(), main(), ROOT, waitForPort()
+
+### Community 125 - "DeliverySettingsPageView"
+Cohesion: 0.33
+Nodes (4): DeliverySettingsPageView(), getServerAuthHeaders(), Route, Route
+
+### Community 126 - "account.settings.index.tsx"
+Cohesion: 0.47
+Nodes (3): SettingsHubView(), Route, Route
+
+### Community 127 - "TakeawaySettingsPageView"
+Cohesion: 0.33
+Nodes (4): getServerAuthHeaders(), TakeawaySettingsPageView(), Route, Route
+
+### Community 129 - "EmployeesSettingsPageView"
+Cohesion: 0.40
+Nodes (3): EmployeesSettingsPageView(), Route, Route
+
+### Community 130 - "account.settings.restaurant.tsx"
+Cohesion: 0.40
+Nodes (3): RestaurantSettingsPageView(), Route, Route
+
+### Community 131 - "push-env.sh"
+Cohesion: 0.50
+Nodes (3): NO_UPDATE_NOTIFIER, push-env.sh script, VERCEL_FORCE_NO_UPDATE
+
+### Community 132 - "seed-auth-emulator.js"
+Cohesion: 0.67
+Nodes (3): createUser(), main(), USERS
+
+### Community 138 - "class-variance-authority"
+Cohesion: 0.11
+Nodes (20): SelectContent, SelectItem, SelectLabel, SelectScrollDownButton, SelectScrollUpButton, SelectSeparator, SelectTrigger, Textarea (+12 more)
+
+### Community 142 - "firebase-tools"
+Cohesion: 0.25
+Nodes (7): SahlDZ V4 — Complete Interface Replacement, اختبار القبول البصري, الاختلاف الإلزامي عن النسخة السابقة, القرار, المفهوم, حدود التنفيذ, صفحة `/ops` الجديدة
+
+### Community 156 - "dashboard.orders.tsx"
+Cohesion: 0.36
+Nodes (6): ManagerDownloadBanner(), freshCachedTarget(), getPostAuthRedirect(), redirectIfAuthed(), isEmbeddedWebView(), LandingPage()
+
+### Community 158 - "mobile.inventory.tsx"
+Cohesion: 0.39
+Nodes (6): buildWeeklyReport(), WeeklyDailyRow, WeeklyReport, weeklyReportPlainText(), WeeklyTypeRow, MobileWeeklyReport()
+
+### Community 160 - "mobile-inventory.tsx"
+Cohesion: 0.29
+Nodes (7): CountRow, IngredientRow, MobileInventory(), Status, STATUS_META, STATUS_ORDER, statusOf()
+
+### Community 168 - "telegram.functions.ts"
+Cohesion: 0.29
+Nodes (5): clearRestaurantBotToken, generateTelegramLinkToken, getTelegramStatus, setRestaurantBotToken, unlinkTelegram
+
+### Community 170 - "delivery.functions.ts"
+Cohesion: 0.33
+Nodes (4): disableDelivery, enableDelivery, getDeliveryStatus, regenerateDeliveryToken
+
+### Community 171 - "appOrigin"
+Cohesion: 0.40
+Nodes (4): qrcode, qrcode, appOrigin(), TableCard()
+
+### Community 172 - "session-cache.ts"
+Cohesion: 0.60
+Nodes (4): cacheSession(), readRaw(), readSessionCache(), SessionCache
+
+### Community 173 - "allowedStaffPaths"
+Cohesion: 0.50
+Nodes (4): allowedInterfacePaths(), allowedStaffPaths(), firstStaffPath(), unifiedAllowedPaths()
 
 ## Knowledge Gaps
-
-- **297 isolated node(s):** `name`, `private`, `sideEffects`, `type`, `node` (+292 more)
+- **585 isolated node(s):** `fs`, `path`, `srcDir`, `routesDir`, `viewsDir` (+580 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **89 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **99 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
-
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `dependencies` connect `Key Runtime Dependencies` to `Shared UI & PDF Helpers`, `Auth Shell & QR Codes`, `Package Metadata`, `Cloudflare Vite Plugin`, `clsx Dependency`, `cmdk Dependency`, `date-fns Dependency`, `Embla Carousel Dependency`, `exceljs Dependency`, `Firebase Dependency`, `Floating UI Dependency`, `Hookform Resolvers`, `i18next Dependency`, `input-otp Dependency`, `jspdf-autotable Dependency`, `Lovable Cloud Auth`, `Lovable Email JS`, `Lovable Webhooks`, `Lucide Icons`, `Radix Accordion`, `Radix Alert Dialog`, `Radix Aspect Ratio`, `Radix Avatar`, `Radix Checkbox`, `Radix Collapsible`, `Radix Context Menu`, `Radix Dialog`, `Radix Dropdown Menu`, `Radix Hover Card`, `Radix Label`, `Radix Menubar`, `Radix Navigation Menu`, `Radix Popover`, `Radix Progress`, `Radix Radio Group`, `Radix Scroll Area`, `Radix Select`, `Radix Separator`, `Radix Slot`, `Radix Switch`, `Radix Tabs`, `Radix Toggle`, `Radix Tooltip`, `React Core`, `React DOM`, `React Day Picker`, `React Email`, `React Email Components`, `React Hook Form`, `Resizable Panels`, `Recharts Charts`, `Supabase JS`, `Tailwind Merge`, `Tailwind CSS`, `Tailwind Vite Plugin`, `React Router Dependency`, `React Start Dependency`, `Router Plugin`, `tw-animate-css Dependency`, `Vaul Dependency`, `Vite TS Config Paths`, `ws Dependency`, `Zod Validation`?**
-  _High betweenness centrality (0.344) - this node is a cross-community bridge._
-- **Why does `TableCard()` connect `Auth Shell & QR Codes` to `UI Dialog Components`?**
-  _High betweenness centrality (0.155) - this node is a cross-community bridge._
-- **Why does `qrcode` connect `Auth Shell & QR Codes` to `Key Runtime Dependencies`?**
-  _High betweenness centrality (0.154) - this node is a cross-community bridge._
-- **What connects `name`, `private`, `sideEffects` to the rest of the system?**
-  _297 weakly-connected nodes found - possible documentation gaps or missing edges._
-- **Should `UI Dialog Components` be split into smaller, more focused modules?**
-  _Cohesion score 0.051893408134642355 - nodes in this community are weakly interconnected._
+- **Why does `dependencies` connect `Radix Collapsible` to `WelcomeSettingsPageView`, `Shared UI & PDF Helpers`, `qrcode`, `ops.accounting.tsx`, `Key Runtime Dependencies`, `framer-motion`, `i18next-browser-languagedetector`, `@radix-ui/react-slider`, `@radix-ui/react-toggle-group`, `Package Metadata`, `react-i18next`, `sonner`, `vite-plugin-pwa`, `workbox-window`, `mobile.index.tsx`, `@radix-ui/react-dropdown-menu`, `@radix-ui/react-popover`, `@tanstack/react-query`, `clsx Dependency`, `cmdk Dependency`, `date-fns Dependency`, `appOrigin`, `Embla Carousel Dependency`, `exceljs`, `Firebase Dependency`, `Floating UI Dependency`, `Hookform Resolvers`, `i18next Dependency`, `input-otp Dependency`, `jspdf-autotable Dependency`, `Lovable Cloud Auth`, `Lovable Email JS`, `Lucide Icons`, `Radix Accordion`, `Radix Avatar`, `Radix Checkbox`, `Radix Context Menu`, `Radix Hover Card`, `Radix Label`, `Radix Menubar`, `Radix Navigation Menu`, `Radix Radio Group`, `Radix Scroll Area`, `Radix Select`, `Radix Slot`, `Radix Switch`, `Radix Tabs`, `Radix Toggle`, `Radix Tooltip`, `React Core`, `React DOM`, `React Day Picker`, `React Hook Form`, `Resizable Panels`, `Recharts Charts`, `Supabase JS`, `Tailwind Merge`, `Tailwind CSS`, `React Router Dependency`, `Router Plugin`, `tw-animate-css Dependency`, `Vaul Dependency`, `ws Dependency`, `Zod Validation`, `mobile-inventory.tsx`?**
+  _High betweenness centrality (0.210) - this node is a cross-community bridge._
+- **Why does `supabase` connect `Radix Aspect Ratio` to `UI Dialog Components`, `Daily Summary Server Functions`, `Shared UI & PDF Helpers`, `Auth Shell & QR Codes`, `App Bar Controls`, `Shared Hooks & Utilities`, `Role Auth & Preview Mode`, `Chef Server Functions`, `Waiter Server Functions`, `class-variance-authority`, `Dashboard Onboarding Tour`, `Firebase Adapter Core`, `UI Card Components`, `Chatbot & Theme Controls`, `Ops Overview KPIs`, `FloatingInput Primitive`, `GradientText Primitive`, `SectionHeader Primitive`, `mobile.inventory.tsx`, `mobile-inventory.tsx`, `Ops Complaints Route`, `Ops Expenses Route`, `Ops Reports Route`, `Ops Staff Performance Route`, `Ops Waste Route`, `telegram.functions.ts`, `delivery.functions.ts`, `Cloudflare Vite Plugin`, `exceljs Dependency`, `Radix Dropdown Menu`, `Radix Popover`, `Radix Separator`, `Tailwind Vite Plugin`, `Vite TS Config Paths`, `WS Types`, `manager-db.functions.ts`?**
+  _High betweenness centrality (0.112) - this node is a cross-community bridge._
+- **Why does `jspdf` connect `Shared UI & PDF Helpers` to `Radix Collapsible`?**
+  _High betweenness centrality (0.105) - this node is a cross-community bridge._
+- **What connects `fs`, `path`, `srcDir` to the rest of the system?**
+  _585 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Daily Summary Server Functions` be split into smaller, more focused modules?**
-  _Cohesion score 0.060496067755595885 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.10052910052910052 - nodes in this community are weakly interconnected._
 - **Should `Shared UI & PDF Helpers` be split into smaller, more focused modules?**
-  _Cohesion score 0.06567992599444958 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.05359937402190924 - nodes in this community are weakly interconnected._
+- **Should `Project Architecture Docs` be split into smaller, more focused modules?**
+  _Cohesion score 0.051515151515151514 - nodes in this community are weakly interconnected._

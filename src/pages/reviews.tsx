@@ -183,11 +183,11 @@ export default function ReviewsPage() {
 
   return (
     <div className="space-y-6" dir="rtl">
-      {/* Premium header */}
-      <div className="glass shadow-glass rounded-2xl p-5 md:p-6 flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-4 min-w-0">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-yellow-500 to-amber-500 flex items-center justify-center text-white shadow-md shrink-0">
-            <Star className="w-6 h-6" />
+      {/* Header */}
+      <div className="bg-card border border-border rounded-xl p-5 md:p-6 flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-3.5 min-w-0">
+          <div className="w-10 h-10 rounded-lg bg-secondary text-primary flex items-center justify-center shrink-0">
+            <Star className="w-5 h-5" />
           </div>
           <div className="min-w-0">
             <h1 className="text-xl md:text-2xl font-bold text-foreground tracking-tight">التقييمات والمراجعات</h1>
@@ -200,20 +200,20 @@ export default function ReviewsPage() {
 
       {/* Stats */}
       <div data-annotate="reviews-stats" className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div data-annotate="reviews-rating" className="glass shadow-glass rounded-2xl p-5 hover-lift border border-border/60">
-          <div className="text-sm font-medium text-muted-foreground mb-3">{t("reviews.avg")}</div>
+        <div data-annotate="reviews-rating" className="bg-card border border-border rounded-xl p-5">
+          <div className="text-xs font-medium text-muted-foreground mb-2">{t("reviews.avg")}</div>
           <div className="flex items-center gap-3">
-            <div className="text-3xl font-bold text-foreground">{stats.avg.toFixed(1)}</div>
-            <Stars value={Math.round(stats.avg)} size={20} />
+            <div className="text-2xl sm:text-3xl font-bold text-foreground tabular-nums">{stats.avg.toFixed(1)}</div>
+            <Stars value={Math.round(stats.avg)} size={18} />
           </div>
         </div>
-        <div className="glass shadow-glass rounded-2xl p-5 hover-lift border border-border/60">
-          <div className="text-sm font-medium text-muted-foreground mb-3">{t("reviews.count")}</div>
-          <div className="text-3xl font-bold text-foreground">{stats.total}</div>
+        <div className="bg-card border border-border rounded-xl p-5">
+          <div className="text-xs font-medium text-muted-foreground mb-2">{t("reviews.count")}</div>
+          <div className="text-2xl sm:text-3xl font-bold text-foreground tabular-nums">{stats.total}</div>
         </div>
-        <div className="glass shadow-glass rounded-2xl p-5 hover-lift border border-border/60">
-          <div className="text-sm font-medium text-muted-foreground mb-3">{t("reviews.googleRate")}</div>
-          <div className="text-3xl font-bold text-foreground">{stats.conv}%</div>
+        <div className="bg-card border border-border rounded-xl p-5">
+          <div className="text-xs font-medium text-muted-foreground mb-2">{t("reviews.googleRate")}</div>
+          <div className="text-2xl sm:text-3xl font-bold text-foreground tabular-nums">{stats.conv}%</div>
           <div className="text-xs text-muted-foreground mt-1">{t("reviews.googleHint")}</div>
         </div>
       </div>

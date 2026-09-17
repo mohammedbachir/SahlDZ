@@ -2,11 +2,10 @@
 @source "../src";
 @import "tw-animate-css";
 
-@custom-variant dark (&:is(.dark *));
-
 /*
- * Sahl DZ Design System
- * Human-first design — less polish, more character
+ * SahlDZ Web Design System
+ * Calm, professional Arabic RTL restaurant management interface
+ * Light-only theme based on docs/DESIGN.md
  */
 
 @theme inline {
@@ -57,84 +56,60 @@
 }
 
 :root {
-  --radius: 0.625rem;
-  /* Warm, grounded palette */
-  --background: #faf8f5;
-  --foreground: #1a1612;
-  --card: #ffffff;
-  --card-foreground: #1a1612;
-  --popover: #ffffff;
-  --popover-foreground: #1a1612;
-  --primary: #c5943a;
-  --primary-foreground: #ffffff;
-  --secondary: #f3efe9;
-  --secondary-foreground: #1a1612;
-  --muted: #f0ece6;
-  --muted-foreground: #6b5e52;
-  --accent: #c5943a;
-  --accent-foreground: #1a1612;
-  --destructive: #b83a2a;
-  --destructive-foreground: #ffffff;
-  --border: #e4ddd4;
-  --input: #e4ddd4;
-  --ring: #c5943a;
-  --success: #3d7a4a;
-  --success-foreground: #ffffff;
-  --warning: #c5943a;
-  --warning-foreground: #1a1612;
+  --radius: 0.375rem;
 
-  /* Chart colors */
-  --chart-1: #c5943a;
-  --chart-2: #3d7a4a;
-  --chart-3: #5a7fb5;
-  --chart-4: #b83a2a;
-  --chart-5: #8b6bb5;
+  /* Warm ivory application background and crisp white surfaces */
+  --background: #F8F6F1;
+  --foreground: #27231E;
+  --card: #FFFFFF;
+  --card-foreground: #27231E;
+  --popover: #FFFFFF;
+  --popover-foreground: #27231E;
+
+  /* Restrained copper brand color */
+  --primary: #A96F2E;
+  --primary-hover: #8C5921;
+  --primary-foreground: #FFFFFF;
+
+  /* Secondary & neutral muted tokens */
+  --secondary: #F3EFEA;
+  --secondary-foreground: #27231E;
+  --muted: #EFECE6;
+  --muted-foreground: #746C61;
+  --accent: #F3EFEA;
+  --accent-foreground: #A96F2E;
+
+  /* Calm borders and inputs */
+  --border: #E6E1D9;
+  --input: #E6E1D9;
+  --ring: #A96F2E;
+
+  /* Semantic status tokens (strict semantic use only) */
+  --success: #27734F;
+  --success-foreground: #FFFFFF;
+  --warning: #B86D16;
+  --warning-foreground: #FFFFFF;
+  --destructive: #B33F35;
+  --destructive-foreground: #FFFFFF;
+  --info: #3D6F9E;
+  --info-foreground: #FFFFFF;
+
+  /* Charts */
+  --chart-1: #A96F2E;
+  --chart-2: #27734F;
+  --chart-3: #3D6F9E;
+  --chart-4: #B33F35;
+  --chart-5: #B86D16;
 
   /* Sidebar */
-  --sidebar: #f5f2ed;
-  --sidebar-foreground: #1a1612;
-  --sidebar-primary: #c5943a;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #ebe6de;
-  --sidebar-accent-foreground: #1a1612;
-  --sidebar-border: #e4ddd4;
-  --sidebar-ring: #c5943a;
-}
-
-.dark {
-  --background: #141210;
-  --foreground: #f0ece6;
-  --card: #1e1c18;
-  --card-foreground: #f0ece6;
-  --popover: #1e1c18;
-  --popover-foreground: #f0ece6;
-  --primary: #d4a84a;
-  --primary-foreground: #141210;
-  --secondary: #252320;
-  --secondary-foreground: #f0ece6;
-  --muted: #201e1a;
-  --muted-foreground: #8a7e72;
-  --accent: #d4a84a;
-  --accent-foreground: #141210;
-  --destructive: #d4503f;
-  --destructive-foreground: #ffffff;
-  --border: #302c26;
-  --input: #302c26;
-  --ring: #d4a84a;
-  --success: #4a9458;
-  --success-foreground: #141210;
-  --warning: #d4a84a;
-  --warning-foreground: #141210;
-
-  /* Dark sidebar */
-  --sidebar: #1a1815;
-  --sidebar-foreground: #f0ece6;
-  --sidebar-primary: #d4a84a;
-  --sidebar-primary-foreground: #141210;
-  --sidebar-accent: #252320;
-  --sidebar-accent-foreground: #f0ece6;
-  --sidebar-border: #302c26;
-  --sidebar-ring: #d4a84a;
+  --sidebar: #FFFFFF;
+  --sidebar-foreground: #27231E;
+  --sidebar-primary: #A96F2E;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #F3EFEA;
+  --sidebar-accent-foreground: #A96F2E;
+  --sidebar-border: #E6E1D9;
+  --sidebar-ring: #A96F2E;
 }
 
 @layer base {
@@ -145,7 +120,7 @@
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
-    font-family: "Cairo", "IBM Plex Sans Arabic", system-ui, sans-serif;
+    font-family: "Cairo", "IBM Plex Sans Arabic", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     line-height: 1.6;
@@ -153,13 +128,13 @@
 
   * {
     scrollbar-width: thin;
-    scrollbar-color: color-mix(in oklab, var(--primary) 50%, transparent) transparent;
+    scrollbar-color: var(--border) transparent;
   }
 
   ::-webkit-scrollbar,
   *::-webkit-scrollbar {
-    width: 10px;
-    height: 10px;
+    width: 6px;
+    height: 6px;
   }
 
   ::-webkit-scrollbar-track,
@@ -169,21 +144,13 @@
 
   ::-webkit-scrollbar-thumb,
   *::-webkit-scrollbar-thumb {
-    background: color-mix(in oklab, var(--primary) 45%, transparent);
+    background: var(--border);
     border-radius: 999px;
-    border: 2px solid transparent;
-    background-clip: content-box;
   }
 
   ::-webkit-scrollbar-thumb:hover,
   *::-webkit-scrollbar-thumb:hover {
-    background: color-mix(in oklab, var(--primary) 70%, transparent);
-    background-clip: content-box;
-  }
-
-  ::-webkit-scrollbar-corner,
-  *::-webkit-scrollbar-corner {
-    background: transparent;
+    background: var(--muted-foreground);
   }
 
   h1, h2, h3, h4, h5, h6 {
@@ -193,72 +160,26 @@
 }
 
 /* ============================================
-   SUBTLE SURFACES — not glass, just soft cards
+   CALM SURFACES & SHADOWS
    ============================================ */
 
 @layer utilities {
   .surface {
-    background: var(--card);
+    background-color: var(--card);
     border: 1px solid var(--border);
-    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
   }
 
-  .surface-raised {
-    background: var(--card);
+  .surface-subtle {
+    background-color: var(--secondary);
     border: 1px solid var(--border);
-    box-shadow: 0 2px 8px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
   }
 
-  /* Keep glass for specific use cases only */
-  .glass {
-    background: color-mix(in oklab, var(--card) 85%, transparent);
-    border: 1px solid color-mix(in oklab, var(--border) 50%, transparent);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-  }
-}
-
-/* ============================================
-   SHADOWS — subtle, not dramatic
-   ============================================ */
-
-@layer utilities {
-  .shadow-sm { box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
-  .shadow-card { box-shadow: 0 1px 3px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.03); }
-  .shadow-glass { box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
-  .shadow-elegant { box-shadow: 0 4px 16px rgba(0,0,0,0.08); }
-  .shadow-glow { box-shadow: 0 0 20px rgba(197, 148, 58, 0.15); }
-  .shadow-elevated { box-shadow: 0 8px 24px rgba(0,0,0,0.1); }
-}
-
-/* ============================================
-   INTERACTIONS — human-like feedback
-   ============================================ */
-
-@layer utilities {
-  .hover-lift {
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  .shadow-subtle {
+    box-shadow: 0 1px 2px rgba(39, 35, 30, 0.04);
   }
 
-  .hover-lift:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-  }
-
-  .hover-glow:hover {
-    box-shadow: 0 0 16px rgba(197, 148, 58, 0.2);
-  }
-
-  .hover-scale {
-    transition: transform 0.15s ease;
-  }
-
-  .hover-scale:hover {
-    transform: scale(1.02);
-  }
-
-  .hover-scale:active {
-    transform: scale(0.98);
+  .shadow-popover {
+    box-shadow: 0 2px 8px rgba(39, 35, 30, 0.08);
   }
 }
 
@@ -268,11 +189,7 @@
 
 @layer utilities {
   .animate-fade-in {
-    animation: fade-in 0.3s ease-out;
-  }
-
-  .animate-slide-up {
-    animation: slide-up 0.3s ease-out;
+    animation: fade-in 0.2s ease-out;
   }
 }
 
@@ -281,114 +198,14 @@
   to { opacity: 1; }
 }
 
-@keyframes slide-up {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
 /* ============================================
-   BUTTONS — simple, not overdesigned
-   ============================================ */
-
-@layer utilities {
-  .btn-gold {
-    background: var(--primary);
-    color: var(--primary-foreground);
-    font-weight: 600;
-    padding: 0.625rem 1.5rem;
-    border-radius: var(--radius);
-    transition: all 0.15s ease;
-  }
-
-  .btn-gold:hover {
-    opacity: 0.9;
-    transform: translateY(-1px);
-  }
-
-  .btn-gold:active {
-    transform: translateY(0);
-  }
-
-  .btn-outline-gold {
-    background: transparent;
-    color: var(--primary);
-    font-weight: 600;
-    padding: 0.625rem 1.5rem;
-    border-radius: var(--radius);
-    border: 1.5px solid var(--primary);
-    transition: all 0.15s ease;
-  }
-
-  .btn-outline-gold:hover {
-    background: var(--primary);
-    color: var(--primary-foreground);
-  }
-}
-
-/* ============================================
-   CARD STYLES
-   ============================================ */
-
-@layer utilities {
-  .card-interactive {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 1.25rem;
-    transition: all 0.2s ease;
-  }
-
-  .card-interactive:hover {
-    border-color: var(--primary);
-    box-shadow: 0 2px 8px rgba(197, 148, 58, 0.1);
-  }
-}
-
-/* ============================================
-   INPUT STYLES
-   ============================================ */
-
-@layer utilities {
-  .input-gold {
-    width: 100%;
-    padding: 0.625rem 0.875rem;
-    border-radius: var(--radius);
-    border: 1.5px solid var(--border);
-    background: var(--background);
-    color: var(--foreground);
-    transition: all 0.15s ease;
-    outline: none;
-  }
-
-  .input-gold:focus {
-    border-color: var(--primary);
-    box-shadow: 0 0 0 2px rgba(197, 148, 58, 0.12);
-  }
-
-  .input-gold::placeholder {
-    color: var(--muted-foreground);
-  }
-}
-
-/* ============================================
-   SECTION STYLES
-   ============================================ */
-
-@layer utilities {
-  .section-divider {
-    height: 1px;
-    background: var(--border);
-  }
-}
-
-/* ============================================
-   RESPONSIVE UTILITIES
+   LAYOUT CONTAINER
    ============================================ */
 
 @layer utilities {
   .container-sahl {
     width: 100%;
-    max-width: 1200px;
+    max-width: 1280px;
     margin-left: auto;
     margin-right: auto;
     padding-left: 1rem;
@@ -403,18 +220,8 @@
   }
 }
 
-/* ============================================
-   REDUCED MOTION
-   ============================================ */
-
 @media (prefers-reduced-motion: reduce) {
-  .hover-lift:hover,
-  .hover-scale:hover {
-    transform: none;
-  }
-  
-  .animate-fade-in,
-  .animate-slide-up {
+  .animate-fade-in {
     animation: none;
   }
 }

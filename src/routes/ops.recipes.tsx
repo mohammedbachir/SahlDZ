@@ -455,7 +455,7 @@ function OpsRecipes() {
                       {rs.length === 0 ? tx("بدون وصفة") : (rs.length) + tx(" مكوّن")}
                     </div>
                     {it.category_id === null && (
-                      <div className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+                      <div className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-warning/10 text-warning border border-warning/20">
                         غير مصنف
                       </div>
                     )}

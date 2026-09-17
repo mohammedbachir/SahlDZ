@@ -1,8 +1,5 @@
 import { useEffect, useRef, useState, lazy, Suspense } from "react";
-import {
-  createFileRoute,
-  useNavigate,
-} from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import {
   ShoppingBag,
   UtensilsCrossed,
@@ -20,15 +17,8 @@ import {
   Smartphone,
 } from "lucide-react";
 import { requireAuth } from "@/lib/auth";
-import { AdminChatBot } from "@/components/AdminChatBot";
-import {
-  DashboardOnboarding,
-  hasCompletedOnboarding,
-} from "@/components/DashboardOnboarding";
-import {
-  DashboardTour,
-  tourSteps,
-} from "@/components/DashboardTour";
+import { DashboardOnboarding, hasCompletedOnboarding } from "@/components/DashboardOnboarding";
+import { DashboardTour, tourSteps } from "@/components/DashboardTour";
 import { supabase } from "@/integrations/supabase/client";
 import {
   DropdownMenu,
@@ -39,7 +29,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
-import { ThemeToggle } from "@/components/ThemeToggle";
 import { NotificationsBell } from "@/components/NotificationsBell";
 import { useTranslation } from "react-i18next";
 import { Outlet } from "@tanstack/react-router";
@@ -58,32 +47,24 @@ const AccountingPage = lazy(() => import("@/pages/accounting"));
 const ReviewsPage = lazy(() => import("@/pages/reviews"));
 
 type TabId =
-  | "orders"
-  | "menu"
-  | "tables"
-  | "analytics"
-  | "accounting"
-  | "ops"
-  | "reviews"
-  | "settings";
+  "orders" | "menu" | "tables" | "analytics" | "accounting" | "ops" | "reviews" | "settings";
 
 type TabItem = {
   id: TabId;
   key: string;
   icon: React.ComponentType<{ className?: string }>;
-  gradient: string;
   component?: React.ComponentType;
 };
 
 const TABS: TabItem[] = [
-  { id: "orders", key: "orders", icon: ShoppingBag, gradient: "from-amber-500 to-orange-500", component: OrdersPage },
-  { id: "menu", key: "menu", icon: UtensilsCrossed, gradient: "from-emerald-500 to-teal-500", component: MenuPage },
-  { id: "tables", key: "tables", icon: LayoutGrid, gradient: "from-blue-500 to-indigo-500", component: TablesPage },
-  { id: "analytics", key: "analytics", icon: BarChart3, gradient: "from-purple-500 to-pink-500", component: AnalyticsPage },
-  { id: "accounting", key: "accounting", icon: Calculator, gradient: "from-teal-500 to-cyan-600", component: AccountingPage },
-  { id: "ops", key: "ops", icon: Boxes, gradient: "from-rose-500 to-red-500" },
-  { id: "reviews", key: "reviews", icon: Star, gradient: "from-yellow-500 to-amber-500", component: ReviewsPage },
-  { id: "settings", key: "settings", icon: Settings, gradient: "from-slate-500 to-gray-500" },
+  { id: "orders", key: "orders", icon: ShoppingBag, component: OrdersPage },
+  { id: "menu", key: "menu", icon: UtensilsCrossed, component: MenuPage },
+  { id: "tables", key: "tables", icon: LayoutGrid, component: TablesPage },
+  { id: "analytics", key: "analytics", icon: BarChart3, component: AnalyticsPage },
+  { id: "accounting", key: "accounting", icon: Calculator, component: AccountingPage },
+  { id: "ops", key: "ops", icon: Boxes },
+  { id: "reviews", key: "reviews", icon: Star, component: ReviewsPage },
+  { id: "settings", key: "settings", icon: Settings },
 ];
 
 type Restaurant = { name: string; logo_url: string | null };
@@ -157,7 +138,9 @@ function DashboardLayout() {
             setRestaurant({ name: parsed.name, logo_url: parsed.logo_url });
             setRestaurantId(parsed.id);
             return;
-          } catch { /* ignore */ }
+          } catch {
+            /* ignore */
+          }
         }
         setRestaurant({ name: "مطعم السهل", logo_url: null });
         setRestaurantId("mock-restaurant-id");
@@ -179,10 +162,7 @@ function DashboardLayout() {
                 restaurant_id: inv.restaurant_id,
                 role: inv.role,
               });
-              await supabase
-                .from("staff_invitations")
-                .update({ accepted: true })
-                .eq("id", inv.id);
+              await supabase.from("staff_invitations").update({ accepted: true }).eq("id", inv.id);
             }
           }
         }
@@ -220,7 +200,9 @@ function DashboardLayout() {
           setRestaurant({ name: parsed.name, logo_url: parsed.logo_url });
           setRestaurantId(parsed.id);
           return;
-        } catch { /* ignore */ }
+        } catch {
+          /* ignore */
+        }
       }
       setRestaurant({ name: "مطعم السهل", logo_url: null });
       setRestaurantId("mock-restaurant-id");
@@ -237,7 +219,9 @@ function DashboardLayout() {
           const parsed = JSON.parse(saved);
           setRestaurant({ name: parsed.name, logo_url: parsed.logo_url });
           setRestaurantId(parsed.id);
-        } catch { /* ignore */ }
+        } catch {
+          /* ignore */
+        }
       }
     };
     window.addEventListener("restaurant-updated", onStorage);
@@ -257,7 +241,9 @@ function DashboardLayout() {
         const parsed = JSON.parse(saved);
         setRestaurant({ name: parsed.name, logo_url: parsed.logo_url });
         setRestaurantId(parsed.id);
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     }
   };
 
@@ -299,13 +285,13 @@ function DashboardLayout() {
       navigate({ to: "/dashboard/settings" });
       return;
     }
-    
+
     // For other tabs, if we are in settings, we must navigate back to dashboard
     if (window.location.pathname.startsWith("/dashboard/settings")) {
       navigate({ to: "/dashboard", search: { tab: tabId } });
       return;
     }
-    
+
     setActiveTab(tabId);
     window.history.replaceState(null, "", `/dashboard?tab=${tabId}`);
   };
@@ -352,9 +338,7 @@ function DashboardLayout() {
   }, [tourActive, activeTab, navigate]);
 
   // Filter visible tabs
-  let visibleTabs = isStaffOnly
-    ? TABS.filter((t) => t.id === "orders" || t.id === "menu")
-    : TABS;
+  let visibleTabs = isStaffOnly ? TABS.filter((t) => t.id === "orders" || t.id === "menu") : TABS;
 
   if (tourActive) {
     visibleTabs = visibleTabs.slice(0, tourStep + 1);
@@ -370,11 +354,11 @@ function DashboardLayout() {
   // Render active tab content
   const renderContent = () => {
     const tab = TABS.find((t) => t.id === activeTab);
-    
+
     if (activeTab === "settings") {
       return <Outlet />;
     }
-    
+
     if (!tab?.component) {
       return (
         <div className="flex items-center justify-center py-20 text-sm text-[var(--muted-foreground)]">
@@ -393,10 +377,7 @@ function DashboardLayout() {
   // Show onboarding if needed
   if (showOnboarding) {
     return (
-      <DashboardOnboarding
-        onComplete={handleOnboardingComplete}
-        onReset={handleOnboardingReset}
-      />
+      <DashboardOnboarding onComplete={handleOnboardingComplete} onReset={handleOnboardingReset} />
     );
   }
 
@@ -429,9 +410,7 @@ function DashboardLayout() {
               <div className="font-bold text-sm truncate text-[var(--foreground)]">
                 {restaurant?.name ?? t("nav.myRestaurant")}
               </div>
-              <div className="text-[11px] text-[var(--muted-foreground)]">
-                {t("nav.dashboard")}
-              </div>
+              <div className="text-[11px] text-[var(--muted-foreground)]">{t("nav.dashboard")}</div>
             </div>
           )}
           <button
@@ -456,20 +435,22 @@ function DashboardLayout() {
               <button
                 key={tab.id}
                 onClick={() => handleTabChange(tab.id)}
-                className={`w-full flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all duration-300 ${
+                className={`w-full flex items-center gap-3 rounded-l-sm rounded-r-none px-3 py-2 text-xs transition-colors ${
                   active
-                    ? "bg-[var(--primary)] text-[var(--primary-foreground)] font-semibold"
-                    : "text-[var(--muted-foreground)] font-medium hover:bg-[var(--muted)] hover:text-[var(--foreground)]"
+                    ? "bg-primary/10 text-primary font-medium border-r-2 border-primary"
+                    : "text-muted-foreground font-normal hover:bg-secondary hover:text-foreground border-r-2 border-transparent"
                 } ${sidebarExpanded ? "" : "justify-center"} ${
-                  isTourCurrent ? "ring-2 ring-[var(--primary)] ring-offset-1 ring-offset-[var(--sidebar)]" : ""
+                  isTourCurrent ? "ring-2 ring-primary ring-offset-1 ring-offset-background" : ""
                 }`}
               >
                 <div className="relative">
-                  <Icon className={`w-[18px] h-[18px] shrink-0 ${active ? "text-[var(--primary-foreground)]" : ""}`} />
+                  <Icon className={`w-4 h-4 shrink-0 ${active ? "text-primary" : ""}`} />
                   {tourActive && (
-                    <span className={`absolute -top-2 -right-2 w-4 h-4 rounded-full bg-[var(--primary)] text-[10px] font-bold flex items-center justify-center text-[#1a1612] ${
-                      active ? "ring-2 ring-[var(--primary-foreground)]" : ""
-                    }`}>
+                    <span
+                      className={`absolute -top-2 -right-2 w-4 h-4 rounded-full bg-primary text-[10px] font-bold flex items-center justify-center text-primary-foreground ${
+                        active ? "ring-2 ring-primary-foreground" : ""
+                      }`}
+                    >
                       {i + 1}
                     </span>
                   )}
@@ -484,11 +465,11 @@ function DashboardLayout() {
         <div className="p-2 border-t border-[var(--border)]">
           <button
             onClick={handleLogout}
-            className={`w-full flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-[var(--muted-foreground)] font-medium hover:bg-[var(--muted)] hover:text-[var(--foreground)] transition-colors ${
+            className={`w-full flex items-center gap-3 rounded-sm px-3 py-2 text-xs text-[var(--muted-foreground)] hover:bg-destructive/10 hover:text-destructive transition-colors ${
               sidebarExpanded ? "" : "justify-center"
             }`}
           >
-            <LogOut className="w-[18px] h-[18px] shrink-0" />
+            <LogOut className="w-4 h-4 shrink-0" />
             {sidebarExpanded && <span>{t("nav.logout")}</span>}
           </button>
         </div>
@@ -522,7 +503,6 @@ function DashboardLayout() {
 
           <div className="flex items-center gap-2">
             <LanguageSwitcher />
-            <ThemeToggle />
             <NotificationsBell restaurantId={restaurantId} />
 
             {/* User menu */}
@@ -551,9 +531,7 @@ function DashboardLayout() {
         </header>
 
         {/* Main content - Tab content */}
-        <main className="flex-1 p-4 md:p-6 pb-20 md:pb-6">
-          {renderContent()}
-        </main>
+        <main className="flex-1 p-4 md:p-6 pb-20 md:pb-6">{renderContent()}</main>
       </div>
 
       {/* ============================================
@@ -599,9 +577,6 @@ function DashboardLayout() {
           onNext={handleTourNext}
         />
       )}
-
-      {/* Chatbot */}
-      <AdminChatBot />
     </div>
   );
 }

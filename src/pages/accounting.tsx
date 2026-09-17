@@ -175,7 +175,7 @@ export default function AccountingPage() {
       {/* Header */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-2">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[var(--primary)] to-[var(--accent)] flex items-center justify-center text-[var(--primary-foreground)]">
+          <div className="w-9 h-9 rounded-lg bg-secondary text-primary flex items-center justify-center">
             <Calculator className="w-4.5 h-4.5 w-[18px] h-[18px]" />
           </div>
           <div>
@@ -272,7 +272,7 @@ export default function AccountingPage() {
                 <Landmark className="w-3.5 h-3.5" />
                 صافي الربح / الخسارة
               </div>
-              <div className={`text-xl font-extrabold tabular-nums ${report.netProfit >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600"}`}>
+              <div className={`text-xl font-extrabold tabular-nums ${report.netProfit >= 0 ? "text-[#27734F]" : "text-[#B33F35]"}`}>
                 {report.netProfit >= 0 ? "+" : ""}{formatDZD(report.netProfit)}
               </div>
               <div className="text-[11px] text-[var(--muted-foreground)] mt-0.5">
@@ -343,7 +343,7 @@ export default function AccountingPage() {
                 <span className="font-extrabold text-base text-[var(--foreground)]">
                   صافي الربح / الخسارة
                 </span>
-                <span className={`font-extrabold text-base tabular-nums ${report.netProfit >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600"}`} dir="ltr">
+                <span className={`font-extrabold text-base tabular-nums ${report.netProfit >= 0 ? "text-[#27734F]" : "text-[#B33F35]"}`} dir="ltr">
                   {report.netProfit >= 0 ? "+" : ""}{formatDZD(report.netProfit)}
                 </span>
               </div>
@@ -375,7 +375,7 @@ export default function AccountingPage() {
                       </div>
                       <div className="h-2 rounded-full bg-[var(--muted)]/70 overflow-hidden">
                         <div
-                          className="h-full rounded-full bg-gradient-to-l from-[var(--primary)] to-[var(--accent)] transition-all duration-500"
+                          className="h-full rounded-full bg-primary transition-all duration-500"
                           style={{ width: `${pct}%` }}
                         />
                       </div>
@@ -449,7 +449,7 @@ export default function AccountingPage() {
                       <TableCell className="text-xs text-muted-foreground text-left tabular-nums">
                         {d.expenses > 0 ? formatDZD(d.expenses) : "—"}
                       </TableCell>
-                      <TableCell className={`text-xs font-bold text-left tabular-nums ${d.net >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600"}`}>
+                      <TableCell className={`text-xs font-bold text-left tabular-nums ${d.net >= 0 ? "text-[#27734F]" : "text-[#B33F35]"}`}>
                         {d.net >= 0 ? "+" : ""}{formatDZD(d.net)}
                       </TableCell>
                     </TableRow>

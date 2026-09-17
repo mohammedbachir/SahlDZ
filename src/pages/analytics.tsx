@@ -319,15 +319,8 @@ function Tilt3D({
   );
 }
 
-/** Floating blurred gradient blobs for page atmosphere — purely decorative. */
 function AnimatedBackground() {
-  return (
-    <div className="pointer-events-none absolute inset-0 overflow-hidden">
-      <div className="absolute -top-24 -right-20 w-96 h-96 rounded-full bg-gradient-primary opacity-[0.14] blur-[100px] animate-float-slow" />
-      <div className="absolute top-1/3 -left-24 w-80 h-80 rounded-full bg-gradient-primary opacity-[0.10] blur-[110px] animate-float-slower" />
-      <div className="absolute bottom-0 right-1/4 w-72 h-72 rounded-full bg-gradient-primary opacity-[0.09] blur-[90px] animate-float-slow" />
-    </div>
-  );
+  return null;
 }
 
 function SectionHeader({
@@ -344,8 +337,8 @@ function SectionHeader({
   return (
     <div className="flex items-center justify-between gap-3 flex-wrap mb-5">
       <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl bg-gradient-primary shadow-glow flex items-center justify-center shrink-0">
-          <Icon className="w-5 h-5 text-primary-foreground" />
+        <div className="w-9 h-9 rounded-lg bg-secondary text-primary flex items-center justify-center shrink-0">
+          <Icon className="w-4 h-4" />
         </div>
         <div>
           <h3 className="text-lg font-semibold text-foreground leading-tight">
@@ -361,7 +354,7 @@ function SectionHeader({
   );
 }
 
-/** Floating glass tooltip shared by all charts on the page. */
+/** Chart tooltip shared by all charts on the page. */
 function ChartTooltip({
   active,
   payload,
@@ -382,7 +375,7 @@ function ChartTooltip({
   if (!active || !payload || !payload.length) return null;
   const value = payload[0].value;
   return (
-    <div className="glass-strong rounded-xl px-3.5 py-2.5 shadow-elegant border border-border/60 text-xs min-w-[120px]">
+    <div className="bg-card rounded-lg px-3 py-2 border border-border text-xs min-w-[120px] shadow-sm">
       <div className="text-muted-foreground mb-1">
         {labelFormatter ? labelFormatter(label) : `${labelPrefix ?? ""}${label}`}
       </div>
@@ -432,28 +425,20 @@ function KpiCard({
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 18, scale: 0.97 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      transition={{ duration: 0.5, delay: index * 0.08, ease: [0.2, 0.7, 0.2, 1] }}
-      style={{ transformStyle: "preserve-3d" }}
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3, delay: index * 0.05 }}
     >
-      <Tilt3D className="group relative rounded-2xl glass-card hover-lift p-6 overflow-hidden">
-        <div className="absolute -top-16 -left-16 w-40 h-40 rounded-full bg-gradient-primary opacity-10 blur-3xl group-hover:opacity-25 transition-opacity duration-500" />
-        <div className="relative flex items-start justify-between mb-4">
-          <div
-            className="w-11 h-11 rounded-xl bg-gradient-primary shadow-glow flex items-center justify-center"
-            style={{ transform: "translateZ(30px)" }}
-          >
-            <Icon className="w-5 h-5 text-primary-foreground" />
+      <div className="bg-card border border-border rounded-xl p-5">
+        <div className="flex items-start justify-between mb-3">
+          <div className="w-9 h-9 rounded-lg bg-secondary text-primary flex items-center justify-center">
+            <Icon className="w-4 h-4" />
           </div>
-          <span className="text-[11px] uppercase tracking-wider font-medium text-muted-foreground text-left">
+          <span className="text-xs font-medium text-muted-foreground">
             {title}
           </span>
         </div>
-        <div
-          className="relative text-3xl md:text-4xl font-bold text-foreground mb-2 tabular-nums"
-          style={{ transform: "translateZ(20px)" }}
-        >
+        <div className="text-2xl sm:text-3xl font-bold text-foreground mb-2 tabular-nums">
           {format(Math.round(animated))}
         </div>
         <div className="relative flex items-center justify-between gap-2">
@@ -498,7 +483,7 @@ function KpiCard({
             </div>
           )}
         </div>
-      </Tilt3D>
+      </div>
     </motion.div>
   );
 }
@@ -617,7 +602,7 @@ function RevenueRangeCard({
           viewport={{ once: true, margin: "-60px" }}
           transition={{ duration: 0.55, ease: [0.2, 0.7, 0.2, 1] }}
           data-annotate="analytics-chart"
-          className="rounded-2xl glass-card hover-lift p-6"
+          className="rounded-xl bg-card border border-border p-5 md:p-6"
         >
       <SectionHeader
         icon={Wallet}
@@ -921,7 +906,7 @@ export default function AnalyticsPage() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, margin: "-60px" }}
           transition={{ duration: 0.55, ease: [0.2, 0.7, 0.2, 1] }}
-          className="rounded-2xl glass-card hover-lift p-6"
+          className="rounded-xl bg-card border border-border p-5 md:p-6"
         >
           <SectionHeader
             icon={TrendingUp}
@@ -982,7 +967,7 @@ export default function AnalyticsPage() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, margin: "-60px" }}
           transition={{ duration: 0.55, ease: [0.2, 0.7, 0.2, 1] }}
-          className="rounded-2xl glass-card hover-lift p-6"
+          className="rounded-xl bg-card border border-border p-5 md:p-6"
         >
           <SectionHeader
             icon={Flame}
@@ -1027,7 +1012,7 @@ export default function AnalyticsPage() {
                         }}
                         viewport={{ once: true }}
                         transition={{ duration: 0.7, delay: idx * 0.03, ease: [0.2, 0.7, 0.2, 1] }}
-                        className="h-full bg-gradient-primary rounded-full"
+                        className="h-full bg-primary rounded-full"
                       />
                     </div>
                   </div>
@@ -1042,7 +1027,7 @@ export default function AnalyticsPage() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, margin: "-60px" }}
           transition={{ duration: 0.55, ease: [0.2, 0.7, 0.2, 1] }}
-          className="rounded-2xl glass-card hover-lift p-6"
+          className="rounded-xl bg-card border border-border p-5 md:p-6"
         >
           <SectionHeader
             icon={Snowflake}
@@ -1085,7 +1070,7 @@ export default function AnalyticsPage() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, margin: "-60px" }}
           transition={{ duration: 0.55, ease: [0.2, 0.7, 0.2, 1] }}
-          className="rounded-2xl glass-card hover-lift p-6"
+          className="rounded-xl bg-card border border-border p-5 md:p-6"
         >
           <SectionHeader icon={Clock} title="ساعات الذروة" subtitle="هذا الأسبوع" />
           <div className="h-56" dir="ltr">

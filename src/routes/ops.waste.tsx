@@ -42,11 +42,11 @@ const WASTE_REASONS: Record<string, string> = {
 };
 
 const REASON_COLORS: Record<string, string> = {
-  burned: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
-  expired: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300",
-  dropped: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300",
-  prep_error: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300",
-  other: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300",
+  burned: "bg-destructive/10 text-destructive border border-destructive/20",
+  expired: "bg-warning/10 text-warning border border-warning/20",
+  dropped: "bg-warning/10 text-warning border border-warning/20",
+  prep_error: "bg-[#3D6F9E]/10 text-[#3D6F9E] border border-[#3D6F9E]/20",
+  other: "bg-secondary text-secondary-foreground border border-border",
 };
 
 function startOfWeek() {

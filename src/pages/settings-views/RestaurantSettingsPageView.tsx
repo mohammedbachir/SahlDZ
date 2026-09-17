@@ -160,7 +160,7 @@ export function RestaurantSettingsPageView() {
       </div>
 
       {r?.activation_code && (
-        <div className="glass shadow-glass rounded-2xl border border-primary/30 p-6 space-y-4 bg-gradient-to-br from-primary/5 to-transparent">
+        <div className="bg-card border border-primary/20 rounded-xl p-6 space-y-4">
           <div className="flex items-center gap-2">
             <KeyRound className="w-5 h-5 text-primary" />
             <h3 className="text-lg font-bold">رقم تسجيل (تسجيل الدخول على الأجهزة)</h3>
@@ -187,7 +187,7 @@ export function RestaurantSettingsPageView() {
         </div>
       )}
 
-      <div className="glass shadow-glass rounded-2xl border border-border/60 p-6 space-y-5">
+      <div className="bg-card border border-border rounded-xl p-6 space-y-5">
         <div className="space-y-2">
           <Label>شعار المطعم</Label>
           <div className="flex items-center gap-4">

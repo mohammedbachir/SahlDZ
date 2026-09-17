@@ -498,11 +498,11 @@ export default function MenuPage() {
 
   return (
     <div className="space-y-6" dir="rtl">
-      {/* Premium header */}
-      <div className="glass shadow-glass rounded-2xl p-5 md:p-6 flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-4 min-w-0">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary to-accent flex items-center justify-center text-primary-foreground shadow-md shrink-0">
-            <UtensilsCrossed className="w-6 h-6" />
+      {/* Header */}
+      <div className="bg-card border border-border rounded-xl p-5 md:p-6 flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-3.5 min-w-0">
+          <div className="w-10 h-10 rounded-lg bg-secondary text-primary flex items-center justify-center shrink-0">
+            <UtensilsCrossed className="w-5 h-5" />
           </div>
           <div className="min-w-0">
             <h1 className="text-xl md:text-2xl font-bold text-foreground tracking-tight">
@@ -522,7 +522,7 @@ export default function MenuPage() {
             variant="outline"
             onClick={onSeedDemo}
             disabled={seeding}
-            className="rounded-xl"
+            className="rounded-lg"
           >
             {seeding ? (
               <Loader2 className="w-4 h-4 ml-1 animate-spin" />
@@ -531,14 +531,14 @@ export default function MenuPage() {
             )}
             تعبئة منيو تجريبي
           </Button>
-          <Button variant="outline" onClick={openCatNew} className="rounded-xl">
+          <Button variant="outline" onClick={openCatNew} className="rounded-lg">
             <Plus className="w-4 h-4 ml-1" />
             إضافة فئة
           </Button>
           <Button
             data-annotate="menu-add"
             onClick={openItemNew}
-            className="rounded-xl bg-gradient-to-br from-primary to-primary/80 shadow-md shadow-primary/20"
+            className="rounded-lg"
           >
             <Plus className="w-4 h-4 ml-1" />
             إضافة صنف
@@ -547,40 +547,40 @@ export default function MenuPage() {
       </div>
 
       {categories.length === 0 ? (
-        <div className="glass shadow-glass rounded-2xl border-2 border-dashed border-border p-16 text-center">
-          <div className="w-16 h-16 mx-auto rounded-2xl bg-muted flex items-center justify-center mb-4">
-            <UtensilsCrossed className="w-8 h-8 text-muted-foreground" />
+        <div className="bg-card border-2 border-dashed border-border rounded-xl p-12 text-center">
+          <div className="w-12 h-12 mx-auto rounded-lg bg-secondary flex items-center justify-center mb-3 text-muted-foreground">
+            <UtensilsCrossed className="w-6 h-6" />
           </div>
-          <p className="text-lg font-semibold text-foreground">
+          <p className="text-base font-semibold text-foreground">
             ابدأ بإضافة فئة جديدة
           </p>
-          <p className="text-sm text-muted-foreground mt-1">
+          <p className="text-xs text-muted-foreground mt-1">
             نظّم أصنافك ضمن فئات لتظهر بشكل احترافي للزبائن
           </p>
-          <Button onClick={openCatNew} className="mt-5 rounded-xl">
+          <Button onClick={openCatNew} className="mt-4 rounded-lg">
             <Plus className="w-4 h-4 ml-1" />
             إضافة فئة
           </Button>
         </div>
       ) : (
-        <div className="space-y-8">
+        <div className="space-y-6">
           {categories.map((cat) => {
             const catItems = items.filter((i) => i.category_id === cat.id);
             return (
               <section
                 key={cat.id}
-                className="glass shadow-glass rounded-2xl p-5 md:p-6"
+                className="bg-card border border-border rounded-xl p-5 md:p-6"
               >
-                <div className="flex items-center justify-between gap-3 mb-5 pb-4 border-b border-border/60">
+                <div className="flex items-center justify-between gap-3 mb-5 pb-4 border-b border-border">
                   <div className="flex items-center gap-3 min-w-0">
                     {cat.image_url ? (
                       <img
                         src={cat.image_url}
                         alt={cat.name}
-                        className="w-12 h-12 rounded-xl object-cover ring-1 ring-border shadow-sm shrink-0"
+                        className="w-10 h-10 rounded-lg object-cover ring-1 ring-border shrink-0"
                       />
                     ) : (
-                      <div className="w-1.5 h-7 rounded-full bg-gradient-to-b from-primary to-accent" />
+                      <div className="w-1 h-6 rounded-full bg-primary" />
                     )}
                     <h2 className="text-lg md:text-xl font-bold text-foreground tracking-tight truncate">
                       {cat.name}
@@ -1003,26 +1003,25 @@ function ItemCard({
   return (
     <div
       data-annotate="menu-card"
-      className="group relative rounded-2xl bg-card border border-border overflow-hidden flex flex-col transition-all duration-300 hover:-translate-y-1 hover:shadow-glass hover:border-primary/30"
+      className="group relative rounded-xl bg-card border border-border overflow-hidden flex flex-col transition-colors hover:border-primary/40"
     >
       <div className="relative overflow-hidden">
         {item.image_url ? (
           <img
             src={item.image_url}
             alt={item.name}
-            className="w-full h-[180px] object-cover transition-transform duration-500 group-hover:scale-105"
+            className="w-full h-[160px] object-cover"
           />
         ) : (
-          <div className="w-full h-[180px] bg-gradient-to-br from-muted to-muted/40 flex items-center justify-center text-muted-foreground">
-            <ImageIcon className="w-10 h-10 opacity-50" />
+          <div className="w-full h-[160px] bg-secondary flex items-center justify-center text-muted-foreground">
+            <ImageIcon className="w-8 h-8 opacity-40" />
           </div>
         )}
         {!item.is_available && (
-          <span className="absolute top-3 right-3 text-[10px] font-semibold bg-background/90 backdrop-blur-sm text-destructive rounded-full px-2.5 py-1 shadow-sm">
+          <span className="absolute top-2.5 right-2.5 text-[10px] font-semibold bg-card border border-destructive/20 text-destructive rounded-md px-2 py-0.5">
             غير متاح
           </span>
         )}
-        <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
       </div>
       <div className="p-4 flex flex-col flex-1 gap-2">
         <h3 className="font-bold text-foreground tracking-tight line-clamp-1">

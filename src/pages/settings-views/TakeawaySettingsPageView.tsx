@@ -116,7 +116,7 @@ export function TakeawaySettingsPageView() {
         <h2 className="text-xl font-bold">الطلب السريع عبر QR (Takeaway)</h2>
       </div>
 
-      <div className="glass shadow-glass rounded-2xl border border-border/60 p-6 space-y-4">
+      <div className="bg-card border border-border rounded-xl p-6 space-y-4">
         <p className="text-sm text-muted-foreground leading-relaxed">
           ضع رمز QR على طاولة الكاشير. العميل يمسح الرمز، يطلب الأكل، يدخل اسمه ورقمه، ويأخذ رمز طلبه (مثلاً <span className="font-mono font-bold text-foreground">007</span>) لمتابعته. الرمز يُعاد ترقيمه تلقائياً كل يوم الساعة 6 صباحاً.
         </p>

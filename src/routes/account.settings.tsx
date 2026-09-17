@@ -19,9 +19,9 @@ function AccountSettingsLayout() {
             <div className="mb-6">
               <Link
                 to="/account/settings"
-                className="inline-flex items-center gap-2 font-bold text-[var(--primary)] transition-colors bg-[var(--primary)]/10 hover:bg-[var(--primary)]/20 px-5 py-3 rounded-xl border border-[var(--primary)]/20 shadow-sm"
+                className="inline-flex items-center gap-2 text-xs font-semibold text-primary transition-colors bg-primary/10 hover:bg-primary/20 px-4 py-2 rounded-lg border border-primary/20"
               >
-                <ArrowRight className="w-5 h-5" />
+                <ArrowRight className="w-4 h-4" />
                 رجوع لصفحة الإعدادات الرئيسية
               </Link>
             </div>

@@ -160,11 +160,11 @@ export default function TablesPage() {
 
   return (
     <div className="space-y-6" dir="rtl">
-      {/* Premium header */}
-      <div className="glass shadow-glass rounded-2xl p-5 md:p-6 flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-4 min-w-0">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center text-white shadow-md shrink-0">
-            <LayoutGrid className="w-6 h-6" />
+      {/* Header */}
+      <div className="bg-card border border-border rounded-xl p-5 md:p-6 flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-3.5 min-w-0">
+          <div className="w-10 h-10 rounded-lg bg-secondary text-primary flex items-center justify-center shrink-0">
+            <LayoutGrid className="w-5 h-5" />
           </div>
           <div className="min-w-0">
             <h1 className="text-xl md:text-2xl font-bold text-foreground tracking-tight">إدارة الطاولات</h1>
@@ -174,11 +174,11 @@ export default function TablesPage() {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button onClick={() => setBulkOpen(true)} variant="outline" className="rounded-xl">
+          <Button onClick={() => setBulkOpen(true)} variant="outline" className="rounded-lg">
             <Layers className="ml-2 h-4 w-4" />
             إضافة عدة طاولات
           </Button>
-          <Button data-annotate="tables-add" onClick={() => setOpen(true)} className="rounded-xl bg-gradient-to-br from-primary to-primary/80 shadow-md shadow-primary/20">
+          <Button data-annotate="tables-add" onClick={() => setOpen(true)} className="rounded-lg">
             <Plus className="ml-2 h-4 w-4" />
             {t("tables.addTable")}
           </Button>
@@ -186,13 +186,13 @@ export default function TablesPage() {
       </div>
 
       {tables.length === 0 ? (
-        <div className="glass shadow-glass rounded-2xl border-2 border-dashed border-border p-16 text-center">
-          <div className="w-16 h-16 mx-auto rounded-2xl bg-muted flex items-center justify-center mb-4">
-            <LayoutGrid className="w-8 h-8 text-muted-foreground" />
+        <div className="bg-card border-2 border-dashed border-border rounded-xl p-12 text-center">
+          <div className="w-12 h-12 mx-auto rounded-lg bg-secondary flex items-center justify-center mb-3 text-muted-foreground">
+            <LayoutGrid className="w-6 h-6" />
           </div>
-          <p className="text-lg font-semibold text-foreground">ابدأ بإضافة طاولات</p>
-          <p className="text-sm text-muted-foreground mt-1">أنشئ طاولات مع رموز QR للطلبات_self-service</p>
-          <Button onClick={() => setOpen(true)} className="mt-5 rounded-xl">
+          <p className="text-base font-semibold text-foreground">ابدأ بإضافة طاولات</p>
+          <p className="text-xs text-muted-foreground mt-1">أنشئ طاولات مع رموز QR للطلبات</p>
+          <Button onClick={() => setOpen(true)} className="mt-4 rounded-lg">
             <Plus className="ml-2 h-4 w-4" />
             {t("tables.addTable")}
           </Button>
@@ -323,12 +323,12 @@ function TableCard({ table, onDelete }: { table: TableRow; onDelete: () => void 
   }
 
   return (
-    <div data-annotate="tables-card" className="group glass shadow-glass rounded-2xl p-6 flex flex-col items-center gap-4 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:border-primary/30 border border-border">
-      <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-500/10 to-indigo-500/10 flex items-center justify-center mb-1">
-        <span className="text-2xl font-bold text-blue-500">{table.table_number}</span>
+    <div data-annotate="tables-card" className="group bg-card rounded-xl p-5 flex flex-col items-center gap-3 border border-border hover:border-primary/40 transition-colors">
+      <div className="w-12 h-12 rounded-lg bg-secondary text-primary flex items-center justify-center mb-1">
+        <span className="text-xl font-bold">{table.table_number}</span>
       </div>
-      <h3 className="text-lg font-bold text-foreground">{t("common.table")} {table.table_number}</h3>
-      <div data-annotate="tables-qr" className="bg-white p-3 rounded-xl border border-border shadow-sm">
+      <h3 className="text-base font-bold text-foreground">{t("common.table")} {table.table_number}</h3>
+      <div data-annotate="tables-qr" className="bg-white p-3 rounded-lg border border-border">
         <canvas ref={canvasRef} />
       </div>
       <p className="text-[10px] text-muted-foreground break-all text-center select-all opacity-60 group-hover:opacity-100 transition-opacity">{url}</p>
