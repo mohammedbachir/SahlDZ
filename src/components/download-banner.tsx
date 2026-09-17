@@ -1,8 +1,8 @@
 import { Monitor, Smartphone, Download, ArrowLeft } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 
-const DESKTOP_URL = "/SahlDZ-Setup-1.0.0.exe";
-const APK_URL = "/sahldz.apk";
+const DESKTOP_URL = "https://github.com/mohammedbachir/SahlDZ/releases/download/v1.01/SahlDZ-Setup-1.0.0.exe";
+const APK_URL = "https://github.com/mohammedbachir/SahlDZ/releases/download/v1.0.0/sahldz-v1.2.0.apk";
 
 export function DownloadBanner() {
   return (

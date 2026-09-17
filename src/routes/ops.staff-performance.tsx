@@ -28,10 +28,10 @@ type StaffPerf = {
 };
 
 const ROLE_COLORS: Record<string, string> = {
-  "نادل": "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
-  "مطبخ": "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300",
-  "كاشير": "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
-  "استقبال": "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300",
+  "نادل": "bg-[#3D6F9E]/10 text-[#3D6F9E] border border-[#3D6F9E]/20",
+  "مطبخ": "bg-warning/10 text-warning border border-warning/20",
+  "كاشير": "bg-success/10 text-success border border-success/20",
+  "استقبال": "bg-primary/10 text-primary border border-primary/20",
 };
 
 function startOfMonth() {

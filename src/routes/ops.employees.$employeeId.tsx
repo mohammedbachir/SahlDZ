@@ -152,7 +152,7 @@ function EmployeeInfo() {
         <ArrowRight className="w-4 h-4" /> {tx("عودة للموظفين")}
       </Link>
 
-      <Card className="rounded-2xl glass shadow-glass border-border/60 p-4">
+      <Card className="rounded-xl border border-border bg-card p-4">
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-full bg-[var(--primary)]/10 text-[var(--primary)] flex items-center justify-center">
@@ -317,7 +317,7 @@ function EmployeeInfo() {
         </div>
       </Card>
 
-      <Card className="rounded-2xl glass shadow-glass border-border/60 p-4">
+      <Card className="rounded-xl border border-border bg-card p-4">
         <h3 className="font-bold text-sm">{tx("أداء الموظف")}</h3>
         <p className="text-xs text-[var(--muted-foreground)] mt-1">
           {tx("قريباً: سجلات الأداء، الرواتب، والسحب المالي.")}

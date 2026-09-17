@@ -282,7 +282,7 @@ function OpsEmployees() {
         </div>
       </div>
 
-      <Card className="rounded-2xl glass shadow-glass border-border/60 overflow-x-auto">
+      <Card className="rounded-xl border border-border bg-card overflow-x-auto">
         <Table className="min-w-[620px]">
           <TableHeader>
             <TableRow>

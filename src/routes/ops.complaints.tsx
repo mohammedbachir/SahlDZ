@@ -41,16 +41,16 @@ type Complaint = {
 };
 
 const STATUS_LABELS: Record<string, { label: string; color: string; icon: typeof Clock }> = {
-  open: { label: tx("مفتوحة"), color: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300", icon: AlertTriangle },
-  investigating: { label: tx("قيد المراجعة"), color: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300", icon: Clock },
-  resolved: { label: tx("محلولة"), color: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300", icon: CheckCircle2 },
+  open: { label: tx("مفتوحة"), color: "bg-destructive/10 text-destructive border border-destructive/20", icon: AlertTriangle },
+  investigating: { label: tx("قيد المراجعة"), color: "bg-warning/10 text-warning border border-warning/20", icon: Clock },
+  resolved: { label: tx("محلولة"), color: "bg-success/10 text-success border border-success/20", icon: CheckCircle2 },
 };
 
 const SEVERITY_LABELS: Record<string, { label: string; color: string }> = {
-  low: { label: tx("منخفضة"), color: "bg-gray-100 text-gray-600" },
-  medium: { label: tx("متوسطة"), color: "bg-amber-100 text-amber-700" },
-  high: { label: tx("عالية"), color: "bg-orange-100 text-orange-700" },
-  critical: { label: tx("حرجة"), color: "bg-red-100 text-red-700" },
+  low: { label: tx("منخفضة"), color: "bg-secondary text-secondary-foreground border border-border" },
+  medium: { label: tx("متوسطة"), color: "bg-warning/10 text-warning border border-warning/20" },
+  high: { label: tx("عالية"), color: "bg-warning/15 text-[#8C5921] border border-warning/30 font-medium" },
+  critical: { label: tx("حرجة"), color: "bg-destructive/10 text-destructive border border-destructive/20 font-medium" },
 };
 
 const EMPTY_FORM = { title: "", description: "", customer_name: "", severity: "medium" as string };

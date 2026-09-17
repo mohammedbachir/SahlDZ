@@ -106,7 +106,7 @@ export function DeliverySettingsPageView() {
         <h2 className="text-xl font-bold">نظام التوصيل (Delivery)</h2>
       </div>
 
-      <div className="glass shadow-glass rounded-2xl border border-border/60 p-6 space-y-4">
+      <div className="bg-card border border-border rounded-xl p-6 space-y-4">
         <p className="text-sm text-muted-foreground leading-relaxed">
           فعّل رابطًا مخصصًا للطلب من البيت — انسخه وضعه في Bio على Instagram أو شاركه عبر WhatsApp. سيظهر الطلب لدى الطباخ مع اسم العميل ورقم الهاتف وعنوان التوصيل.
         </p>

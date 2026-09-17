@@ -198,7 +198,7 @@ export function EmployeesSettingsPageView() {
         <h2 className="text-xl font-bold">الموظفون</h2>
       </div>
 
-      <div className="glass shadow-glass rounded-2xl border border-border/60 p-6 space-y-4">
+      <div className="bg-card border border-border rounded-xl p-6 space-y-4">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <p className="text-sm text-muted-foreground flex-1">
             مكان واحد لكل الموظفين: الاسم + PIN + الصلاحيات (مطبخ، نادل، كاشير، وأقسام الإدارة). الموظف الذي له أكثر من صلاحية يجدها تبويبات في تطبيق سطح المكتب.

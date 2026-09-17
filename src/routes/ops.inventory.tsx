@@ -2,7 +2,17 @@ import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { requireOpsAccess, useAreaPermission } from "@/lib/permissions";
 import { CanWrite } from "@/components/PermissionsGate";
-import { Plus, Trash2, Pencil, Plus as PlusIcon, Minus, MoreVertical, Camera, Loader2 } from "lucide-react";
+import {
+  Plus,
+  Trash2,
+  Pencil,
+  Plus as PlusIcon,
+  Minus,
+  MoreVertical,
+  Camera,
+  Loader2,
+  Package,
+} from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { sendLowStockAlertFn, sendPurchaseNotificationFn } from "@/lib/ops-alerts.functions";
@@ -13,7 +23,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Card } from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -176,10 +185,7 @@ function OpsInventory() {
   const [wasteSaving, setWasteSaving] = useState(false);
 
   const loadAll = async (rid: string) => {
-    const { data, error } = await supabase
-      .from("ingredients")
-      .select("*")
-      .eq("restaurant_id", rid);
+    const { data, error } = await supabase.from("ingredients").select("*").eq("restaurant_id", rid);
     if (error) toast.error(tx("فشل تحميل المكونات"));
     const list = (data ?? []) as Ingredient[];
     list.sort((a, b) => a.name.localeCompare(b.name, "ar"));
@@ -217,7 +223,7 @@ function OpsInventory() {
     setSaving(false);
     if (error) {
       console.error("ingredient insert failed", error);
-      toast.error(tx("فشل إضافة المكون: ") + (error.message));
+      toast.error(tx("فشل إضافة المكون: ") + error.message);
       return;
     }
     toast.success(tx("تمت إضافة المكون"));
@@ -258,7 +264,7 @@ function OpsInventory() {
       if (!r.items.length) {
         toast.warning(tx("لم نستطع قراءة أي عنصر — جرّب صورة أوضح"));
       } else {
-        toast.success(tx("تم استخراج ") + (r.items.length) + tx(" عنصر"));
+        toast.success(tx("تم استخراج ") + r.items.length + tx(" عنصر"));
       }
       setRecItems(r.items);
       const itemsTotal = r.items.reduce(
@@ -328,7 +334,10 @@ function OpsInventory() {
     ]);
     if (poRes.error) throw poRes.error;
     if (txRes.error) throw txRes.error;
-    const purchasesFromOrders = (poRes.data ?? []).reduce((sum: number, row: any) => sum + Number(row.total || 0), 0);
+    const purchasesFromOrders = (poRes.data ?? []).reduce(
+      (sum: number, row: any) => sum + Number(row.total || 0),
+      0,
+    );
     const previousDebtRows = (txRes.data ?? []).reduce((sum: number, row: any) => {
       return row.type === "purchase" && row.notes?.includes(tx("الدين السابق"))
         ? sum + Number(row.amount || 0)
@@ -358,7 +367,12 @@ function OpsInventory() {
     let processed = 0;
     try {
       const supplierId = await ensureReceiptSupplier();
-      const purchaseRows: { ingredient_id: string; quantity: number; unit_price: number; subtotal: number }[] = [];
+      const purchaseRows: {
+        ingredient_id: string;
+        quantity: number;
+        unit_price: number;
+        subtotal: number;
+      }[] = [];
       for (const it of recItems) {
         const name = it.name.trim();
         const unit = it.unit.trim() || tx("حبة");
@@ -401,14 +415,21 @@ function OpsInventory() {
           ingredientId = createdIng.id;
         }
         const subtotal = qty * price;
-        if (ingredientId) purchaseRows.push({ ingredient_id: ingredientId, quantity: qty, unit_price: price, subtotal });
+        if (ingredientId)
+          purchaseRows.push({
+            ingredient_id: ingredientId,
+            quantity: qty,
+            unit_price: price,
+            subtotal,
+          });
         total += subtotal;
         processed += 1;
       }
       const receiptTotal = Number(recMeta.totalAmount) || total;
       const paidAmount = Number(recMeta.paidAmount) || 0;
       const grandTotalDebt = Number(recMeta.grandTotalDebt) || 0;
-      const previousDebt = Number(recMeta.previousDebt) || Math.max(grandTotalDebt - receiptTotal + paidAmount, 0);
+      const previousDebt =
+        Number(recMeta.previousDebt) || Math.max(grandTotalDebt - receiptTotal + paidAmount, 0);
 
       if (supplierId && processed > 0) {
         const existingBalance = await readSupplierBalance(supplierId);
@@ -419,16 +440,19 @@ function OpsInventory() {
             restaurant_id: restaurantId,
             supplier_id: supplierId,
             total: receiptTotal,
-            notes: tx("فاتورة مصورة") + (previousDebt ? ` — الدين السابق ${previousDebt} دج` : "") + (grandTotalDebt ? ` — الدين الإجمالي ${grandTotalDebt} دج` : ""),
+            notes:
+              tx("فاتورة مصورة") +
+              (previousDebt ? ` — الدين السابق ${previousDebt} دج` : "") +
+              (grandTotalDebt ? ` — الدين الإجمالي ${grandTotalDebt} دج` : ""),
           })
           .select("id")
           .single();
         if (poErr || !po) throw poErr ?? new Error(tx("فشل إنشاء فاتورة المورد"));
 
         if (purchaseRows.length) {
-          const { error: piErr } = await supabase.from("purchase_items").insert(
-            purchaseRows.map((r) => ({ purchase_order_id: po.id, ...r })),
-          );
+          const { error: piErr } = await supabase
+            .from("purchase_items")
+            .insert(purchaseRows.map((r) => ({ purchase_order_id: po.id, ...r })));
           if (piErr) throw piErr;
         }
 
@@ -447,7 +471,7 @@ function OpsInventory() {
             type: "purchase",
             amount: receiptTotal,
             date: today,
-            notes: tx("فاتورة مصورة #") + (po.id.slice(0, 8)),
+            notes: tx("فاتورة مصورة #") + po.id.slice(0, 8),
           },
         ];
         if (paidAmount > 0) {
@@ -473,7 +497,7 @@ function OpsInventory() {
         const { error: txErr } = await supabase.from("supplier_transactions").insert(txRows);
         if (txErr) throw txErr;
       }
-      toast.success(tx("تمت إضافة ") + (processed) + tx(" مكون للمخزون"));
+      toast.success(tx("تمت إضافة ") + processed + tx(" مكون للمخزون"));
       try {
         const { data: sessionData } = await supabase.auth.getSession();
         if (sessionData.session?.access_token) {
@@ -522,12 +546,7 @@ function OpsInventory() {
       restaurant_id: restaurantId,
       ingredient_id: wasteIng.id,
       quantity: qty,
-      reason: wasteForm.reason as
-        | "burned"
-        | "expired"
-        | "dropped"
-        | "prep_error"
-        | "other",
+      reason: wasteForm.reason as "burned" | "expired" | "dropped" | "prep_error" | "other",
       reason_other: wasteForm.reason === "other" ? wasteForm.reason_other.trim() || null : null,
       logged_by: wasteForm.logged_by.trim() || null,
       cost,
@@ -635,38 +654,62 @@ function OpsInventory() {
       toast.error(tx("فشل التعديل"));
       return;
     }
-    toast.success(adjForm.direction === "add" ? tx("تمت الإضافة للمخزون") : tx("تم الخصم من المخزون"));
+    toast.success(
+      adjForm.direction === "add" ? tx("تمت الإضافة للمخزون") : tx("تم الخصم من المخزون"),
+    );
     setAdjOpen(false);
     if (adjForm.direction === "remove") void maybeAlert(adjIng.id);
     await loadAll(restaurantId);
   };
 
   return (
-    <div className="space-y-4 p-2">
-      <div className="flex items-center justify-between" data-annotate="ops-inventory-actions">
-        <div className="text-sm text-muted-foreground">إجمالي المكونات: {items.length}</div>
+    <div className="space-y-4">
+      {/* Contextual Page Toolbar */}
+      <div
+        className="rounded-md border border-border bg-card p-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3"
+        data-annotate="ops-inventory-actions"
+      >
+        <div className="flex items-center gap-2">
+          <div className="w-7 h-7 rounded-sm bg-primary/10 text-primary flex items-center justify-center shrink-0">
+            <Package className="w-4 h-4" />
+          </div>
+          <div>
+            <h1 className="text-sm font-bold text-foreground">{tx("سجل المخزون والمكونات")}</h1>
+            <p className="text-[11px] text-muted-foreground">
+              {tx("إجمالي المواد المسجلة")}: {items.length} {tx("صنف")}
+            </p>
+          </div>
+        </div>
         <div className="flex items-center gap-2">
           <CanWrite area="inventory">
-          <Button
-            variant="outline"
-            onClick={() => {
-              setRecItems([]);
-              setRecPreview(null);
-              setRecMeta(emptyReceiptMeta);
-              setRecOpen(true);
-            }}
-            className="gap-2"
-          >
-            <Camera className="w-4 h-4" /> {tx("تصوير الفاتورة")}
-          </Button>
-          <Button onClick={() => setAddOpen(true)} className="gap-2">
-            <Plus className="w-4 h-4" /> {tx("إضافة مكون")}
-          </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setRecItems([]);
+                setRecPreview(null);
+                setRecMeta(emptyReceiptMeta);
+                setRecOpen(true);
+              }}
+              className="h-8 gap-1.5 rounded-sm text-xs font-medium"
+            >
+              <Camera className="w-3.5 h-3.5" /> {tx("تصوير الفاتورة")}
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => setAddOpen(true)}
+              className="h-8 gap-1.5 rounded-sm text-xs font-medium"
+            >
+              <Plus className="w-3.5 h-3.5" /> {tx("إضافة مكون")}
+            </Button>
           </CanWrite>
         </div>
       </div>
 
-      <Card className="rounded-2xl glass shadow-glass border-border/60 overflow-x-auto" data-annotate="ops-inventory-table">
+      <div
+        className="rounded-md border border-border bg-card overflow-hidden"
+        data-annotate="ops-inventory-table"
+      >
         <Table className="min-w-[640px]">
           <TableHeader>
             <TableRow>
@@ -699,53 +742,55 @@ function OpsInventory() {
                   <TableRow key={i.id}>
                     <TableCell className="font-medium">{i.name}</TableCell>
                     <TableCell>{i.unit}</TableCell>
-                    <TableCell>{Number(i.current_stock)}</TableCell>
-                    <TableCell>{Number(i.alert_threshold)}</TableCell>
-                    <TableCell>{formatDZD(Number(i.cost_per_unit))}</TableCell>
+                    <TableCell className="tabular-nums">{Number(i.current_stock)}</TableCell>
+                    <TableCell className="tabular-nums">{Number(i.alert_threshold)}</TableCell>
+                    <TableCell className="tabular-nums">
+                      {formatDZD(Number(i.cost_per_unit))}
+                    </TableCell>
                     <TableCell>
                       {low ? (
-                        <Badge variant="destructive">{tx("ناقص")}</Badge>
+                        <Badge variant="warning">{tx("ناقص")}</Badge>
                       ) : (
-                        <Badge variant="secondary">{tx("جيد")}</Badge>
+                        <Badge variant="success">{tx("جيد")}</Badge>
                       )}
                     </TableCell>
                     <TableCell>
                       <CanWrite area="inventory">
-                      <div className="flex items-center gap-1 justify-end">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="gap-1.5"
-                          onClick={() => openWaste(i)}
-                        >
-                          <Trash2 className="w-3.5 h-3.5" /> {tx("هدر")}
-                        </Button>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8">
-                              <MoreVertical className="w-4 h-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="text-right">
-                            <DropdownMenuItem onClick={() => openAdjust(i, "add")}>
-                              <PlusIcon className="w-4 h-4 ml-2" /> {tx("إضافة للمخزون")}
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => openAdjust(i, "remove")}>
-                              <Minus className="w-4 h-4 ml-2" /> {tx("خصم من المخزون")}
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem onClick={() => openEdit(i)}>
-                              <Pencil className="w-4 h-4 ml-2" /> {tx("تعديل")}
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => deleteIngredient(i)}
-                              className="text-destructive focus:text-destructive"
-                            >
-                              <Trash2 className="w-4 h-4 ml-2" /> {tx("حذف")}
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
+                        <div className="flex items-center gap-1 justify-end">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="gap-1.5"
+                            onClick={() => openWaste(i)}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" /> {tx("هدر")}
+                          </Button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-8 w-8">
+                                <MoreVertical className="w-4 h-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="text-right">
+                              <DropdownMenuItem onClick={() => openAdjust(i, "add")}>
+                                <PlusIcon className="w-4 h-4 ml-2" /> {tx("إضافة للمخزون")}
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => openAdjust(i, "remove")}>
+                                <Minus className="w-4 h-4 ml-2" /> {tx("خصم من المخزون")}
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem onClick={() => openEdit(i)}>
+                                <Pencil className="w-4 h-4 ml-2" /> {tx("تعديل")}
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => deleteIngredient(i)}
+                                className="text-destructive focus:text-destructive"
+                              >
+                                <Trash2 className="w-4 h-4 ml-2" /> {tx("حذف")}
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
                       </CanWrite>
                     </TableCell>
                   </TableRow>
@@ -754,7 +799,7 @@ function OpsInventory() {
             )}
           </TableBody>
         </Table>
-      </Card>
+      </div>
 
       {/* Add ingredient modal */}
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
@@ -765,7 +810,11 @@ function OpsInventory() {
           <div className="space-y-3">
             <div>
               <Label>{tx("الاسم")}</Label>
-              <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder={tx("مثال: طماطم")} />
+              <Input
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                placeholder={tx("مثال: طماطم")}
+              />
             </div>
             <div>
               <Label>{tx("الوحدة")}</Label>
@@ -785,20 +834,34 @@ function OpsInventory() {
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               <div>
                 <Label>{tx("الكمية الحالية")}</Label>
-                <Input type="number" value={form.current_stock} onChange={(e) => setForm({ ...form, current_stock: e.target.value })} />
+                <Input
+                  type="number"
+                  value={form.current_stock}
+                  onChange={(e) => setForm({ ...form, current_stock: e.target.value })}
+                />
               </div>
               <div>
                 <Label>{tx("حد التنبيه")}</Label>
-                <Input type="number" value={form.alert_threshold} onChange={(e) => setForm({ ...form, alert_threshold: e.target.value })} />
+                <Input
+                  type="number"
+                  value={form.alert_threshold}
+                  onChange={(e) => setForm({ ...form, alert_threshold: e.target.value })}
+                />
               </div>
               <div>
                 <Label>{tx("السعر/وحدة (دج)")}</Label>
-                <Input type="number" value={form.cost_per_unit} onChange={(e) => setForm({ ...form, cost_per_unit: e.target.value })} />
+                <Input
+                  type="number"
+                  value={form.cost_per_unit}
+                  onChange={(e) => setForm({ ...form, cost_per_unit: e.target.value })}
+                />
               </div>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setAddOpen(false)}>{tx("إلغاء")}</Button>
+            <Button variant="outline" onClick={() => setAddOpen(false)}>
+              {tx("إلغاء")}
+            </Button>
             <Button onClick={submitAdd} disabled={saving}>
               {saving ? tx("جاري الحفظ…") : tx("حفظ")}
             </Button>
@@ -856,11 +919,14 @@ function OpsInventory() {
               />
             </div>
             <div className="text-sm text-muted-foreground">
-              التكلفة المُحتسبة: {formatDZD(((Number(wasteForm.quantity) || 0) * Number(wasteIng?.cost_per_unit || 0)))}
+              التكلفة المُحتسبة:{" "}
+              {formatDZD((Number(wasteForm.quantity) || 0) * Number(wasteIng?.cost_per_unit || 0))}
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setWasteOpen(false)}>{tx("إلغاء")}</Button>
+            <Button variant="outline" onClick={() => setWasteOpen(false)}>
+              {tx("إلغاء")}
+            </Button>
             <Button onClick={submitWaste} disabled={wasteSaving}>
               {wasteSaving ? tx("جاري الحفظ…") : tx("تسجيل")}
             </Button>
@@ -877,11 +943,17 @@ function OpsInventory() {
           <div className="space-y-3">
             <div>
               <Label>{tx("الاسم")}</Label>
-              <Input value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} />
+              <Input
+                value={editForm.name}
+                onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+              />
             </div>
             <div>
               <Label>{tx("الوحدة")}</Label>
-              <Select value={editForm.unit} onValueChange={(v) => setEditForm({ ...editForm, unit: v })}>
+              <Select
+                value={editForm.unit}
+                onValueChange={(v) => setEditForm({ ...editForm, unit: v })}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder={tx("اختر الوحدة")} />
                 </SelectTrigger>
@@ -897,19 +969,29 @@ function OpsInventory() {
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <Label>{tx("حد التنبيه")}</Label>
-                <Input type="number" value={editForm.alert_threshold} onChange={(e) => setEditForm({ ...editForm, alert_threshold: e.target.value })} />
+                <Input
+                  type="number"
+                  value={editForm.alert_threshold}
+                  onChange={(e) => setEditForm({ ...editForm, alert_threshold: e.target.value })}
+                />
               </div>
               <div>
                 <Label>{tx("السعر/وحدة (دج)")}</Label>
-                <Input type="number" value={editForm.cost_per_unit} onChange={(e) => setEditForm({ ...editForm, cost_per_unit: e.target.value })} />
+                <Input
+                  type="number"
+                  value={editForm.cost_per_unit}
+                  onChange={(e) => setEditForm({ ...editForm, cost_per_unit: e.target.value })}
+                />
               </div>
             </div>
             <p className="text-xs text-muted-foreground">
-              {tx("لتعديل الكمية الحالية، استخدم \"إضافة/خصم من المخزون\".")}
+              {tx('لتعديل الكمية الحالية، استخدم "إضافة/خصم من المخزون".')}
             </p>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEditOpen(false)}>{tx("إلغاء")}</Button>
+            <Button variant="outline" onClick={() => setEditOpen(false)}>
+              {tx("إلغاء")}
+            </Button>
             <Button onClick={submitEdit} disabled={editSaving}>
               {editSaving ? tx("جاري الحفظ…") : tx("حفظ")}
             </Button>
@@ -922,7 +1004,8 @@ function OpsInventory() {
         <DialogContent dir="rtl">
           <DialogHeader>
             <DialogTitle>
-              {adjForm.direction === "add" ? tx("إضافة للمخزون") : tx("خصم من المخزون")} — {adjIng?.name}
+              {adjForm.direction === "add" ? tx("إضافة للمخزون") : tx("خصم من المخزون")} —{" "}
+              {adjIng?.name}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
@@ -947,7 +1030,9 @@ function OpsInventory() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setAdjOpen(false)}>{tx("إلغاء")}</Button>
+            <Button variant="outline" onClick={() => setAdjOpen(false)}>
+              {tx("إلغاء")}
+            </Button>
             <Button onClick={submitAdjust} disabled={adjSaving}>
               {adjSaving ? tx("جاري الحفظ…") : tx("تأكيد")}
             </Button>
@@ -1066,9 +1151,7 @@ function OpsInventory() {
                           <Input
                             type="number"
                             value={it.quantity}
-                            onChange={(e) =>
-                              updateRecItem(i, { quantity: Number(e.target.value) })
-                            }
+                            onChange={(e) => updateRecItem(i, { quantity: Number(e.target.value) })}
                           />
                         </TableCell>
                         <TableCell className="w-20">
@@ -1087,11 +1170,7 @@ function OpsInventory() {
                           />
                         </TableCell>
                         <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => removeRecItem(i)}
-                          >
+                          <Button variant="ghost" size="icon" onClick={() => removeRecItem(i)}>
                             <Trash2 className="w-4 h-4" />
                           </Button>
                         </TableCell>
@@ -1110,7 +1189,7 @@ function OpsInventory() {
               onClick={submitReceipt}
               disabled={recSaving || recAnalyzing || recItems.length === 0}
             >
-              {recSaving ? tx("جاري الحفظ…") : tx("حفظ (") + (recItems.length) + ")"}
+              {recSaving ? tx("جاري الحفظ…") : tx("حفظ (") + recItems.length + ")"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1119,7 +1198,7 @@ function OpsInventory() {
       <ConfirmDialog
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
-        title={tx("حذف \"") + (deleteTarget?.name ?? "") + tx("\"")}
+        title={tx('حذف "') + (deleteTarget?.name ?? "") + tx('"')}
         description={tx("لا يمكن التراجع عن هذا الإجراء.")}
         confirmLabel={tx("حذف")}
         destructive

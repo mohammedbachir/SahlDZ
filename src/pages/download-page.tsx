@@ -40,7 +40,7 @@ export default function DownloadPage() {
   function handleDownloadAPK() {
     setDownloading(true);
     const link = document.createElement("a");
-    link.href = "/sahldz.apk";
+    link.href = "https://github.com/mohammedbachir/SahlDZ/releases/download/v1.0.0/sahldz-v1.2.0.apk";
     link.download = "SahlDZ-v1.2.0.apk";
     document.body.appendChild(link);
     link.click();
@@ -103,7 +103,7 @@ export default function DownloadPage() {
           onClick={() => {
             setDownloading(true);
             const link = document.createElement("a");
-            link.href = "/SahlDZ-Setup-1.0.0.exe";
+            link.href = "https://github.com/mohammedbachir/SahlDZ/releases/download/v1.01/SahlDZ-Setup-1.0.0.exe";
             link.download = "SahlDZ-Setup-1.0.0.exe";
             document.body.appendChild(link);
             link.click();

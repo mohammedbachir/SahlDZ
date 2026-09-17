@@ -52,14 +52,11 @@ export function AccountShell({
   };
 
   return (
-    <div
-      className="min-h-screen flex flex-col bg-[var(--background)]"
-      dir="rtl"
-    >
+    <div className="min-h-screen flex flex-col bg-background text-foreground" dir="rtl">
       {/* Header */}
-      <header className="h-14 md:h-16 bg-[var(--card)] border-b border-[var(--border)] flex items-center justify-between px-4 md:px-6 sticky top-0 z-30">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="w-9 h-9 rounded-lg bg-[var(--primary)] flex items-center justify-center text-[#1a1612] font-bold text-sm shrink-0 overflow-hidden">
+      <header className="h-12 bg-card border-b border-border flex items-center justify-between px-4 sm:px-6 sticky top-0 z-30">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="w-7 h-7 rounded-sm bg-primary text-primary-foreground flex items-center justify-center font-bold text-xs shrink-0 overflow-hidden">
             {restaurant?.logo_url ? (
               <img
                 src={restaurant.logo_url}
@@ -67,43 +64,37 @@ export function AccountShell({
                 className="w-full h-full object-cover"
               />
             ) : (
-              <span>
-                {restaurant?.name?.[0] ?? tx("account.fallbackInitial")}
-              </span>
+              <span>{restaurant?.name?.[0] ?? tx("account.fallbackInitial")}</span>
             )}
           </div>
           <div className="leading-tight min-w-0">
-            <div className="font-bold text-sm truncate text-[var(--foreground)]">
+            <div className="font-semibold text-xs truncate text-foreground">
               {restaurant?.name ?? tx("account.ownerAccount")}
             </div>
-            <div className="text-[11px] text-[var(--muted-foreground)]">
-              {tx("account.ownerAccount")}
-            </div>
+            <div className="text-[10px] text-muted-foreground">{tx("account.ownerAccount")}</div>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
           <Link
             to="/ops"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--primary)]/10 text-[var(--primary)] hover:bg-[var(--primary)]/20 transition-colors"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-sm text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
           >
-            <LayoutDashboard className="w-4 h-4" />
-            <span className="hidden sm:inline">
-              {tx("account.operationsManagement")}
-            </span>
+            <LayoutDashboard className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">{tx("account.operationsManagement")}</span>
             <span className="sm:hidden">{tx("account.operationsShort")}</span>
           </Link>
           <button
             onClick={handleLogout}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-[var(--muted-foreground)] hover:bg-[var(--muted)] hover:text-[var(--foreground)] transition-colors"
+            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-sm text-xs font-medium text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors cursor-pointer"
           >
-            <LogOut className="w-4 h-4" />
+            <LogOut className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">{tx("account.logout")}</span>
           </button>
         </div>
       </header>
 
-      <main className="flex-1 p-4 md:p-6">{children(restaurant)}</main>
+      <main className="flex-1 p-4 sm:p-6">{children(restaurant)}</main>
     </div>
   );
 }

@@ -150,7 +150,7 @@ export function WelcomeSettingsPageView() {
         {!splashLoaded && <Loader2 className="w-4 h-4 animate-spin text-primary" />}
       </div>
 
-      <div className="glass shadow-glass rounded-2xl border border-border/60 p-6 space-y-5">
+      <div className="bg-card border border-border rounded-xl p-6 space-y-5">
         <p className="text-sm text-muted-foreground">أول ما يراه العميل عند مسح QR. تظهر مرة واحدة كل 24 ساعة افتراضياً.</p>
 
         <div className="space-y-3 rounded-xl border bg-muted/30 p-4">

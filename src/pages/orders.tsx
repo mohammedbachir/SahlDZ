@@ -56,15 +56,14 @@ type ColumnDef = {
   status: OrderStatus;
   label: string;
   accent: string;
-  gradient: string;
   icon: React.ComponentType<{ className?: string }>;
 };
 
 const COLUMNS: ColumnDef[] = [
-  { status: "new", label: "جديدة", accent: "#EF4444", gradient: "from-red-500 to-rose-500", icon: Inbox },
-  { status: "preparing", label: "قيد التحضير", accent: "#F59E0B", gradient: "from-amber-500 to-yellow-500", icon: ChefHat },
-  { status: "ready", label: "جاهزة", accent: "#10B981", gradient: "from-emerald-500 to-green-500", icon: CheckCheck },
-  { status: "paid", label: "مدفوعة", accent: "#6B7280", gradient: "from-gray-500 to-slate-500", icon: Wallet },
+  { status: "new", label: "جديدة", accent: "#B33F35", icon: Inbox },
+  { status: "preparing", label: "قيد التحضير", accent: "#B86D16", icon: ChefHat },
+  { status: "ready", label: "جاهزة", accent: "#27734F", icon: CheckCheck },
+  { status: "paid", label: "مدفوعة", accent: "#746C61", icon: Wallet },
 ];
 
 function getNextStatus(o: Pick<Order, "status" | "order_type">): { label: string; next: OrderStatus } | null {
@@ -255,23 +254,23 @@ export default function OrdersPage() {
         {/* Loading stats */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {COLUMNS.map((c) => (
-            <div key={c.status} className="glass-card rounded-2xl p-4 animate-pulse">
+            <div key={c.status} className="bg-card border border-border rounded-xl p-4 animate-pulse">
               <div className="flex items-center gap-3 mb-3">
-                <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${c.gradient} opacity-20`} />
-                <div className="h-4 w-20 bg-[var(--muted)] rounded" />
+                <div className="w-8 h-8 rounded-lg bg-secondary text-primary" />
+                <div className="h-4 w-20 bg-muted rounded" />
               </div>
-              <div className="h-8 w-12 bg-[var(--muted)] rounded" />
+              <div className="h-8 w-12 bg-muted rounded" />
             </div>
           ))}
         </div>
         {/* Loading cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="glass-card rounded-2xl p-4 space-y-3 animate-pulse">
-              <div className="h-4 w-20 bg-[var(--muted)] rounded" />
-              <div className="h-3 w-full bg-[var(--muted)] rounded" />
-              <div className="h-3 w-2/3 bg-[var(--muted)] rounded" />
-              <div className="h-10 w-full bg-[var(--muted)] rounded-xl mt-2" />
+            <div key={i} className="bg-card border border-border rounded-xl p-4 space-y-3 animate-pulse">
+              <div className="h-4 w-20 bg-muted rounded" />
+              <div className="h-3 w-full bg-muted rounded" />
+              <div className="h-3 w-2/3 bg-muted rounded" />
+              <div className="h-10 w-full bg-muted rounded-lg mt-2" />
             </div>
           ))}
         </div>
@@ -286,17 +285,17 @@ export default function OrdersPage() {
     <div className="space-y-6">
       {/* Stats bar */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <div className="glass-card rounded-xl px-4 py-2 flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-[var(--primary)] animate-pulse" />
-            <span className="text-sm font-medium text-[var(--foreground)]">
+        <div className="flex items-center gap-3">
+          <div className="bg-card border border-border rounded-lg px-3.5 py-1.5 flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-primary" />
+            <span className="text-xs font-medium text-foreground">
               {totalOrders} طلب اليوم
             </span>
           </div>
           {newOrders > 0 && (
-            <div className="glass-card rounded-xl px-4 py-2 flex items-center gap-2 border-red-500/30">
-              <Bell className="w-4 h-4 text-red-500" />
-              <span className="text-sm font-medium text-red-500">
+            <div className="bg-destructive/10 border border-destructive/20 rounded-lg px-3.5 py-1.5 flex items-center gap-2">
+              <Bell className="w-3.5 h-3.5 text-destructive" />
+              <span className="text-xs font-medium text-destructive">
                 {newOrders} طلب جديد
               </span>
             </div>
@@ -305,12 +304,12 @@ export default function OrdersPage() {
 
         <div className="flex items-center gap-3 flex-wrap">
           {/* Filter */}
-          <div className="flex items-center gap-2 glass-card rounded-xl px-3 py-2">
-            <Filter className="w-4 h-4 text-[var(--muted-foreground)]" />
+          <div className="flex items-center gap-2 bg-card border border-border rounded-lg px-3 py-1.5">
+            <Filter className="w-3.5 h-3.5 text-muted-foreground" />
             <select
               value={filterType}
               onChange={(e) => setFilterType(e.target.value)}
-              className="bg-transparent text-sm font-medium text-[var(--foreground)] outline-none cursor-pointer"
+              className="bg-transparent text-xs font-medium text-foreground outline-none cursor-pointer"
             >
               <option value="all">الكل</option>
               <option value="dine_in">طاولة</option>
@@ -340,18 +339,18 @@ export default function OrdersPage() {
             <button
               key={c.status}
               onClick={() => setActiveMobileTab(c.status)}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium whitespace-nowrap transition-all ${
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-medium whitespace-nowrap transition-colors border ${
                 activeMobileTab === c.status
-                  ? `bg-gradient-to-r ${c.gradient} text-white shadow-lg`
-                  : "glass-card text-[var(--foreground)]"
+                  ? "bg-primary text-primary-foreground border-primary font-semibold"
+                  : "bg-card border-border text-foreground hover:bg-secondary"
               }`}
             >
-              <Icon className="w-4 h-4" />
+              <Icon className="w-3.5 h-3.5" />
               {c.label}
-              <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+              <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
                 activeMobileTab === c.status
-                  ? "bg-white/20"
-                  : "bg-[var(--muted)]"
+                  ? "bg-white/20 text-white"
+                  : "bg-secondary text-muted-foreground"
               }`}>
                 {grouped[c.status].length}
               </span>
@@ -392,15 +391,15 @@ function Column({
   const Icon = col.icon;
 
   return (
-    <div className="glass-card rounded-2xl overflow-hidden">
+    <div className="bg-card border border-border rounded-xl overflow-hidden flex flex-col">
       {/* Column header */}
-      <div className={`bg-gradient-to-r ${col.gradient} p-4`}>
+      <div className="bg-secondary/60 border-b border-border px-3.5 py-2.5">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Icon className="w-5 h-5 text-white" />
-            <h2 className="text-sm font-bold text-white">{col.label}</h2>
+            <Icon className="w-4 h-4 text-foreground" />
+            <h2 className="text-xs font-bold text-foreground">{col.label}</h2>
           </div>
-          <span className="bg-white/20 text-white text-xs font-bold px-2.5 py-1 rounded-full">
+          <span className="bg-card border border-border text-foreground text-[11px] font-semibold px-2 py-0.5 rounded-md tabular-nums">
             {items.length}
           </span>
         </div>
@@ -448,28 +447,28 @@ function OrderCard({ order, accent, onAdvance }: { order: Order; accent: string;
   return (
     <div
       data-annotate="orders-card"
-      className={`glass-card rounded-xl p-4 space-y-3 transition-all duration-200 hover:shadow-elevated ${
-        isNew ? "ring-2 ring-red-500/50 animate-pulse" : ""
+      className={`bg-card rounded-lg border border-border p-3.5 space-y-2.5 transition-colors hover:border-primary/40 ${
+        isNew ? "ring-1 ring-destructive/40" : ""
       }`}
     >
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="font-mono font-bold text-sm text-[var(--foreground)]">#{orderNum}</span>
+          <span className="font-mono font-bold text-xs text-foreground">#{orderNum}</span>
           {isNew && (
-            <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+            <span className="w-1.5 h-1.5 rounded-full bg-destructive" />
           )}
         </div>
         {isDelivery ? (
-          <span className="text-xs bg-orange-500/10 text-orange-500 px-2 py-1 rounded-lg font-medium flex items-center gap-1">
+          <span className="text-[10px] bg-warning/10 text-warning border border-warning/20 px-2 py-0.5 rounded-md font-medium flex items-center gap-1">
             <Bike className="w-3 h-3" /> توصيل
           </span>
         ) : isTakeaway ? (
-          <span className="text-xs bg-blue-500/10 text-blue-500 px-2 py-1 rounded-lg font-medium">
+          <span className="text-[10px] bg-[#3D6F9E]/10 text-[#3D6F9E] border border-[#3D6F9E]/20 px-2 py-0.5 rounded-md font-medium">
             استلام
           </span>
         ) : order.table_number != null ? (
-          <span className="text-xs bg-[var(--muted)] text-[var(--foreground)] px-2 py-1 rounded-lg font-medium">
+          <span className="text-[10px] bg-secondary text-foreground border border-border px-2 py-0.5 rounded-md font-medium">
             {t("common.table")} {order.table_number}
           </span>
         ) : null}
@@ -477,22 +476,22 @@ function OrderCard({ order, accent, onAdvance }: { order: Order; accent: string;
 
       {/* Delivery info */}
       {isDelivery && (
-        <div className="text-xs space-y-1.5 bg-[var(--muted)]/50 rounded-lg p-2.5">
+        <div className="text-xs space-y-1 bg-secondary/50 rounded-md p-2">
           {order.customer_name && (
-            <div className="flex items-center gap-1.5 text-[var(--foreground)]">
-              <User className="w-3 h-3 text-[var(--muted-foreground)]" />
+            <div className="flex items-center gap-1.5 text-foreground">
+              <User className="w-3 h-3 text-muted-foreground" />
               {order.customer_name}
             </div>
           )}
           {order.customer_phone && (
-            <a href={`tel:${order.customer_phone}`} className="flex items-center gap-1.5 text-[var(--primary)] hover:underline" dir="ltr">
+            <a href={`tel:${order.customer_phone}`} className="flex items-center gap-1.5 text-primary hover:underline" dir="ltr">
               <Phone className="w-3 h-3" />
               {order.customer_phone}
             </a>
           )}
           {order.customer_address && (
-            <div className="flex items-start gap-1.5 text-[var(--foreground)]">
-              <MapPin className="w-3 h-3 text-[var(--muted-foreground)] mt-0.5 shrink-0" />
+            <div className="flex items-start gap-1.5 text-foreground">
+              <MapPin className="w-3 h-3 text-muted-foreground mt-0.5 shrink-0" />
               <span className="break-words">{order.customer_address}</span>
             </div>
           )}
@@ -500,11 +499,11 @@ function OrderCard({ order, accent, onAdvance }: { order: Order; accent: string;
       )}
 
       {/* Items */}
-      <ul className="text-sm space-y-1">
+      <ul className="text-xs space-y-1">
         {(order.items ?? []).map((it) => (
           <li key={it.id} className="flex items-center justify-between">
-            <span className="text-[var(--foreground)]">
-              <span className="font-bold text-[var(--primary)]">x{it.quantity}</span>{" "}
+            <span className="text-foreground">
+              <span className="font-bold text-primary">x{it.quantity}</span>{" "}
               {it.name_snapshot}
             </span>
           </li>
@@ -512,12 +511,12 @@ function OrderCard({ order, accent, onAdvance }: { order: Order; accent: string;
       </ul>
 
       {/* Footer */}
-      <div className="flex items-center justify-between pt-2 border-t border-[var(--border)]">
-        <div className="flex items-center gap-1 text-xs text-[var(--muted-foreground)]">
+      <div className="flex items-center justify-between pt-2 border-t border-border">
+        <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
           <Clock className="w-3 h-3" />
           {ago}
         </div>
-        <span className="font-bold text-[var(--foreground)]">{formatDZD(order.total)}</span>
+        <span className="font-bold text-xs text-foreground tabular-nums">{formatDZD(order.total)}</span>
       </div>
 
       {/* Action button */}
@@ -525,14 +524,10 @@ function OrderCard({ order, accent, onAdvance }: { order: Order; accent: string;
         <button
           data-annotate="orders-actions"
           onClick={onAdvance}
-          className={`w-full py-2.5 rounded-xl font-semibold text-sm transition-all duration-200 flex items-center justify-center gap-2 ${
-            isDelivery && order.status === "ready"
-              ? "bg-gradient-to-r from-[#D4A853] to-[#B8943F] text-white hover:shadow-lg hover:shadow-[#D4A853]/30"
-              : "bg-[var(--muted)] text-[var(--foreground)] hover:bg-[var(--muted)]/80"
-          }`}
+          className="w-full py-2 rounded-lg font-semibold text-xs transition-colors flex items-center justify-center gap-1.5 bg-primary text-primary-foreground hover:bg-[#8C5921] cursor-pointer"
         >
           {cfg.label}
-          <ArrowRight className="w-4 h-4" />
+          <ArrowRight className="w-3.5 h-3.5" />
         </button>
       )}
     </div>
