@@ -131,15 +131,14 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
   <script>
-    // ─── Config (align with web app .env) ─────────────────────
-    const USE_EMULATORS = true;
+    // ─── Config (production — sahldz-app project) ─────────────
     const FB = {
-      apiKey: "demo-key",
-      authDomain: "localhost",
-      projectId: "sahldz-demo",
-      storageBucket: "sahldz-demo.appspot.com",
-      messagingSenderId: "000",
-      appId: "demo",
+      apiKey: "AIzaSyDyQHAOaqMO3wyNooIp779zz3kFgUFF2VQ",
+      authDomain: "sahldz-app.firebaseapp.com",
+      projectId: "sahldz-app",
+      storageBucket: "sahldz-app.firebasestorage.app",
+      messagingSenderId: "489082299272",
+      appId: "1:489082299272:web:445555b741290eb743503d",
     };
 
     const $=id=>document.getElementById(id);
@@ -148,10 +147,6 @@
     const app = firebase.initializeApp(FB);
     const auth = firebase.auth();
     const db = firebase.firestore();
-    if (USE_EMULATORS) {
-      auth.useEmulator("http://127.0.0.1:9099");
-      db.useEmulator("127.0.0.1", 8081);
-    }
 
     // ─── Tabs ─────────────────────────────────────────────────
     $("tab-owner").onclick=()=>{mode="owner";activate("owner")};

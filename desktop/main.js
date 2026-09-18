@@ -8,10 +8,9 @@ const { autoUpdater } = require("electron-updater");
 // ─── Configuration ────────────────────────────────────────────
 // The desktop always boots straight into the unified staff login:
 // activation code → employee → PIN.
-// TEST BUILD — while the final deployment is not published we boot to the
-// local dev server on port 8080. Switch DEFAULT_BASE to
-// "https://sahldz.com" when the production release is ready.
-const DEFAULT_BASE = process.env.APP_BASE_URL || "http://localhost:8080";
+// Production build connects to the sahldz.com server. Override via
+// APP_BASE_URL (e.g. the local dev server) when needed.
+const DEFAULT_BASE = process.env.APP_BASE_URL || "https://sahldz.com";
 const APP_URL =
   (process.env.VITE_DEV_SERVER_URL || DEFAULT_BASE) + "/staff-login";
 const configPath = path.join(app.getPath("userData"), "config.json");
