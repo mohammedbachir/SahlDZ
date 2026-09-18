@@ -6,7 +6,11 @@ package-lock.json
 .vercel
 .env*
 !.env.example
-desktop/
+desktop/node_modules/
+desktop/dist/
+desktop/out-*/
+desktop/release/
+desktop/release*/
 android-app/
 client/
 *.apk
