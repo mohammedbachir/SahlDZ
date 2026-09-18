@@ -35,6 +35,7 @@ export type StaffRecord = {
   permissions: string[];
   email?: string | null;
   user_id?: string | null;
+  salary?: number | null;
   created_at?: string;
 };
 
@@ -44,6 +45,7 @@ export type StaffInput = {
   permissions: string[];
   email?: string | null;
   password?: string | null;
+  salary?: number | null;
   frozen?: boolean;
   freeze_reason?: string | null;
 };
@@ -124,6 +126,7 @@ export async function listStaffCore(rid: string) {
     permissions: effectiveStaffPermissions(s),
     email: s.email ?? null,
     user_id: s.user_id ?? null,
+    salary: s.salary ? Number(s.salary) : null,
     created_at: s.created_at ?? null,
   }));
   return { staff: sortByName(staff) };
@@ -170,6 +173,7 @@ export async function addStaffCore(rid: string, input: StaffInput) {
     permissions,
     email,
     user_id,
+    salary: input.salary ? Number(input.salary) || null : null,
     created_at: new Date().toISOString(),
   });
   if (error) throw new Error(error.message);
@@ -233,6 +237,10 @@ export async function updateStaffCore(
       payload.user_id = uid;
       payload.email = email;
     }
+  }
+
+  if (input.salary !== undefined) {
+    payload.salary = input.salary ? Math.max(0, Number(input.salary)) : null;
   }
 
   if (Object.keys(payload).length === 0) return { ok: true };

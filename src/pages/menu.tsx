@@ -22,6 +22,8 @@ import {
 } from "@/lib/menu-options.functions";
 import { seedCashierMenu } from "@/lib/cashier.functions";
 import { useRestaurantId, formatDZD } from "@/lib/restaurant";
+import { uploadImageWithFallback } from "@/lib/image-upload";
+import { uploadImageToGithub } from "@/lib/github-storage.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -92,6 +94,17 @@ function buildMenuImagePath(
 
 export default function MenuPage() {
   const { restaurantId, loading: rLoading } = useRestaurantId();
+  const ghUpload = useServerFn(uploadImageToGithub);
+  const githubUploadFn = async (base64: string, path: string) => {
+    try {
+      const r = (await ghUpload({ data: { path, base64 } })) as {
+        url?: string;
+      };
+      return r?.url ?? null;
+    } catch {
+      return null;
+    }
+  };
   const [categories, setCategories] = useState<Category[]>([]);
   const [items, setItems] = useState<MenuItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -126,7 +139,7 @@ export default function MenuPage() {
 
   const reload = async (rid: string) => {
     setLoading(true);
-    const [{ data: cats }, { data: its }] = await Promise.all([
+    const [catsRes, itsRes] = await Promise.all([
       supabase
         .from("categories")
         .select("id, name, display_order, image_url")
@@ -141,8 +154,10 @@ export default function MenuPage() {
         .eq("restaurant_id", rid)
         .order("created_at", { ascending: true }),
     ]);
-    setCategories((cats ?? []) as Category[]);
-    setItems((its ?? []) as MenuItem[]);
+    if (catsRes.error) toast.error("تعذّر تحميل الفئات");
+    if (itsRes.error) toast.error("تعذّر تحميل الأصناف");
+    if (catsRes.data) setCategories(catsRes.data as Category[]);
+    if (itsRes.data) setItems(itsRes.data as MenuItem[]);
     setLoading(false);
   };
 
@@ -196,14 +211,14 @@ export default function MenuPage() {
       let imageUrl: string | null = catEditing?.image_url ?? null;
       if (catImage) {
         const path = buildMenuImagePath(restaurantId, "categories", catImage);
-        const { error: upErr } = await supabase.storage
-          .from("menu-images")
-          .upload(path, catImage, {
-            contentType: catImage.type || "image/png",
-          });
-        if (upErr) throw upErr;
-        imageUrl = supabase.storage.from("menu-images").getPublicUrl(path)
-          .data.publicUrl;
+        const up = await uploadImageWithFallback(
+          "menu-images",
+          path,
+          catImage,
+          githubUploadFn,
+        );
+        imageUrl = up.url;
+        if (up.warning) toast.warning(up.warning);
       }
       if (catEditing) {
         const { error } = await supabase
@@ -224,8 +239,10 @@ export default function MenuPage() {
       }
       setCatOpen(false);
       await reload(restaurantId);
-    } catch {
-      toast.error("تعذّر حفظ الفئة");
+    } catch (e) {
+      console.error("[saveCat] error", e);
+      const msg = e instanceof Error ? e.message : "تعذّر حفظ الفئة";
+      toast.error(`تعذّر حفظ الفئة: ${msg}`);
     } finally {
       setCatSaving(false);
     }
@@ -298,14 +315,14 @@ export default function MenuPage() {
       let imageUrl: string | null = itemEditing?.image_url ?? null;
       if (itemImage) {
         const path = buildMenuImagePath(restaurantId, "items", itemImage);
-        const { error: upErr } = await supabase.storage
-          .from("menu-images")
-          .upload(path, itemImage, {
-            contentType: itemImage.type || "image/png",
-          });
-        if (upErr) throw upErr;
-        imageUrl = supabase.storage.from("menu-images").getPublicUrl(path)
-          .data.publicUrl;
+        const up = await uploadImageWithFallback(
+          "menu-images",
+          path,
+          itemImage,
+          githubUploadFn,
+        );
+        imageUrl = up.url;
+        if (up.warning) toast.warning(up.warning);
       }
 
       const payload = {

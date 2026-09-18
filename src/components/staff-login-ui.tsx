@@ -3,12 +3,18 @@ import { Link } from "@tanstack/react-router";
 import { ChevronLeft, ArrowRight, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export function StaffAvatar({ icon: Icon, sm }: { icon: LucideIcon; sm?: boolean }) {
+export function StaffAvatar({
+  icon: Icon,
+  sm,
+}: {
+  icon: LucideIcon;
+  sm?: boolean;
+}) {
   return (
     <div
       className={cn(
         "flex items-center justify-center shrink-0 rounded-xl bg-gradient-to-br from-[var(--primary)]/30 to-[var(--accent)]/10 text-[var(--primary)] ring-1 ring-[var(--primary)]/25",
-        sm ? "w-8 h-8 rounded-lg" : "w-11 h-11"
+        sm ? "w-8 h-8 rounded-lg" : "w-11 h-11",
       )}
     >
       <Icon className={sm ? "w-4 h-4" : "w-5 h-5"} />
@@ -48,7 +54,9 @@ export function StaffAccountButton({
       className="group w-full flex items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--card)] px-4 py-3 text-right transition-all duration-200 hover:border-[var(--primary)]/60 hover:bg-[var(--muted)]/50 hover:shadow-md active:scale-[0.985]"
     >
       <StaffAvatar icon={icon} />
-      <span className="flex-1 font-semibold text-sm text-[var(--foreground)]">{label}</span>
+      <span className="flex-1 font-semibold text-sm text-[var(--foreground)]">
+        {label}
+      </span>
       <span className="text-[var(--muted-foreground)] transition-all group-hover:-translate-x-0.5 group-hover:text-[var(--primary)]">
         <ChevronLeft className="w-4 h-4" />
       </span>
@@ -69,7 +77,24 @@ export function PinBackButton({ onClick }: { onClick: () => void }) {
   );
 }
 
-export function BackHomeLink({ label }: { label: string }) {
+export function BackHomeLink({
+  label,
+  onClick,
+}: {
+  label: string;
+  onClick?: () => void;
+}) {
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border)] px-4 py-2 text-xs font-medium text-[var(--muted-foreground)] transition-colors hover:border-[var(--primary)]/50 hover:text-[var(--primary)]"
+      >
+        {label}
+      </button>
+    );
+  }
   return (
     <Link
       to="/"
@@ -90,7 +115,9 @@ export function StaffPinInput({
   length: number;
 }) {
   const [digits, setDigits] = useState<string[]>(Array(length).fill(""));
-  const [refs] = useState<(HTMLInputElement | null)[]>(() => Array.from({ length }, () => null));
+  const [refs] = useState<(HTMLInputElement | null)[]>(() =>
+    Array.from({ length }, () => null),
+  );
 
   function handleChange(index: number, value: string) {
     if (value.length > 1) value = value.slice(-1);
@@ -103,7 +130,8 @@ export function StaffPinInput({
   }
 
   function handleKeyDown(index: number, e: React.KeyboardEvent) {
-    if (e.key === "Backspace" && !digits[index] && index > 0) refs[index - 1]?.focus();
+    if (e.key === "Backspace" && !digits[index] && index > 0)
+      refs[index - 1]?.focus();
   }
 
   return (
@@ -125,7 +153,7 @@ export function StaffPinInput({
             "w-11 h-14 text-center text-xl font-bold rounded-xl transition-all duration-150 bg-[var(--card)] text-[var(--foreground)] outline-none disabled:opacity-50",
             d
               ? "border-2 border-[var(--primary)]/70 shadow-sm shadow-[var(--primary)]/20"
-              : "border-2 border-[var(--border)] focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/25"
+              : "border-2 border-[var(--border)] focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/25",
           )}
         />
       ))}

@@ -1,4 +1,10 @@
-import { createFileRoute, Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  Link,
+  Outlet,
+  useNavigate,
+  useRouterState,
+} from "@tanstack/react-router";
 import {
   LayoutDashboard,
   Package,
@@ -19,7 +25,6 @@ import {
   User,
   Menu,
   X,
-  Calendar,
   Search,
   Bell,
   ChevronDown,
@@ -240,18 +245,11 @@ const SEARCH_TARGETS: SearchTarget[] = [
     keywords: "شكاوى عملاء زبائن مشاكل جودة خدمة تعليقات",
   },
   {
-    title: "إعدادات المطعم والخدمات",
+    title: "إعدادات النظام والمطعم",
     category: "النظام والإعدادات",
     path: "/account/settings",
     icon: Settings,
     keywords: "إعدادات مطعم توصيل طاولات طابعات نظام عام",
-  },
-  {
-    title: "حساب المالك والاشتراك",
-    category: "النظام والإعدادات",
-    path: "/account",
-    icon: User,
-    keywords: "حساب مالك ملف شخصي اشتراك باقة خطة",
   },
 ];
 
@@ -304,11 +302,15 @@ function OpsLayout() {
   const handleSearchKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "ArrowDown") {
       e.preventDefault();
-      setSelectedIndex((prev) => (prev + 1) % Math.max(1, filteredTargets.length));
+      setSelectedIndex(
+        (prev) => (prev + 1) % Math.max(1, filteredTargets.length),
+      );
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
       setSelectedIndex(
-        (prev) => (prev - 1 + filteredTargets.length) % Math.max(1, filteredTargets.length),
+        (prev) =>
+          (prev - 1 + filteredTargets.length) %
+          Math.max(1, filteredTargets.length),
       );
     } else if (e.key === "Enter") {
       e.preventDefault();
@@ -338,7 +340,10 @@ function OpsLayout() {
   // Close dropdown on outside click
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node)
+      ) {
         setOpenDropdown(null);
       }
     };
@@ -352,7 +357,8 @@ function OpsLayout() {
   const isGroupActive = (group: NavGroup) =>
     group.areas.some((area) => isActive(AREA_PATHS[area], area === "overview"));
 
-  const isSystemActive = pathname.startsWith("/account/settings") || pathname === "/account";
+  const isSystemActive =
+    pathname.startsWith("/account/settings") || pathname === "/account";
 
   const handleLogout = async () => {
     localStorage.removeItem("sahl_dz_preview_role");
@@ -373,11 +379,17 @@ function OpsLayout() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-background text-foreground" dir="rtl">
+    <div
+      className="min-h-screen flex flex-col bg-background text-foreground"
+      dir="rtl"
+    >
       {/* ========================================================= */}
       {/* RESTAURANT CONTROL DESK — TWO-ROW COMMAND & MODULE HEADER */}
       {/* ========================================================= */}
-      <header className="sticky top-0 z-40 bg-card border-b border-border" ref={dropdownRef}>
+      <header
+        className="sticky top-0 z-40 bg-card border-b border-border"
+        ref={dropdownRef}
+      >
         {/* ROW 1: System Command Bar */}
         <div className="h-13 px-4 sm:px-6 lg:px-8 border-b border-border/70 flex items-center justify-between gap-4">
           {/* Right: Brand, Branch & Title */}
@@ -387,20 +399,21 @@ function OpsLayout() {
               className="md:hidden p-1.5 rounded-sm text-muted-foreground hover:bg-secondary hover:text-foreground cursor-pointer"
               aria-label="القائمة"
             >
-              {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+              {mobileMenuOpen ? (
+                <X className="w-5 h-5" />
+              ) : (
+                <Menu className="w-5 h-5" />
+              )}
             </button>
 
             {/* Brand Affordance */}
             <Link to="/ops" className="flex items-center gap-2.5 shrink-0">
               <div className="w-7 h-7 rounded-sm bg-primary text-primary-foreground flex items-center justify-center font-bold text-xs shrink-0 tracking-tight">
-                سهل
+                S
               </div>
-              <div className="flex flex-col">
-                <span className="font-bold text-sm tracking-tight text-foreground">سهل ديزاد</span>
-                <span className="text-[10px] text-muted-foreground hidden lg:inline">
-                  مكتب تحكم العمليات والمتابعة اليومية
-                </span>
-              </div>
+              <span className="font-bold text-sm tracking-tight text-foreground">
+                sahlDZ
+              </span>
             </Link>
           </div>
 
@@ -421,13 +434,8 @@ function OpsLayout() {
             </button>
           </div>
 
-          {/* Left: Financial Period, Status, Role & Account */}
+          {/* Left: Status, Role & Account */}
           <div className="flex items-center gap-2.5 text-xs">
-            {/* Financial Period */}
-            <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-sm border border-border/60 bg-secondary/20 text-foreground">
-              <Calendar className="w-3.5 h-3.5 text-primary shrink-0" />
-            </div>
-
             {/* Notification / System Readiness Indicator */}
             <button
               onClick={() => navigate({ to: "/ops/reports" })}
@@ -497,7 +505,9 @@ function OpsLayout() {
             {/* 2 - 5: Module Groups with Structured Dropdowns */}
             {NAV_GROUPS.slice(1).map((group) => {
               const visibleAreas =
-                userRole === null ? [] : group.areas.filter((area) => canViewArea(userRole, area));
+                userRole === null
+                  ? []
+                  : group.areas.filter((area) => canViewArea(userRole, area));
               if (visibleAreas.length === 0) return null;
 
               const active = isGroupActive(group);
@@ -534,7 +544,8 @@ function OpsLayout() {
                         const to = AREA_PATHS[area] as OpsPath;
                         const itemActive = isActive(to);
                         const Icon = AREA_ICONS[area];
-                        const label = NAV_ITEM_LABELS[area] ?? AREA_LABELS[area];
+                        const label =
+                          NAV_ITEM_LABELS[area] ?? AREA_LABELS[area];
 
                         return (
                           <Link
@@ -567,7 +578,9 @@ function OpsLayout() {
                 onMouseLeave={() => setOpenDropdown(null)}
               >
                 <button
-                  onClick={() => setOpenDropdown(openDropdown === "system" ? null : "system")}
+                  onClick={() =>
+                    setOpenDropdown(openDropdown === "system" ? null : "system")
+                  }
                   className={`flex items-center gap-1.5 px-3.5 h-11 text-xs transition-colors border-b-2 cursor-pointer ${
                     isSystemActive
                       ? "border-primary text-primary font-semibold bg-primary/5"
@@ -596,19 +609,7 @@ function OpsLayout() {
                       }`}
                     >
                       <Settings className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
-                      <span>{tx("إعدادات المطعم والخدمات")}</span>
-                    </Link>
-                    <Link
-                      to="/account"
-                      onClick={() => setOpenDropdown(null)}
-                      className={`flex items-center gap-2.5 px-3 py-2 text-xs transition-colors ${
-                        pathname === "/account"
-                          ? "bg-primary/10 text-primary font-medium border-r-2 border-primary"
-                          : "text-foreground hover:bg-secondary/60"
-                      }`}
-                    >
-                      <User className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
-                      <span>{tx("حساب المالك والاشتراك")}</span>
+                      <span>{tx("إعدادات النظام والمطعم")}</span>
                     </Link>
                   </div>
                 )}
@@ -618,10 +619,9 @@ function OpsLayout() {
 
           {/* Quick breadcrumb display on row 2 left side */}
           <div className="text-[11px] text-muted-foreground font-medium flex items-center gap-1.5">
-            <span className="text-muted-foreground/60">الموضع:</span>
             <span className="text-foreground font-semibold">
               {pathname === "/ops" || pathname === "/ops/"
-                ? tx("مكتب المتابعة اليومية")
+                ? tx("المتابعة اليومية")
                 : NAV_GROUPS.flatMap((g) => g.areas).find((a) =>
                       isActive(AREA_PATHS[a], a === "overview"),
                     )
@@ -641,7 +641,9 @@ function OpsLayout() {
         {(() => {
           const activeGroup =
             NAV_GROUPS.slice(1).find((g) => isGroupActive(g)) ??
-            (isSystemActive ? { id: "system", title: tx("النظام والإعدادات"), areas: [] } : null);
+            (isSystemActive
+              ? { id: "system", title: tx("النظام والإعدادات"), areas: [] }
+              : null);
 
           if (!activeGroup) return null;
 
@@ -660,28 +662,16 @@ function OpsLayout() {
               </span>
               <div className="flex items-center gap-1 overflow-x-auto">
                 {activeGroup.id === "system" ? (
-                  <>
-                    <Link
-                      to="/account/settings"
-                      className={`px-2.5 py-1 rounded-sm text-xs transition-colors ${
-                        pathname.startsWith("/account/settings")
-                          ? "bg-card text-primary font-semibold shadow-xs border border-border"
-                          : "text-muted-foreground hover:text-foreground hover:bg-secondary/60"
-                      }`}
-                    >
-                      {tx("إعدادات المطعم والخدمات")}
-                    </Link>
-                    <Link
-                      to="/account"
-                      className={`px-2.5 py-1 rounded-sm text-xs transition-colors ${
-                        pathname === "/account"
-                          ? "bg-card text-primary font-semibold shadow-xs border border-border"
-                          : "text-muted-foreground hover:text-foreground hover:bg-secondary/60"
-                      }`}
-                    >
-                      {tx("حساب المالك والاشتراك")}
-                    </Link>
-                  </>
+                  <Link
+                    to="/account/settings"
+                    className={`px-2.5 py-1 rounded-sm text-xs transition-colors ${
+                      pathname.startsWith("/account/settings")
+                        ? "bg-card text-primary font-semibold shadow-xs border border-border"
+                        : "text-muted-foreground hover:text-foreground hover:bg-secondary/60"
+                    }`}
+                  >
+                    {tx("إعدادات النظام والمطعم")}
+                  </Link>
                 ) : (
                   visibleAreas.map((area) => {
                     const to = AREA_PATHS[area] as OpsPath;
@@ -745,7 +735,8 @@ function OpsLayout() {
                         const to = AREA_PATHS[area] as OpsPath;
                         const active = isActive(to);
                         const Icon = AREA_ICONS[area];
-                        const label = NAV_ITEM_LABELS[area] ?? AREA_LABELS[area];
+                        const label =
+                          NAV_ITEM_LABELS[area] ?? AREA_LABELS[area];
 
                         return (
                           <Link
@@ -773,24 +764,14 @@ function OpsLayout() {
                   <div className="text-xs font-semibold text-muted-foreground px-1">
                     {tx("النظام والإعدادات")}
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Link
-                      to="/account/settings"
-                      onClick={() => setMobileMenuOpen(false)}
-                      className="flex items-center gap-2 p-2.5 rounded-sm text-xs bg-card border border-border text-foreground"
-                    >
-                      <Settings className="w-4 h-4" />
-                      <span>{tx("إعدادات المطعم")}</span>
-                    </Link>
-                    <Link
-                      to="/account"
-                      onClick={() => setMobileMenuOpen(false)}
-                      className="flex items-center gap-2 p-2.5 rounded-sm text-xs bg-card border border-border text-foreground"
-                    >
-                      <User className="w-4 h-4" />
-                      <span>{tx("حساب المالك")}</span>
-                    </Link>
-                  </div>
+                  <Link
+                    to="/account/settings"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="flex items-center gap-2 p-2.5 rounded-sm text-xs bg-card border border-border text-foreground"
+                  >
+                    <Settings className="w-4 h-4 shrink-0" />
+                    <span>{tx("إعدادات النظام والمطعم")}</span>
+                  </Link>
                 </div>
               )}
 
@@ -887,7 +868,9 @@ function OpsLayout() {
                 setSelectedIndex(0);
               }}
               onKeyDown={handleSearchKeyDown}
-              placeholder={tx("ابحث في أقسام النظام، المخزون، المصاريف، التقارير...")}
+              placeholder={tx(
+                "ابحث في أقسام النظام، المخزون، المصاريف، التقارير...",
+              )}
               className="flex-1 bg-transparent border-0 text-xs focus:outline-none text-foreground placeholder:text-muted-foreground"
             />
             {searchQuery && (
@@ -944,7 +927,8 @@ function OpsLayout() {
           <div className="px-3 py-2 border-t border-border bg-secondary/10 flex items-center justify-between text-[11px] text-muted-foreground">
             <div className="flex items-center gap-3">
               <span>
-                للتحرك: <kbd className="font-mono">↑</kbd> <kbd className="font-mono">↓</kbd>
+                للتحرك: <kbd className="font-mono">↑</kbd>{" "}
+                <kbd className="font-mono">↓</kbd>
               </span>
               <span>
                 للانتقال: <kbd className="font-mono">↵ Enter</kbd>

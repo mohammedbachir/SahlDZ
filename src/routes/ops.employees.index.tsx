@@ -60,9 +60,10 @@ type EmployeeForm = {
   name: string;
   pin: string;
   permissions: string[];
+  salary: string;
 };
 
-const EMPTY_FORM: EmployeeForm = { name: "", pin: "", permissions: [] };
+const EMPTY_FORM: EmployeeForm = { name: "", pin: "", permissions: [], salary: "" };
 
 function OpsEmployees() {
   useTranslation();
@@ -118,7 +119,7 @@ function OpsEmployees() {
 
   const openAdd = () => {
     void generateUniquePin().then((p) => {
-      setForm({ name: "", pin: p, permissions: [] });
+      setForm({ name: "", pin: p, permissions: [], salary: "" });
       setAddOpen(true);
     });
   };
@@ -137,6 +138,7 @@ function OpsEmployees() {
           name: form.name.trim(),
           pin: form.pin.trim(),
           permissions: form.permissions,
+          salary: form.salary ? Number(form.salary) : null,
         },
       });
       toast.success(
@@ -156,7 +158,12 @@ function OpsEmployees() {
 
   const openEdit = (m: StaffRecord) => {
     setEditMember(m);
-    setEditForm({ name: m.name, pin: "", permissions: m.permissions ?? [] });
+    setEditForm({
+      name: m.name,
+      pin: "",
+      permissions: m.permissions ?? [],
+      salary: m.salary ? String(m.salary) : "",
+    });
     setEditOpen(true);
   };
 
@@ -172,6 +179,7 @@ function OpsEmployees() {
       const input: Record<string, unknown> = {
         name: editForm.name.trim(),
         permissions: editForm.permissions,
+        salary: editForm.salary ? Number(editForm.salary) : null,
       };
       if (editForm.pin) input.pin = editForm.pin;
       await updateStaffFn({ headers, data: { staffId: editMember.id, input } });
@@ -450,6 +458,15 @@ function OpsEmployees() {
               />
             </div>
             <div>
+              <Label>{tx("الراتب الشهري (دج) — اختياري")}</Label>
+              <Input
+                type="number"
+                value={form.salary}
+                onChange={(e) => setForm({ ...form, salary: e.target.value })}
+                placeholder="32000"
+              />
+            </div>
+            <div>
               <Label>{tx("رقم PIN للدخول")}</Label>
               <div className="flex items-center gap-2">
                 <Input
@@ -506,6 +523,15 @@ function OpsEmployees() {
                 onChange={(e) =>
                   setEditForm({ ...editForm, name: e.target.value })
                 }
+              />
+            </div>
+            <div>
+              <Label>{tx("الراتب الشهري (دج) — اختياري")}</Label>
+              <Input
+                type="number"
+                value={editForm.salary}
+                onChange={(e) => setEditForm({ ...editForm, salary: e.target.value })}
+                placeholder="32000"
               />
             </div>
             <div>

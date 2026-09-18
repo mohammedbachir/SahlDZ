@@ -10,6 +10,7 @@ import {
   Bell,
   Undo2,
   Bike,
+  Plus,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -27,6 +28,7 @@ import { tx } from "@/lib/ops-tx";
 import { clearKioskRole } from "@/lib/kiosk-session";
 import { staffLoginFailPath } from "@/lib/staff-session";
 import { StaffTabs } from "@/components/staff-tabs";
+import { WaiterOrderComposer } from "@/components/waiter-order-composer";
 
 export const Route = createFileRoute("/waiter-screen")({
   component: Page,
@@ -211,6 +213,7 @@ function Page() {
   const [filter, setFilter] = useState<"all" | "ready" | "mine">("ready");
   const prevReadyIdsRef = useRef<Set<string>>(new Set());
   const soundEnabledRef = useRef(true);
+  const [composerOpen, setComposerOpen] = useState(false);
 
   const [tick, setTick] = useState(0);
 
@@ -478,6 +481,13 @@ function Page() {
               {readyCount}
             </span>
           )}
+          <Button
+            onClick={() => setComposerOpen(true)}
+            className="h-9 gap-1.5 text-sm font-bold"
+          >
+            <Plus className="w-4 h-4" />
+            <span className="hidden sm:inline">{tx("طلب جديد")}</span>
+          </Button>
           <button
             onClick={handleLogout}
             className="flex items-center gap-2 text-sm font-bold text-[var(--foreground)] bg-[var(--muted)] hover:bg-[var(--muted)]/80 rounded-lg px-3 py-2 transition-colors"
@@ -698,6 +708,17 @@ function Page() {
           </div>
         )}
       </main>
+
+      {composerOpen && (
+        <WaiterOrderComposer
+          token={token}
+          restaurantName={restaurantName}
+          onClose={() => setComposerOpen(false)}
+          onCreated={() => {
+            void fetchOrders();
+          }}
+        />
+      )}
     </div>
   );
 }

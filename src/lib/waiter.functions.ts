@@ -20,6 +20,11 @@ import {
   effectiveStaffPermissions,
 } from "@/lib/staff-core";
 import { requireRestaurantId } from "@/lib/server-staff-auth";
+import {
+  fetchMenuForRestaurantCore,
+  createOrderForRestaurantCore,
+  type NewOrderInput,
+} from "@/lib/order-create";
 
 /** DB logic: resolve waiter context from session token. */
 export async function getWaiterContextCore(token: string) {
@@ -66,6 +71,52 @@ export const getWaiterContext = createServerFn({ method: "GET" })
 export const waiterLogout = createServerFn({ method: "POST" })
   .validator((d: { token: string }) => d)
   .handler(async () => ({ ok: true }));
+
+// ─── Waiter self-service ordering (send a new order from the floor) ──
+
+/** DB logic: menu + tables for the waiter's restaurant. */
+export async function waiterGetMenuCore(token: string) {
+  const { staffRow, restaurantId } = await resolveStaffFromToken(token);
+  if (!staffRow.permissions?.includes("waiter"))
+    throw new Error("هذا الحساب لا يملك صلاحية النادل");
+  return fetchMenuForRestaurantCore(restaurantId);
+}
+
+export const waiterGetMenu = createServerFn({ method: "GET" })
+  .validator((d: { token: string }) => d)
+  .handler(async ({ data }) => {
+    const { token } = data as { token: string };
+    if (!getFirebaseDb())
+      throw new Error("Firebase غير مُعد — يرجى تكوين الاتصال");
+    return waiterGetMenuCore(token);
+  });
+
+/** DB logic: waiter creates a new order, pre-assigned to themselves. */
+export async function waiterCreateOrderCore(
+  token: string,
+  input: Omit<NewOrderInput, "token">,
+) {
+  const { staffRow, staffId, restaurantId } =
+    await resolveStaffFromToken(token);
+  if (!staffRow.permissions?.includes("waiter"))
+    throw new Error("هذا الحساب لا يملك صلاحية النادل");
+  return createOrderForRestaurantCore(restaurantId, input, {
+    servedBy: staffId,
+    createdByRole: "waiter",
+  });
+}
+
+export const waiterCreateOrder = createServerFn({ method: "POST" })
+  .validator((d: { token: string } & Omit<NewOrderInput, "token">) => d)
+  .handler(async ({ data }) => {
+    const { token, ...input } = data as { token: string } & Omit<
+      NewOrderInput,
+      "token"
+    >;
+    if (!getFirebaseDb())
+      throw new Error("Firebase غير مُعد — يرجى تكوين الاتصال");
+    return waiterCreateOrderCore(token, input);
+  });
 
 /** DB logic: list active orders for the waiter's restaurant. */
 export async function waiterListOrdersCore(token: string) {
@@ -194,7 +245,8 @@ export const waiterUnclaimOrder = createServerFn({ method: "POST" })
     return waiterUnclaimOrderCore(token, orderId);
   });
 
-/** DB logic: waiter marks order as served (delivered to table). */
+/** DB logic: waiter marks order as served (delivered to table). It stays in
+ * cashier's "ready for payment" list as "served" until the cashier confirms. */
 export async function waiterMarkServedCore(token: string, orderId: string) {
   const { staffId, restaurantId } = await resolveStaffFromToken(token);
   const db = getFirebaseDb();
@@ -211,7 +263,11 @@ export async function waiterMarkServedCore(token: string, orderId: string) {
     throw new Error("هذا الطلب مُسند لنادل آخر");
   }
 
-  await updateDoc(orderRef, { served_by: staffId, status: "paid" });
+  await updateDoc(orderRef, {
+    served_by: staffId,
+    served_at: new Date().toISOString(),
+    status: "served",
+  });
   return { ok: true };
 }
 

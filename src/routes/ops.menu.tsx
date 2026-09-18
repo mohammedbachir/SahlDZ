@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
 import { requireOpsAccess, useAreaPermission } from "@/lib/permissions";
 import {
   Plus,
@@ -10,6 +11,7 @@ import {
   ToggleLeft,
   ToggleRight,
   Image as ImageIcon,
+  Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -37,6 +39,9 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { uploadImageWithFallback } from "@/lib/image-upload";
+import { MenuImportDialog } from "@/components/menu-import-dialog";
+import { uploadImageToGithub } from "@/lib/github-storage.functions";
 
 export const Route = createFileRoute("/ops/menu")({
   beforeLoad: requireOpsAccess("menu"),
@@ -76,6 +81,17 @@ function buildMenuImagePath(
 
 function OpsMenu() {
   useTranslation();
+  const ghUpload = useServerFn(uploadImageToGithub);
+  const githubUploadFn = async (base64: string, path: string) => {
+    try {
+      const r = (await ghUpload({ data: { path, base64 } })) as {
+        url?: string;
+      };
+      return r?.url ?? null;
+    } catch {
+      return null;
+    }
+  };
   const { restaurantId, loading: rLoading } = useRestaurantId();
   const { canWrite } = useAreaPermission("menu");
   const [categories, setCategories] = useState<Category[]>([]);
@@ -103,10 +119,11 @@ function OpsMenu() {
   const [itemImagePreview, setItemImagePreview] = useState<string | null>(null);
   const [itemSaving, setItemSaving] = useState(false);
   const [itemDelete, setItemDelete] = useState<MenuItem | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
 
   const reload = async (rid: string) => {
     setLoading(true);
-    const [{ data: cats }, { data: its }] = await Promise.all([
+    const [catsRes, itsRes] = await Promise.all([
       supabase
         .from("categories")
         .select("id, name, display_order, image_url")
@@ -118,12 +135,16 @@ function OpsMenu() {
         )
         .eq("restaurant_id", rid),
     ]);
-    const sorted = [...(cats ?? [])].sort(
+    if (catsRes.error) toast.error("تعذّر تحميل الفئات");
+    if (itsRes.error) toast.error("تعذّر تحميل الأصناف");
+    const cats = catsRes.data ?? [];
+    const its = itsRes.data ?? [];
+    const sorted = [...cats].sort(
       (a, b) =>
         ((a as any).display_order ?? 0) - ((b as any).display_order ?? 0),
     );
     setCategories(sorted as Category[]);
-    setItems((its ?? []) as MenuItem[]);
+    setItems(its as MenuItem[]);
     setLoading(false);
   };
 
@@ -208,14 +229,14 @@ function OpsMenu() {
       let imageUrl: string | null = catEditing?.image_url ?? null;
       if (catImage) {
         const path = buildMenuImagePath(restaurantId, "categories", catImage);
-        const { error: upErr } = await supabase.storage
-          .from("menu-images")
-          .upload(path, catImage, {
-            contentType: catImage.type || "image/png",
-          });
-        if (upErr) throw upErr;
-        imageUrl = supabase.storage.from("menu-images").getPublicUrl(path)
-          .data.publicUrl;
+        const up = await uploadImageWithFallback(
+          "menu-images",
+          path,
+          catImage,
+          githubUploadFn,
+        );
+        imageUrl = up.url;
+        if (up.warning) toast.warning(up.warning);
       }
       if (catEditing) {
         const { error } = await supabase
@@ -236,8 +257,8 @@ function OpsMenu() {
       }
       setCatOpen(false);
       await reload(restaurantId);
-    } catch {
-      toast.error("تعذّر حفظ الفئة");
+    } catch (e) {
+      toast.error((e as Error).message || "تعذّر حفظ الفئة");
     } finally {
       setCatSaving(false);
     }
@@ -311,14 +332,14 @@ function OpsMenu() {
       let imageUrl: string | null = itemEditing?.image_url ?? null;
       if (itemImage) {
         const path = buildMenuImagePath(restaurantId, "items", itemImage);
-        const { error: upErr } = await supabase.storage
-          .from("menu-images")
-          .upload(path, itemImage, {
-            contentType: itemImage.type || "image/png",
-          });
-        if (upErr) throw upErr;
-        imageUrl = supabase.storage.from("menu-images").getPublicUrl(path)
-          .data.publicUrl;
+        const up = await uploadImageWithFallback(
+          "menu-images",
+          path,
+          itemImage,
+          githubUploadFn,
+        );
+        imageUrl = up.url;
+        if (up.warning) toast.warning(up.warning);
       }
       if (itemEditing) {
         const { error } = await supabase
@@ -349,8 +370,8 @@ function OpsMenu() {
       }
       setItemOpen(false);
       await reload(restaurantId);
-    } catch {
-      toast.error("تعذّر حفظ الصنف");
+    } catch (e) {
+      toast.error((e as Error).message || "تعذّر حفظ الصنف");
     } finally {
       setItemSaving(false);
     }
@@ -409,6 +430,14 @@ function OpsMenu() {
         </div>
         {canWrite && (
           <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setImportOpen(true)}
+            >
+              <Sparkles className="w-4 h-4 ml-1" />
+              {tx("استيراد من صورة")}
+            </Button>
             <Button variant="outline" size="sm" onClick={openCatNew}>
               <Plus className="w-4 h-4 ml-1" />
               {tx("فئة")}
@@ -710,6 +739,15 @@ function OpsMenu() {
       </Dialog>
 
       {/* ─── Delete confirmations ─── */}
+      <MenuImportDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        restaurantId={restaurantId}
+        existingCategories={categories}
+        onImported={() => {
+          if (restaurantId) void reload(restaurantId);
+        }}
+      />
       <ConfirmDialog
         open={!!catDelete}
         onOpenChange={() => setCatDelete(null)}

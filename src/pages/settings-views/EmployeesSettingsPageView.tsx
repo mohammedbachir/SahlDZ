@@ -407,8 +407,8 @@ export function EmployeesSettingsPageView() {
         title="تأكيد الحذف"
         description={`هل أنت متأكد من حذف الموظف ${deleteMember?.name}؟`}
         onConfirm={submitDelete}
-        confirmText="حذف الموظف"
-        variant="destructive"
+        confirmLabel="حذف الموظف"
+        destructive
       />
     </div>
   );

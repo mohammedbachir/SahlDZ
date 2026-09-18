@@ -27,6 +27,10 @@ const firebaseConfig = {
 // to run the full app without a real backend.
 const USE_EMULATORS = import.meta.env.VITE_USE_FIREBASE_EMULATORS === "1";
 
+export function getFirebaseStorageBucket(): string | null {
+  return firebaseConfig.storageBucket ?? null;
+}
+
 let app: FirebaseApp | null = null;
 let auth: Auth | null = null;
 let db: Firestore | null = null;

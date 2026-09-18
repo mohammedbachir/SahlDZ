@@ -47,7 +47,13 @@ Preview/demo routes work without a configured backend: `/waiter-login`, `/kitche
 
 - **Firebase Emulators require Java.** The system has Java 17. Firebase-tools v15+ requires Java 21 for emulators. We use firebase-tools v14.x which ships emulator JARs compatible with Java 17.
 - **DO NOT upgrade firebase-tools** (`npm i -g firebase-tools@latest`). The latest version downloads Firestore emulator v1.22.0 which requires Java 21 and will break.
-- The emulator config is in `firebase.json`. Auth runs on `:9099`, Firestore on `:8081`.
+- The emulator config is in `firebase.json`. Auth runs on `:9099`, Firestore on `:8081`, Storage on `:9199`.
 - Data is auto-imported from `firebase-emulator-data/` on start and auto-exported on exit (`exportOnExit` in firebase.json).
 - Use `npm run dev:emulators` to start everything — it checks if emulators are already running, starts them if not, seeds auth accounts, then starts Vite.
-- To manually start emulators: `firebase emulators:start --only auth,firestore --project sahldz-demo`
+- To manually start emulators: `firebase emulators:start --only auth,firestore,storage --project sahldz-demo`
+
+## Firestore composite indexes
+
+- Composite indexes are declared in `firestore.indexes.json` (categories, menu_items, supplier_transactions, staff_transactions, employee_salary_payments, etc.).
+- They must be deployed to the live project for fast filtered queries: `firebase deploy --only firestore:indexes --project sahldz-app`.
+- Until deployed, the Supabase-compatible Firebase adapter (`src/integrations/firebase/client.ts`) transparently falls back to client-side filtering when Firestore returns an index-required error.

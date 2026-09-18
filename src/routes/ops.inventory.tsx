@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { sendLowStockAlertFn, sendPurchaseNotificationFn } from "@/lib/ops-alerts.functions";
 import { analyzeReceipt } from "@/lib/inventory-receipt.functions";
+import { recordInventoryPurchase } from "@/lib/inventory-finance.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurantId, formatDZD } from "@/lib/restaurant";
 import { Button } from "@/components/ui/button";
@@ -149,6 +150,7 @@ function OpsInventory() {
     direction: "add" as "add" | "remove",
     quantity: "",
     note: "",
+    supplier_id: "",
   });
   const [adjSaving, setAdjSaving] = useState(false);
 
@@ -160,8 +162,10 @@ function OpsInventory() {
     current_stock: "0",
     alert_threshold: "0",
     cost_per_unit: "0",
+    supplier_id: "",
   });
   const [saving, setSaving] = useState(false);
+  const [suppliers, setSuppliers] = useState<{ id: string; name: string }[]>([]);
 
   // Receipt photo modal
   const [recOpen, setRecOpen] = useState(false);
@@ -185,11 +189,19 @@ function OpsInventory() {
   const [wasteSaving, setWasteSaving] = useState(false);
 
   const loadAll = async (rid: string) => {
-    const { data, error } = await supabase.from("ingredients").select("*").eq("restaurant_id", rid);
-    if (error) toast.error(tx("فشل تحميل المكونات"));
-    const list = (data ?? []) as Ingredient[];
+    const [ingRes, supRes] = await Promise.all([
+      supabase.from("ingredients").select("*").eq("restaurant_id", rid),
+      supabase
+        .from("suppliers")
+        .select("id, name")
+        .eq("restaurant_id", rid)
+        .order("name", { ascending: true }),
+    ]);
+    if (ingRes.error) toast.error(tx("فشل تحميل المكونات"));
+    const list = (ingRes.data ?? []) as Ingredient[];
     list.sort((a, b) => a.name.localeCompare(b.name, "ar"));
     setItems(list);
+    if (supRes.data) setSuppliers(supRes.data as { id: string; name: string }[]);
     setLoading(false);
   };
 
@@ -212,23 +224,38 @@ function OpsInventory() {
       return;
     }
     setSaving(true);
+    const stock = Number(form.current_stock) || 0;
+    const cost = Number(form.cost_per_unit) || 0;
     const { error } = await supabase.from("ingredients").insert({
       restaurant_id: restaurantId,
       name: form.name.trim(),
       unit: form.unit.trim(),
-      current_stock: Number(form.current_stock) || 0,
+      current_stock: stock,
       alert_threshold: Number(form.alert_threshold) || 0,
-      cost_per_unit: Number(form.cost_per_unit) || 0,
+      cost_per_unit: cost,
     });
-    setSaving(false);
     if (error) {
       console.error("ingredient insert failed", error);
+      setSaving(false);
       toast.error(tx("فشل إضافة المكون: ") + error.message);
       return;
     }
+    if (stock > 0 && cost > 0) {
+      const fin = await recordInventoryPurchase({
+        restaurantId,
+        supplierId: form.supplier_id || null,
+        ingredientName: form.name.trim(),
+        unit: form.unit.trim(),
+        quantity: stock,
+        costPerUnit: cost,
+        note: tx("إضافة مكون يدوي"),
+      });
+      if (!fin.ok) console.error("recordInventoryPurchase failed", fin.error);
+    }
+    setSaving(false);
     toast.success(tx("تمت إضافة المكون"));
     setAddOpen(false);
-    setForm({ name: "", unit: "", current_stock: "0", alert_threshold: "0", cost_per_unit: "0" });
+    setForm({ name: "", unit: "", current_stock: "0", alert_threshold: "0", cost_per_unit: "0", supplier_id: "" });
     await loadAll(restaurantId);
   };
 
@@ -631,7 +658,7 @@ function OpsInventory() {
 
   const openAdjust = (ing: Ingredient, direction: "add" | "remove") => {
     setAdjIng(ing);
-    setAdjForm({ direction, quantity: "", note: "" });
+    setAdjForm({ direction, quantity: "", note: "", supplier_id: "" });
     setAdjOpen(true);
   };
 
@@ -649,11 +676,24 @@ function OpsInventory() {
       .from("ingredients")
       .update({ current_stock: newStock })
       .eq("id", adjIng.id);
-    setAdjSaving(false);
     if (error) {
+      setAdjSaving(false);
       toast.error(tx("فشل التعديل"));
       return;
     }
+    if (adjForm.direction === "add") {
+      const fin = await recordInventoryPurchase({
+        restaurantId,
+        supplierId: adjForm.supplier_id || null,
+        ingredientName: adjIng.name,
+        unit: adjIng.unit,
+        quantity: qty,
+        costPerUnit: Number(adjIng.cost_per_unit || 0),
+        note: adjForm.note.trim() || tx("إضافة يدوية للمخزون"),
+      });
+      if (!fin.ok) console.error("recordInventoryPurchase failed", fin.error);
+    }
+    setAdjSaving(false);
     toast.success(
       adjForm.direction === "add" ? tx("تمت الإضافة للمخزون") : tx("تم الخصم من المخزون"),
     );
@@ -857,6 +897,24 @@ function OpsInventory() {
                 />
               </div>
             </div>
+            <div>
+              <Label>{tx("المورد (اختياري — يُسجَّل القيد المالي للشراء)")}</Label>
+              <Select
+                value={form.supplier_id}
+                onValueChange={(v) => setForm({ ...form, supplier_id: v })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={tx("بدون مورد (مشتريات يدوية)")} />
+                </SelectTrigger>
+                <SelectContent>
+                  {suppliers.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setAddOpen(false)}>
@@ -1028,6 +1086,26 @@ function OpsInventory() {
                 placeholder={tx("مثال: شراء سريع، تصحيح جرد...")}
               />
             </div>
+            {adjForm.direction === "add" && (
+              <div>
+                <Label>{tx("المورد (اختياري — يُسجَّل القيد المالي للشراء)")}</Label>
+                <Select
+                  value={adjForm.supplier_id}
+                  onValueChange={(v) => setAdjForm({ ...adjForm, supplier_id: v })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={tx("بدون مورد (مشتريات يدوية)")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {suppliers.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {s.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setAdjOpen(false)}>

@@ -270,7 +270,18 @@ function Page() {
         )}
 
         <div className="text-center">
-          <BackHomeLink label={tx("common.backToHome")} />
+          <BackHomeLink
+            label={tx("common.backToHome")}
+            onClick={() => {
+              setRestaurantId(null);
+              setRestaurantName("");
+              setLogoUrl(null);
+              setEnabled(null);
+              setStaff([]);
+              setSelectedStaff(null);
+              setQuery("");
+            }}
+          />
         </div>
       </div>
     </div>

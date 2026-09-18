@@ -1,0 +1,53 @@
+{
+    "name":  "sahldz-desktop",
+    "version":  "1.0.0",
+    "description":  "SahlDZ - نظام إدارة المطعم",
+    "main":  "main.js",
+    "author":  "SahlDZ Team",
+    "license":  "MIT",
+    "scripts":  {
+                    "start":  "electron .",
+                    "dev":  "set VITE_DEV_SERVER_URL=http://localhost:8080 \u0026\u0026 electron .",
+                    "build":  "electron-builder",
+                    "build:win":  "electron-builder --win"
+                },
+    "dependencies":  {
+                         "electron-updater":  "^6.1.0"
+                     },
+    "devDependencies":  {
+                            "electron":  "22.3.6",
+                            "electron-builder":  "^24.0.0"
+                        },
+    "build":  {
+                  "appId":  "com.sahldz.app",
+                  "productName":  "SahlDZ",
+                  "directories":  {
+                                      "output":  "release-build"
+                                  },
+                  "files":  [
+                                "main.js",
+                                "preload.js",
+                                "src/**/*"
+                            ],
+                  "win":  {
+                              "target":  [
+                                             {
+                                                 "target":  "nsis",
+                                                 "arch":  [
+                                                              "ia32"
+                                                          ]
+                                             }
+                                         ],
+                              "icon":  "build/icon.png"
+                          },
+                  "nsis":  {
+                               "oneClick":  false,
+                               "perMachine":  false,
+                               "allowToChangeInstallationDirectory":  true,
+                               "createDesktopShortcut":  true,
+                               "createStartMenuShortcut":  true,
+                               "shortcutName":  "SahlDZ",
+                               "unicode":  true
+                           }
+              }
+}

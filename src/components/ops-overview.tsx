@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import {
   AlertTriangle,
@@ -34,6 +34,8 @@ type Kpis = {
   weekWaste: number;
   monthRevenue: number;
   monthNet: number;
+  todayRevenue: number;
+  todayOrders: number;
 };
 
 type RecentEntry = {
@@ -85,12 +87,19 @@ export function OpsOverview() {
     weekWaste: 0,
     monthRevenue: 0,
     monthNet: 0,
+    todayRevenue: 0,
+    todayOrders: 0,
   });
+  const lastUpdatedRef = useRef<string>("");
+  const [dataState, setDataState] = useState<
+    "loading" | "no-auth" | "no-restaurant" | "ready"
+  >("loading");
 
   useEffect(() => {
-    (async () => {
+    const load = async () => {
       const { data: u } = await supabase.auth.getUser();
       if (!u.user) {
+        setDataState("no-auth");
         setLoading(false);
         return;
       }
@@ -105,6 +114,7 @@ export function OpsOverview() {
 
       const rid = await resolveRestaurantId(u.user.id);
       if (!rid) {
+        setDataState("no-restaurant");
         setLoading(false);
         return;
       }
@@ -112,61 +122,71 @@ export function OpsOverview() {
       const now = new Date();
       const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
       const sevenDaysAgo = new Date(now.getTime() - 7 * 86400000).toISOString();
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
 
-      const [ingRes, salariesRes, wasteRes, ordersRes, poRes, compRes] = await Promise.all([
-        supabase
-          .from("ingredients")
-          .select("id, name, quantity, min_quantity, unit")
-          .eq("restaurant_id", rid),
-        supabase.from("staff_salaries").select("id, is_paid, amount").eq("restaurant_id", rid),
-        supabase
-          .from("waste_logs")
-          .select("cost")
-          .eq("restaurant_id", rid)
-          .gte("created_at", sevenDaysAgo),
-        supabase
-          .from("orders")
-          .select("total")
-          .eq("restaurant_id", rid)
-          .eq("payment_status", "paid")
-          .gte("created_at", monthStart),
-        supabase
-          .from("purchase_orders")
-          .select("total")
-          .eq("restaurant_id", rid)
-          .gte("created_at", monthStart),
-        supabase
-          .from("customer_complaints")
-          .select("id", { count: "exact" })
-          .eq("restaurant_id", rid)
-          .in("status", ["open", "in_progress"]),
-      ]);
+      const [ingRes, salariesRes, wasteRes, ordersRes, todayOrdersRes, poRes, compRes] =
+        await Promise.all([
+          supabase
+            .from("ingredients")
+            .select("id, name, current_stock, alert_threshold, unit")
+            .eq("restaurant_id", rid),
+          supabase.from("staff_salaries").select("id, is_paid, amount").eq("restaurant_id", rid),
+          supabase
+            .from("waste_logs")
+            .select("cost")
+            .eq("restaurant_id", rid)
+            .gte("created_at", sevenDaysAgo),
+          supabase
+            .from("orders")
+            .select("total, paid_amount, discount_amount")
+            .eq("restaurant_id", rid)
+            .eq("status", "paid")
+            .gte("created_at", monthStart),
+          supabase
+            .from("orders")
+            .select("total, paid_amount, discount_amount")
+            .eq("restaurant_id", rid)
+            .eq("status", "paid")
+            .gte("created_at", todayStart),
+          supabase
+            .from("purchase_orders")
+            .select("total")
+            .eq("restaurant_id", rid)
+            .gte("created_at", monthStart),
+          supabase
+            .from("customer_complaints")
+            .select("id", { count: "exact" })
+            .eq("restaurant_id", rid)
+            .in("status", ["open", "in_progress"]),
+        ]);
 
       setOpenComplaintsCount(compRes.count ?? 0);
 
-      const lowStock = (ingRes.data ?? []).filter(
-        (i) => Number(i.quantity) <= Number(i.min_quantity),
+const lowStock = (ingRes.data ?? []).filter(
+        (i: any) => Number(i.current_stock) <= Number(i.alert_threshold),
       ).length;
 
-      const pendingSalaries = (salariesRes.data ?? []).filter((s) => !s.is_paid).length;
+      const pendingSalaries = (salariesRes.data ?? []).filter((s: any) => !s.is_paid).length;
       const salariesPaid = (salariesRes.data ?? [])
-        .filter((s) => s.is_paid)
-        .reduce((sum, s) => sum + Number(s.amount || 0), 0);
+        .filter((s: any) => s.is_paid)
+        .reduce((sum: number, s: any) => sum + Number(s.amount || 0), 0);
 
-      const weekWaste = (wasteRes.data ?? []).reduce((sum, w) => sum + Number(w.cost || 0), 0);
-      const monthRevenue = (ordersRes.data ?? []).reduce((sum, o) => sum + Number(o.total || 0), 0);
-      const purchases = (poRes.data ?? []).reduce((sum, p) => sum + Number(p.total || 0), 0);
+      const moneyIn = (o: any) => Number(o.paid_amount ?? o.total ?? 0);
+
+      const weekWaste = (wasteRes.data ?? []).reduce((sum: number, w: any) => sum + Number(w.cost || 0), 0);
+      const monthRevenue = (ordersRes.data ?? []).reduce((sum: number, o: any) => sum + moneyIn(o), 0);
+      const todayRevenue = (todayOrdersRes.data ?? []).reduce((sum: number, o: any) => sum + moneyIn(o), 0);
+      const purchases = (poRes.data ?? []).reduce((sum: number, p: any) => sum + Number(p.total || 0), 0);
 
       const monthExpensesAll = purchases + salariesPaid + weekWaste;
 
       // Ensure monthly archive runs in the background
-      ensureMonthlyArchive(rid, {
-        revenue: monthRevenue,
-        purchases,
-        salaries: salariesPaid,
-        waste: weekWaste,
-        otherExpenses: 0,
-      }).catch(() => {});
+      const { data: restRow } = await supabase
+        .from("restaurants")
+        .select("name")
+        .eq("id", rid)
+        .maybeSingle();
+      void ensureMonthlyArchive(rid, (restRow as any)?.name ?? "").catch(() => {});
 
       // Fetch recent transactions (orders and purchase orders)
       const [recentOrdersRes, recentPoRes] = await Promise.all([
@@ -174,7 +194,7 @@ export function OpsOverview() {
           .from("orders")
           .select("id, order_number, total, created_at")
           .eq("restaurant_id", rid)
-          .eq("payment_status", "paid")
+          .eq("status", "paid")
           .order("created_at", { ascending: false })
           .limit(4),
         supabase
@@ -218,9 +238,16 @@ export function OpsOverview() {
         weekWaste,
         monthRevenue,
         monthNet: monthRevenue - monthExpensesAll,
+        todayRevenue,
+        todayOrders: (todayOrdersRes.data ?? []).length,
       });
+      lastUpdatedRef.current = new Date().toLocaleTimeString("ar-DZ");
+      setDataState("ready");
       setLoading(false);
-    })();
+    };
+    void load();
+    const id = setInterval(() => void load(), 20_000);
+    return () => clearInterval(id);
   }, []);
 
   const hiddenKeys = HIDDEN_KPIS[userRole] ?? [];
@@ -432,8 +459,26 @@ export function OpsOverview() {
             </span>
             <span className="text-muted-foreground">· {tx("قراءة متصلة للفترة الحالية")}</span>
           </div>
-          <div className="text-[11px] text-muted-foreground font-mono">{tx("العملة: دج")}</div>
+          <div className="flex items-center gap-2 text-[11px] text-muted-foreground font-mono">
+            {dataState === "ready" && lastUpdatedRef.current && (
+              <span className="text-[#27734F] font-semibold">
+                {tx("آخر تحديث:")} {lastUpdatedRef.current}
+              </span>
+            )}
+            <span>{tx("العملة: دج")}</span>
+          </div>
         </div>
+
+        {dataState === "no-auth" && (
+          <div className="px-4 py-3 bg-[#B86D16]/10 border-b border-[#B86D16]/25 text-xs text-[#B86D16] font-medium">
+            {tx("سجّل الدخول بحساب مالك المطعم لعرض موجز الأداء المالي. الأرقام تظهر صفراً لأن الجلسة غير مصرّح لها.")}
+          </div>
+        )}
+        {dataState === "no-restaurant" && (
+          <div className="px-4 py-3 bg-[#B86D16]/10 border-b border-[#B86D16]/25 text-xs text-[#B86D16] font-medium">
+            {tx("حسابك غير مرتبط بأي مطعم — اربط الحساب بمطعم ليتم احتساب العمليات والمداخيل.")}
+          </div>
+        )}
 
         {/* Connected Horizontal Columns (No individual cards) */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x sm:divide-x-reverse divide-border">
@@ -453,6 +498,17 @@ export function OpsOverview() {
               </div>
               <div className="text-[11px] text-muted-foreground">
                 {tx("إجمالي الطلبات المدفوعة المسجلة")}
+              </div>
+              <div className="mt-1.5 flex items-center justify-between border-t border-border/60 pt-1.5">
+                <span className="text-[11px] font-medium text-[#27734F]">
+                  {tx("مداخيل اليوم:")}{" "}
+                  <span className="font-bold tabular-nums">
+                    {loading ? "…" : `${fmt(kpis.todayRevenue)} دج`}
+                  </span>
+                </span>
+                <span className="text-[10px] text-muted-foreground">
+                  {loading ? "" : `${kpis.todayOrders} ${tx("طلب")}`}
+                </span>
               </div>
             </div>
           ) : (

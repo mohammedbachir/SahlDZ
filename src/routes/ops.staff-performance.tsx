@@ -23,6 +23,8 @@ type StaffPerf = {
   name: string;
   role: string;
   orders_served: number;
+  orders_prepared: number;
+  avg_prep_min: number | null;
   waste_logged: number;
   waste_cost: number;
 };
@@ -84,7 +86,28 @@ function OpsStaffPerformance() {
         if (sb) servedCounts.set(sb, (servedCounts.get(sb) ?? 0) + 1);
       }
 
-      // 3. Get waste logged per staff (logged_by field)
+      // 3. Get orders prepared per chef (chef_id + prep times)
+      const { data: kitchenOrders } = await supabase
+        .from("orders")
+        .select("chef_id, started_at, ready_at")
+        .eq("restaurant_id", restaurantId)
+        .gte("started_at", from + "T00:00:00")
+        .lte("started_at", to + "T23:59:59");
+
+      const prepByStaff = new Map<string, { count: number; totalSec: number }>();
+      for (const o of kitchenOrders ?? []) {
+        const cid = (o as any).chef_id;
+        const ready = (o as any).ready_at;
+        const started = (o as any).started_at;
+        if (!cid || !ready || !started) continue;
+        const prev = prepByStaff.get(cid) ?? { count: 0, totalSec: 0 };
+        prev.count++;
+        prev.totalSec +=
+          (new Date(ready).getTime() - new Date(started).getTime()) / 1000;
+        prepByStaff.set(cid, prev);
+      }
+
+      // 4. Get waste logged per staff (logged_by field)
       const { data: wasteRows } = await supabase
         .from("waste_logs")
         .select("logged_by,cost")
@@ -106,11 +129,14 @@ function OpsStaffPerformance() {
       const result: StaffPerf[] = (staffRows ?? []).map((s: any) => {
         const name = s.name as string;
         const waste = wasteByStaff.get(name) ?? { count: 0, cost: 0 };
+        const prep = prepByStaff.get(s.id as string);
         return {
           id: s.id,
           name,
           role: s.role ?? "",
           orders_served: servedCounts.get(s.id) ?? 0,
+          orders_prepared: prep?.count ?? 0,
+          avg_prep_min: prep && prep.count > 0 ? prep.totalSec / prep.count / 60 : null,
           waste_logged: waste.count,
           waste_cost: waste.cost,
         };
@@ -178,6 +204,8 @@ function OpsStaffPerformance() {
                   <TableHead className="text-xs">{tx("الموظف")}</TableHead>
                   <TableHead className="text-xs">{tx("الدور")}</TableHead>
                   <TableHead className="text-xs text-left">{tx("طلبات مُقدّمة")}</TableHead>
+                  <TableHead className="text-xs text-left">{tx("طلبات حضّرها")}</TableHead>
+                  <TableHead className="text-xs text-left">{tx("متوسط وقت التحضير")}</TableHead>
                   <TableHead className="text-xs text-left">{tx("هدر مسجّل")}</TableHead>
                   <TableHead className="text-xs text-left">{tx("تكلفة الهدر")}</TableHead>
                 </TableRow>
@@ -192,6 +220,14 @@ function OpsStaffPerformance() {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-xs font-bold text-left tabular-nums">{s.orders_served}</TableCell>
+                    <TableCell className="text-xs font-bold text-left tabular-nums">
+                      {s.orders_prepared > 0 ? s.orders_prepared : "—"}
+                    </TableCell>
+                    <TableCell className="text-xs text-left tabular-nums">
+                      {s.avg_prep_min !== null
+                        ? `${s.avg_prep_min.toFixed(1)} ${tx("دقيقة")}`
+                        : "—"}
+                    </TableCell>
                     <TableCell className="text-xs text-left tabular-nums">{s.waste_logged}</TableCell>
                     <TableCell className="text-xs text-left tabular-nums text-red-600">
                       {s.waste_cost > 0 ? formatDZD(s.waste_cost) : "—"}

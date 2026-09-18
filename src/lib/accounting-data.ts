@@ -150,7 +150,7 @@ export async function loadAccountingReport(
   const fromIso = from + "T00:00:00";
   const toIso = to + "T23:59:59";
 
-  const [orders, waste, purchaseTxs, purchasesFallback, salaryPayments, otherTxs] =
+  const [orders, waste, purchaseTxs, purchasesFallback, salaryPayments, otherTxs, staffTx] =
     await Promise.all([
       safeFetch<any[]>(() =>
         supabase
@@ -203,6 +203,15 @@ export async function loadAccountingReport(
           .gte("date", from)
           .lte("date", to),
       ),
+      safeFetch<any[]>(() =>
+        supabase
+          .from("staff_transactions")
+          .select("amount,type")
+          .eq("restaurant_id", restaurantId)
+          .in("type", ["advance", "loan"])
+          .gte("date", from)
+          .lte("date", to),
+      ),
     ]);
 
   const revenue = sum(orders, "total");
@@ -211,6 +220,7 @@ export async function loadAccountingReport(
   const purchases = sum(purchaseTxs, "amount");
   const purchasesFromPO = sum(purchasesFallback, "total");
   const salaries = sum(salaryPayments, "net_salary");
+  const staffAdvances = sum(staffTx, "amount");
 
   let other = 0;
   for (const t of otherTxs) {
@@ -288,7 +298,8 @@ export async function loadAccountingReport(
   const cogs = Array.from(cogsByOrder.values()).reduce((s, v) => s + v, 0);
 
   const grossProfit = revenue - cogs;
-  const expensesTotal = (purchases || purchasesFromPO) + salaries + wasteCost + other;
+  const otherTotal = other + staffAdvances;
+  const expensesTotal = (purchases || purchasesFromPO) + salaries + wasteCost + otherTotal;
   const netProfit = revenue - expensesTotal;
   const pct = (n: number) => (revenue > 0 ? Math.round((n / revenue) * 100) : 0);
 
@@ -343,7 +354,7 @@ export async function loadAccountingReport(
       purchases: purchases || purchasesFromPO,
       salaries,
       waste: wasteCost,
-      other,
+      other: otherTotal,
       total: expensesTotal,
     },
     netProfit,

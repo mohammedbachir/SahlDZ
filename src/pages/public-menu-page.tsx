@@ -61,13 +61,14 @@ function lineUnitPrice(line: CartLine) {
 }
 
 const STEPS: Array<{
-  key: "new" | "preparing" | "ready" | "paid";
+  key: "new" | "preparing" | "ready" | "served" | "paid";
   label: string;
   icon: LucideIcon;
 }> = [
   { key: "new", label: "استلام", icon: ScrollText },
   { key: "preparing", label: "تحضير", icon: CookingPot },
   { key: "ready", label: "جاهز", icon: BellRing },
+  { key: "served", label: "مُسلَّم", icon: UtensilsCrossed },
   { key: "paid", label: "تسليم", icon: Check },
 ];
 
@@ -321,7 +322,7 @@ export function PublicMenuPage({
     const status = track?.status ?? "new";
     const currentIdx = STEPS.findIndex((s) => s.key === status);
     const readyNow = status === "ready";
-    const delivered = status === "paid";
+    const delivered = status === "served" || status === "paid";
     const notFound = track && !track.found;
 
     return (

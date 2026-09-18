@@ -19,6 +19,7 @@ const ROOT = path.resolve(__dirname, "..");
 
 const AUTH_PORT = 9099;
 const FIRESTORE_PORT = 8081;
+const STORAGE_PORT = 9199;
 const MAX_WAIT_MS = 30_000;
 
 function isPortOpen(port) {
@@ -57,14 +58,15 @@ function waitForPort(port, timeoutMs) {
 async function main() {
   const authOpen = await isPortOpen(AUTH_PORT);
   const fsOpen = await isPortOpen(FIRESTORE_PORT);
+  const stOpen = await isPortOpen(STORAGE_PORT);
 
-  if (authOpen && fsOpen) {
-    console.log(`[OK] Emulators already running (auth:${AUTH_PORT}, firestore:${FIRESTORE_PORT})`);
+  if (authOpen && fsOpen && stOpen) {
+    console.log(`[OK] Emulators already running (auth:${AUTH_PORT}, firestore:${FIRESTORE_PORT}, storage:${STORAGE_PORT})`);
   } else {
     console.log("[..] Starting Firebase emulators...");
     const child = spawn(
       "firebase",
-      ["emulators:start", "--only", "auth,firestore", "--project", "sahldz-demo"],
+      ["emulators:start", "--only", "auth,firestore,storage", "--project", "sahldz-demo"],
       {
         cwd: ROOT,
         stdio: "ignore",
@@ -87,6 +89,14 @@ async function main() {
       console.log(`[OK] Firestore emulator ready on :${FIRESTORE_PORT}`);
     } catch (e) {
       console.error(`[FAIL] Firestore emulator: ${e.message}`);
+      process.exit(1);
+    }
+
+    try {
+      await waitForPort(STORAGE_PORT, MAX_WAIT_MS);
+      console.log(`[OK] Storage emulator ready on :${STORAGE_PORT}`);
+    } catch (e) {
+      console.error(`[FAIL] Storage emulator: ${e.message}`);
       process.exit(1);
     }
   }

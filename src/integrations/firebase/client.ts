@@ -29,7 +29,12 @@ import {
   uploadString,
   uploadBytes,
 } from "firebase/storage";
-import { getFirebaseAuth, getFirebaseDb, getFirebaseStorage } from "./config";
+import {
+  getFirebaseAuth,
+  getFirebaseDb,
+  getFirebaseStorage,
+  getFirebaseStorageBucket,
+} from "./config";
 import { cacheSession, clearSessionCache } from "@/lib/session-cache";
 
 const NO_BACKEND_MSG =
@@ -132,7 +137,7 @@ function buildQuery(
   return query(collection(db, table), ...constraints);
 }
 
-async function executeFilterChain(
+async function runFirestoreQuery(
   db: any,
   table: string,
   filters: Array<{ op: string; field: string; value: any }>,
@@ -170,6 +175,157 @@ async function executeFilterChain(
   }
 
   return allResults;
+}
+
+// ─── Firestore query resilience ────────────────────────────────
+// Firestore (unlike SQL) rejects some query shapes and needs composite
+// indexes for others. The Supabase-compatible API is expected to behave
+// like SQL, so we try the indexed Firestore query first and transparently
+// fall back to fetching + filtering/ordering locally when Firestore refuses.
+const RANGE_OPS = new Set([
+  "gt",
+  ">",
+  "gte",
+  ">=",
+  "lt",
+  "<",
+  "lte",
+  "<=",
+  "neq",
+  "!=",
+]);
+const indexMissCache = new Set<string>();
+
+function normalizeValue(v: any): any {
+  if (v === null || v === undefined) return v;
+  if (typeof v?.toDate === "function") return v.toDate().getTime();
+  if (v instanceof Date) return v.getTime();
+  if (typeof v === "string" && /^\d{4}-\d{2}-\d{2}T/.test(v)) {
+    const ms = Date.parse(v);
+    if (!Number.isNaN(ms)) return ms;
+  }
+  return v;
+}
+
+function compareValues(x: any, y: any): number {
+  const a = normalizeValue(x);
+  const b = normalizeValue(y);
+  if (a === b) return 0;
+  if (a === null || a === undefined) return -1;
+  if (b === null || b === undefined) return 1;
+  if (typeof a === "number" && typeof b === "number") return a < b ? -1 : 1;
+  return String(a).localeCompare(String(b));
+}
+
+function matchRange(value: any, op: string, target: any): boolean {
+  if (value === null || value === undefined) return false;
+  const c = compareValues(value, target);
+  switch (op) {
+    case ">":
+      return c > 0;
+    case ">=":
+      return c >= 0;
+    case "<":
+      return c < 0;
+    case "<=":
+      return c <= 0;
+    case "!=":
+      return c !== 0;
+    default:
+      return true;
+  }
+}
+
+function isIndexError(e: any): boolean {
+  const msg = String(e?.message ?? e ?? "");
+  return (
+    msg.includes("requires an index") ||
+    msg.includes("FAILED_PRECONDITION") ||
+    msg.includes("first sort order must be the same") ||
+    msg.includes("inequality filter") ||
+    e?.code === 9
+  );
+}
+
+function queryShapeKey(
+  table: string,
+  filters: Array<{ op: string; field: string }>,
+  orderBy: { field: string; direction: string } | null,
+): string {
+  return `${table}|${filters.map((f) => `${f.op}:${f.field}`).join(",")}|${
+    orderBy ? `${orderBy.field}:${orderBy.direction}` : ""
+  }`;
+}
+
+async function resolveClientSide(
+  db: any,
+  table: string,
+  filters: Array<{ op: string; field: string; value: any }>,
+  orderBy: { field: string; direction: "asc" | "desc" } | null,
+  limitN: number | null,
+): Promise<any[]> {
+  // Equality and `in` filters are always safe (single-field index merge),
+  // so push those down and apply range filters / ordering / limit locally.
+  const pushable = filters.filter((f) => f.op === "==" || f.op === "in");
+  const rangeFilters = filters.filter((f) => RANGE_OPS.has(f.op));
+  let rows = await runFirestoreQuery(db, table, pushable, null, null);
+  if (rangeFilters.length) {
+    rows = rows.filter((r) =>
+      rangeFilters.every((f) => matchRange(r[f.field], f.op, f.value)),
+    );
+  }
+  if (orderBy) {
+    const dir = orderBy.direction === "desc" ? -1 : 1;
+    rows = rows
+      .slice()
+      .sort((a, b) => dir * compareValues(a[orderBy.field], b[orderBy.field]));
+  }
+  if (limitN) rows = rows.slice(0, limitN);
+  return rows;
+}
+
+async function executeFilterChain(
+  db: any,
+  table: string,
+  filters: Array<{ op: string; field: string; value: any }>,
+  orderBy: { field: string; direction: "asc" | "desc" } | null = null,
+  limitN: number | null = null,
+): Promise<any[]> {
+  const ineqFilters = filters.filter(
+    (f) => RANGE_OPS.has(f.op) || f.op === "in",
+  );
+  const ineqFields = new Set(ineqFilters.map((f) => f.field));
+  const firstIneqField = ineqFilters[0]?.field ?? null;
+  const eqFields = new Set(
+    filters.filter((f) => f.op === "==").map((f) => f.field),
+  );
+
+  // Shapes Firestore rejects regardless of indexes → resolve locally.
+  const invalidShape =
+    ineqFields.size > 1 ||
+    (orderBy !== null &&
+      firstIneqField !== null &&
+      orderBy.field !== firstIneqField) ||
+    (orderBy !== null && eqFields.has(orderBy.field));
+
+  const key = queryShapeKey(table, filters, orderBy);
+  if (invalidShape || indexMissCache.has(key)) {
+    return resolveClientSide(db, table, filters, orderBy, limitN);
+  }
+
+  try {
+    return await runFirestoreQuery(db, table, filters, orderBy, limitN);
+  } catch (e) {
+    // Cloud Firestore raises several failure modes the SQL-compatible API
+    // must transparently absorb: missing composite indexes
+    // ("requires an index"), mixed filter types, and invalid query shapes.
+    // The client-side fallback only relies on single-field equality / `in`
+    // pushdowns which always work, so try it for ANY failure of the indexed
+    // attempt. Genuine failures (permissions, offline) resurface because the
+    // fallback fails too.
+    if (isIndexError(e)) indexMissCache.add(key);
+    return resolveClientSide(db, table, filters, orderBy, limitN);
+  }
 }
 
 function makeUpdateChain(db: any, table: string, data: any) {
@@ -473,8 +629,8 @@ function firestoreQueryChain(table: string, _builder: any): any {
           db,
           table,
           pendingFilters,
-          null,
-          1,
+          pendingOrderBy,
+          pendingLimit ?? 1,
         );
         return { data: rows[0] ?? null, error: null };
       } catch (e: any) {
@@ -487,8 +643,8 @@ function firestoreQueryChain(table: string, _builder: any): any {
           db,
           table,
           pendingFilters,
-          null,
-          1,
+          pendingOrderBy,
+          pendingLimit ?? 1,
         );
         return { data: rows[0] ?? null, error: null };
       } catch (e: any) {
@@ -515,35 +671,108 @@ function firestoreQueryChain(table: string, _builder: any): any {
 }
 
 // ─── Storage helpers ───────────────────────────────────────────
+const UPLOAD_TIMEOUT_MS = 25_000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error("انتهت مهلة رفع الملف")), ms);
+    promise.then(
+      (v) => {
+        clearTimeout(t);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(t);
+        reject(e);
+      },
+    );
+  });
+}
+
+function parseStoragePath(bucket: string, path: string): string {
+  const full = `${bucket}/${path}`;
+  return full.replace(/\/{2,}/g, "/").replace(/^\/|\/$/g, "");
+}
+
+function getPublicUrlFromBucket(bucket: string, path: string): string {
+  const storageBucket = getFirebaseStorageBucket();
+  if (!storageBucket) return "";
+  try {
+    const full = parseStoragePath(bucket, path);
+    return `https://firebasestorage.googleapis.com/v0/b/${storageBucket}/o/${encodeURIComponent(full)}?alt=media`;
+  } catch {
+    return "";
+  }
+}
+
 function storageChain(bucket: string) {
   return {
-    getPublicUrl: (path: string) => {
-      const storage = getFirebaseStorage();
-      if (!storage) return { data: { publicUrl: "" } };
-      try {
-        const url = `https://firebasestorage.googleapis.com/v0/b/${bucket}/o/${encodeURIComponent(path)}?alt=media`;
-        return { data: { publicUrl: url } };
-      } catch {
-        return { data: { publicUrl: "" } };
-      }
-    },
-    upload: async (path: string, fileData: any) => {
+    getPublicUrl: (path: string) => ({
+      data: { publicUrl: getPublicUrlFromBucket(bucket, path) },
+    }),
+    upload: async (
+      path: string,
+      fileData: any,
+      options?: { contentType?: string },
+    ) => {
       const storage = getFirebaseStorage();
       if (!storage)
         return { data: { path }, error: { message: NO_BACKEND_MSG } };
       try {
-        const ref = storageRef(storage, `${bucket}/${path}`);
+        const ref = storageRef(storage, parseStoragePath(bucket, path));
+        const contentType = options?.contentType;
+        let task: Promise<unknown>;
         if (typeof fileData === "string") {
-          await uploadString(ref, fileData, "data_url");
+          const isDataUrl = fileData.startsWith("data:");
+          task = uploadString(
+            ref,
+            fileData,
+            isDataUrl ? "data_url" : "raw",
+            isDataUrl ? undefined : contentType ? { contentType } : undefined,
+          );
         } else if (fileData instanceof Blob || fileData instanceof File) {
-          await uploadBytes(ref, fileData);
+          task = uploadBytes(
+            ref,
+            fileData,
+            contentType ? { contentType } : undefined,
+          );
         } else {
-          await uploadString(ref, String(fileData));
+          task = uploadString(
+            ref,
+            String(fileData),
+            "raw",
+            contentType ? { contentType } : undefined,
+          );
         }
-        const url = await getDownloadURL(ref);
+        await withTimeout(task, UPLOAD_TIMEOUT_MS);
+        // Build the public URL first so a later metadata/lookup failure can't
+        // make a successful upload look like a failure.
+        let url = getPublicUrlFromBucket(bucket, path);
+        try {
+          url = await withTimeout(getDownloadURL(ref), UPLOAD_TIMEOUT_MS);
+        } catch {
+          // keep the constructed public URL
+        }
         return { data: { path, url }, error: null };
       } catch (e: any) {
-        return { data: null, error: { message: e.message } };
+        const msg = e?.message ?? "فشل رفع الملف";
+        const code = String(e?.code ?? "") || msg;
+        if (
+          /bucket|[Ss]torage has not been set up|firebasestorage\.googleapis\.com\/(404)?/i.test(
+            msg,
+          ) ||
+          code === "storage/unknown" ||
+          code === "storage/bucket-not-found"
+        ) {
+          return {
+            data: null,
+            error: {
+              message:
+                "خدمة تخزين الصور غير مُفعّلة على مشروع Firebase — افتح Storage في لوحة Firebase واضغط «Get Started».",
+            },
+          };
+        }
+        return { data: null, error: { message: msg } };
       }
     },
   };
@@ -782,6 +1011,41 @@ function createRealtimeChannel(name: string) {
 }
 
 // ─── Main client export ────────────────────────────────────────
+function createStorageStub() {
+  const objectUrls = new Map<string, string>();
+  return {
+    from: (_bucket?: string) => ({
+      getPublicUrl: (path: string) => ({
+        data: { publicUrl: objectUrls.get(path) ?? "" },
+      }),
+      list: async (path: string) => ({
+        data: objectUrls.get(path) ? [{ name: path }] : [],
+        error: null,
+      }),
+      upload: async (path: string, fileData: any) => {
+        try {
+          if (typeof fileData === "string") {
+            objectUrls.set(path, fileData);
+            return { data: { path, url: fileData }, error: null };
+          }
+          if (typeof Blob !== "undefined" && fileData instanceof Blob) {
+            const url = URL.createObjectURL(fileData);
+            objectUrls.set(path, url);
+            return { data: { path, url }, error: null };
+          }
+          objectUrls.set(path, String(fileData));
+          return { data: { path, url: String(fileData) }, error: null };
+        } catch (e: any) {
+          return {
+            data: null,
+            error: { message: e?.message ?? "فشل رفع الملف" },
+          };
+        }
+      },
+    }),
+  };
+}
+
 function createFirebaseClient(): any {
   const firebaseDb = getFirebaseDb();
   const isConfigured = !!firebaseDb;
@@ -792,14 +1056,10 @@ function createFirebaseClient(): any {
   };
 
   const auth = authWrapper();
+  const storageStub = createStorageStub();
   const storage = {
     from: (bucket: string) => {
-      if (!isConfigured)
-        return (
-          createStubProxy().storage?.from(bucket) ?? {
-            getPublicUrl: () => ({ data: { publicUrl: "" } }),
-          }
-        );
+      if (!isConfigured) return storageStub.from(bucket);
       return storageChain(bucket);
     },
   };

@@ -6,6 +6,17 @@ import path from "node:path";
 
 const env = loadEnv("production", process.cwd(), "VITE_");
 
+// Expose server-only settings (AI keys, admin keys…) from .env to the dev
+// server and Nitro build so server functions can read process.env.
+const allEnv = loadEnv(
+  process.env.NODE_ENV || "development",
+  process.cwd(),
+  "",
+);
+for (const [k, v] of Object.entries(allEnv)) {
+  if (v != null && process.env[k] === undefined) process.env[k] = String(v);
+}
+
 function injectFcmServiceWorker(loadedEnv: Record<string, string>): Plugin {
   let outDir = "dist";
   return {

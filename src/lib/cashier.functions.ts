@@ -13,9 +13,19 @@ import {
 } from "firebase/firestore";
 import { requireRestaurantId } from "@/lib/server-staff-auth";
 import { hmacSign, hmacVerify, STAFF_SESSION_TTL_MS } from "@/lib/staff-core";
-import { getMenuOptionsForItemsCore } from "@/lib/menu-options.functions";
-import { notifyDriversForOrderCore } from "@/lib/delivery-drivers.functions";
 import { DEFAULT_CATEGORIES, DEFAULT_MENU_ITEMS } from "@/lib/default-menu";
+import {
+  fetchMenuForRestaurantCore,
+  createOrderForRestaurantCore,
+  type NewOrderInput,
+} from "@/lib/order-create";
+
+export type {
+  OrderMenuItem as CashierMenuItem,
+  OrderCategory as CashierCategory,
+  OrderTableInfo as CashierTableInfo,
+  NewOrderLine as CashierNewOrderLine,
+} from "@/lib/order-create";
 
 export type ReadyOrderLine = {
   name: string;
@@ -180,7 +190,7 @@ export async function cashierListReadyCore(token: string) {
   );
   const orderRows = snap.docs
     .map((d) => ({ ...d.data(), id: d.id }))
-    .filter((o: any) => o.status === "ready");
+    .filter((o: any) => ["ready", "served"].includes(o.status));
   return { orders: await enrichOrders(orderRows ?? []) };
 }
 
@@ -191,7 +201,7 @@ export const cashierListReady = createServerFn({ method: "GET" })
     return cashierListReadyCore(token);
   });
 
-/** DB logic: list ALL active orders (new, preparing, ready) for tracking. */
+/** DB logic: list ALL active orders (new, preparing, ready, served) for tracking. */
 export async function cashierListActiveOrdersCore(token: string) {
   const restaurantId = await resolveCashierRestaurantId(token);
   const db = getFirebaseDb();
@@ -202,7 +212,9 @@ export async function cashierListActiveOrdersCore(token: string) {
   );
   const orderRows = snap.docs
     .map((d) => ({ ...d.data(), id: d.id }))
-    .filter((o: any) => ["new", "preparing", "ready"].includes(o.status));
+    .filter((o: any) =>
+      ["new", "preparing", "ready", "served"].includes(o.status),
+    );
   return { orders: await enrichOrders(orderRows ?? []) };
 }
 
@@ -283,12 +295,68 @@ export const cashierLookupTable = createServerFn({ method: "GET" })
     return cashierLookupTableCore(token, tableNumber);
   });
 
-/** DB logic: mark orders as paid. */
-export async function cashierMarkPaidCore(token: string, orderIds: string[]) {
+export type CashierPaymentMode = "full" | "partial" | "debt" | "gift";
+
+export type CashierPaymentInput = {
+  mode: CashierPaymentMode;
+  paidAmount?: number;
+  remainderKind?: "debt" | "discount";
+};
+
+export type CashierPaymentOutcome = {
+  orderId?: string;
+  mode: CashierPaymentMode;
+  paid: number;
+  debt: number;
+  discount: number;
+};
+
+function buildPaymentBreakdown(
+  total: number,
+  payment?: CashierPaymentInput,
+): CashierPaymentOutcome | null {
+  const mode: CashierPaymentMode = payment?.mode ?? "full";
+  const fmt = (n: number) => Math.round(n * 100) / 100;
+
+  if (mode === "full") {
+    return { mode, paid: fmt(total), debt: 0, discount: 0 };
+  }
+
+  if (mode === "debt") {
+    return { mode, paid: 0, debt: fmt(total), discount: 0 };
+  }
+
+  if (mode === "gift") {
+    return { mode, paid: 0, debt: 0, discount: fmt(total) };
+  }
+
+  // partial
+  const paid = Number(payment?.paidAmount);
+  if (!Number.isFinite(paid) || paid <= 0)
+    throw new Error("حدد مبلغ الدفع الجزئي قبل التأكيد");
+  if (paid >= total)
+    throw new Error("المبلغ المدفوع يجب أن يكون أقل من إجمالي الطلب");
+  const remainder = fmt(total - paid);
+  const remainderKind = payment?.remainderKind ?? "debt";
+  return {
+    mode,
+    paid: fmt(paid),
+    debt: remainderKind === "debt" ? remainder : 0,
+    discount: remainderKind === "discount" ? remainder : 0,
+  };
+}
+
+/** DB logic: mark orders as paid with a payment breakdown. */
+export async function cashierMarkPaidCore(
+  token: string,
+  orderIds: string[],
+  payment?: CashierPaymentInput,
+): Promise<{ ok: true; outcomes: CashierPaymentOutcome[] }> {
   const restaurantId = await resolveCashierRestaurantId(token);
   const db = getFirebaseDb();
   if (!db) throw new Error("Firebase غير متصل");
   const now = new Date().toISOString();
+  const outcomes: CashierPaymentOutcome[] = [];
 
   for (const orderId of orderIds) {
     const orderRef = doc(db, "orders", orderId);
@@ -296,17 +364,35 @@ export async function cashierMarkPaidCore(token: string, orderIds: string[]) {
     if (!snap.exists()) continue;
     const data = snap.data();
     if (data.restaurant_id !== restaurantId) continue;
-    if (data.status !== "ready") continue;
-    await updateDoc(orderRef, { status: "paid", served_at: now });
+    if (data.status !== "ready" && data.status !== "served") continue;
+    const total = Number(data.total) || 0;
+    const breakdown = buildPaymentBreakdown(total, payment);
+    await updateDoc(orderRef, {
+      status: "paid",
+      payment_status: "paid",
+      served_at: now,
+      payment_mode: breakdown!.mode,
+      paid_amount: breakdown!.paid,
+      debt_amount: breakdown!.debt,
+      discount_amount: breakdown!.discount,
+    });
+    outcomes.push({ orderId, ...breakdown! });
   }
-  return { ok: true };
+  return { ok: true, outcomes };
 }
 
 export const cashierMarkPaid = createServerFn({ method: "POST" })
-  .validator((d: { token: string; orderIds: string[] }) => d)
+  .validator(
+    (d: { token: string; orderIds: string[]; payment?: CashierPaymentInput }) =>
+      d,
+  )
   .handler(async ({ data }) => {
-    const { token, orderIds } = data as { token: string; orderIds: string[] };
-    return cashierMarkPaidCore(token, orderIds);
+    const { token, orderIds, payment } = data as {
+      token: string;
+      orderIds: string[];
+      payment?: CashierPaymentInput;
+    };
+    return cashierMarkPaidCore(token, orderIds, payment);
   });
 
 export const cashierLogout = createServerFn({ method: "POST" })
@@ -316,23 +402,27 @@ export const cashierLogout = createServerFn({ method: "POST" })
 /** DB logic: generate Z-report (end-of-day) for the cashier's restaurant. */
 export async function cashierZReportCore(token: string): Promise<ZReport> {
   const restaurantId = await resolveCashierRestaurantId(token);
+  const db = getFirebaseDb();
+  if (!db) throw new Error("Firebase غير متصل");
+
   const now = new Date();
   const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const dayKey = now.toISOString().slice(0, 10);
+  const startIso = startOfDay.toISOString();
 
-  const { data: paidOrders } = await supabase
-    .from("orders")
-    .select("*")
-    .eq("restaurant_id", restaurantId)
-    .eq("status", "paid")
-    .gte("created_at", startOfDay.toISOString())
-    .lte("created_at", now.toISOString());
+  const snap = await getDocs(
+    query(collection(db, "orders"), where("restaurant_id", "==", restaurantId)),
+  );
+  const orderRows = snap.docs.map((d) => ({ ...d.data(), id: d.id }));
 
-  const { data: unpaidOrders } = await supabase
-    .from("orders")
-    .select("id,total")
-    .eq("restaurant_id", restaurantId)
-    .in("status", ["new", "preparing", "ready"]);
+  const paidOrders = orderRows.filter((o: any) => {
+    if (o.status !== "paid") return false;
+    const created = firestoreDateToIso(o.created_at);
+    return created >= startIso;
+  });
+  const unpaidOrders = orderRows.filter((o: any) =>
+    ["new", "preparing", "ready", "served"].includes(o.status),
+  );
 
   const byType: ZReport["byType"] = {
     dine_in: { count: 0, revenue: 0 },
@@ -343,9 +433,9 @@ export async function cashierZReportCore(token: string): Promise<ZReport> {
   let totalRevenue = 0;
   let totalOrders = 0;
 
-  for (const o of paidOrders ?? []) {
+  for (const o of paidOrders) {
     const t = ((o as any).order_type as keyof ZReport["byType"]) ?? "dine_in";
-    const rev = (o as any).total as number;
+    const rev = Number((o as any).paid_amount) || Number((o as any).total) || 0;
     totalRevenue += rev;
     totalOrders++;
     if (byType[t]) {
@@ -354,7 +444,7 @@ export async function cashierZReportCore(token: string): Promise<ZReport> {
     }
   }
 
-  const unpaidTotal = (unpaidOrders ?? []).reduce(
+  const unpaidTotal = unpaidOrders.reduce(
     (s: number, o: any) => s + ((o.total as number) ?? 0),
     0,
   );
@@ -365,9 +455,27 @@ export async function cashierZReportCore(token: string): Promise<ZReport> {
     totalOrders,
     avgTicket: totalOrders > 0 ? Math.round(totalRevenue / totalOrders) : 0,
     byType,
-    unpaidCount: (unpaidOrders ?? []).length,
+    unpaidCount: unpaidOrders.length,
     unpaidTotal,
   };
+}
+
+/** Normalize a Firestore timestamp-or-string into an ISO string. */
+function firestoreDateToIso(v: any): string {
+  if (v == null) return "";
+  if (typeof v === "string") return v;
+  if (typeof (v as any)?.toDate === "function") {
+    try {
+      return (v as any).toDate().toISOString();
+    } catch {
+      return "";
+    }
+  }
+  try {
+    return new Date(v).toISOString();
+  } catch {
+    return "";
+  }
 }
 
 export const cashierZReport = createServerFn({ method: "GET" })
@@ -490,89 +598,13 @@ export const getCashierStatus = createServerFn({ method: "GET" }).handler(
 
 // ─── Cashier self-service ordering (create new orders from menu) ──
 
-export type CashierMenuItem = {
-  id: string;
-  name: string;
-  description: string | null;
-  price: number;
-  category_id: string | null;
-  image_url: string | null;
-  is_available: boolean;
-  created_at?: string;
-};
-
-export type CashierCategory = {
-  id: string;
-  name: string;
-  display_order: number;
-};
-
-export type CashierTableInfo = {
-  id: string;
-  table_number: number;
-};
-
-export type CashierNewOrderLine = {
-  menu_item_id: string;
-  name: string;
-  price: number;
-  quantity: number;
-  note?: string;
-  options?: Array<{ label: string; choice: string; price_delta: number }>;
-};
-
-export type CashierNewOrderInput = {
-  token: string;
-  order_type: "dine_in" | "takeaway" | "delivery";
-  table_number?: number;
-  customer_name?: string;
-  customer_phone?: string;
-  customer_address?: string;
-  notes?: string;
-  lines: CashierNewOrderLine[];
-};
+/** Cashier create-order input: shared order payload + cashier token. */
+export type CashierNewOrderInput = NewOrderInput & { token: string };
 
 /** DB logic: fetch categories + available menu items + tables for the cashier menu. */
 export async function cashierGetMenuCore(token: string) {
   const restaurantId = await resolveCashierRestaurantId(token);
-  const [catRes, itemRes, tableRes] = await Promise.all([
-    supabase
-      .from("categories")
-      .select("id,name,display_order")
-      .eq("restaurant_id", restaurantId),
-    supabase
-      .from("menu_items")
-      .select("id,name,description,price,category_id,image_url,is_available")
-      .eq("restaurant_id", restaurantId),
-    supabase
-      .from("tables")
-      .select("id,table_number")
-      .eq("restaurant_id", restaurantId),
-  ]);
-  if (catRes.error) throw new Error(catRes.error.message);
-  if (itemRes.error) throw new Error(itemRes.error.message);
-  if (tableRes.error) throw new Error(tableRes.error.message);
-
-  const categories = ((catRes.data ?? []) as CashierCategory[]).sort(
-    (a, b) => (a.display_order ?? 0) - (b.display_order ?? 0),
-  );
-  const items = ((itemRes.data ?? []) as CashierMenuItem[]).sort((a, b) =>
-    String(a.created_at ?? "").localeCompare(String(b.created_at ?? "")),
-  );
-  const tables = ((tableRes.data ?? []) as CashierTableInfo[]).sort(
-    (a, b) => (a.table_number ?? 0) - (b.table_number ?? 0),
-  );
-
-  const { optionsByItem } = await getMenuOptionsForItemsCore(
-    items.map((i) => i.id),
-  );
-
-  return {
-    categories,
-    items,
-    tables,
-    optionsByItem,
-  };
+  return fetchMenuForRestaurantCore(restaurantId);
 }
 
 export const cashierGetMenu = createServerFn({ method: "GET" })
@@ -587,117 +619,8 @@ export const cashierGetMenu = createServerFn({ method: "GET" })
 /** DB logic: create a new order (status 'new') + its order_items, then return for printing. */
 export async function cashierCreateOrderCore(input: CashierNewOrderInput) {
   const restaurantId = await resolveCashierRestaurantId(input.token);
-
-  if (!input.lines?.length) throw new Error("أضف صنفاً واحداً على الأقل");
-  if (!["dine_in", "takeaway", "delivery"].includes(input.order_type))
-    throw new Error("نوع الطلب غير صالح");
-
-  // Resolve table id for dine_in
-  let tableId: string | null = null;
-  if (input.order_type === "dine_in") {
-    if (!input.table_number) throw new Error("حدد رقم الطاولة");
-    const { data: table } = await supabase
-      .from("tables")
-      .select("id")
-      .eq("restaurant_id", restaurantId)
-      .eq("table_number", input.table_number)
-      .maybeSingle();
-    if (!table) throw new Error("رقم الطاولة غير موجود");
-    tableId = (table as any).id;
-  }
-
-  // Determine the next per-day order number
-  const startOfDay = new Date();
-  startOfDay.setHours(0, 0, 0, 0);
-  const { data: lastOrder } = await supabase
-    .from("orders")
-    .select("daily_number")
-    .eq("restaurant_id", restaurantId)
-    .gte("created_at", startOfDay.toISOString())
-    .order("daily_number", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  const dailyNumber = ((lastOrder?.daily_number as number) ?? 0) + 1;
-
-  const total = input.lines.reduce((sum, l) => {
-    const optionTotal = (l.options ?? []).reduce(
-      (s, o) => s + (o.price_delta || 0),
-      0,
-    );
-    const unitPrice = (l.price || 0) + optionTotal;
-    return sum + unitPrice * (l.quantity || 1);
-  }, 0);
-
-  const now = new Date().toISOString();
-  const orderPayload = {
-    restaurant_id: restaurantId,
-    table_id: tableId,
-    status: "new",
-    acknowledged: false,
-    stock_decremented: false,
-    total,
-    order_type: input.order_type,
-    customer_name: input.customer_name || null,
-    customer_phone: input.customer_phone || null,
-    customer_address: input.customer_address || null,
-    notes: input.notes || null,
-    daily_number: dailyNumber,
-    created_at: now,
-  };
-
-  const { data: created, error } = await supabase
-    .from("orders")
-    .insert(orderPayload)
-    .select("id")
-    .single();
-  if (error) throw new Error(error.message);
-  const orderId = (created as any).id;
-
-  const itemRows = input.lines.map((l) => ({
-    order_id: orderId,
-    menu_item_id: l.menu_item_id,
-    name_snapshot: l.name,
-    quantity: l.quantity || 1,
-    price_snapshot: l.price || 0,
-    note: l.note || null,
-    options_snapshot: l.options?.length ? JSON.stringify(l.options) : null,
-  }));
-  const { error: itemsErr } = await supabase
-    .from("order_items")
-    .insert(itemRows);
-  if (itemsErr) throw new Error(itemsErr.message);
-
-  // Delivery orders: notify the restaurant's linked delivery drivers on
-  // Telegram right away so they can pick up the delivery.
-  if (input.order_type === "delivery") {
-    void notifyDriversForOrderCore({
-      restaurantId,
-      orderId,
-      total,
-      customerName: input.customer_name || null,
-      customerPhone: input.customer_phone || null,
-      customerAddress: input.customer_address || null,
-      items: input.lines.map((l) => ({
-        name: l.name,
-        quantity: l.quantity || 1,
-      })),
-      dailyNumber,
-    });
-  }
-
-  return {
-    orderId,
-    dailyNumber,
-    total,
-    created_at: now,
-    order_type: input.order_type,
-    table_number: input.table_number ?? null,
-    customer_name: input.customer_name || null,
-    customer_phone: input.customer_phone || null,
-    customer_address: input.customer_address || null,
-    notes: input.notes || null,
-    lines: input.lines,
-  };
+  const { token: _token, ...orderInput } = input;
+  return createOrderForRestaurantCore(restaurantId, orderInput);
 }
 
 export const cashierCreateOrder = createServerFn({ method: "POST" })

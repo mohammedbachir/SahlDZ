@@ -89,7 +89,9 @@ export async function decrementStockForOrder(orderId: string) {
     const ingSnap = await getDoc(doc(db, "ingredients", ingredientId));
     if (!ingSnap.exists()) continue;
     const row = ingSnap.data() as IngredientRow;
-    const newStock = Math.max(0, Number(row.current_stock) - used);
+    const base = Number(row.current_stock);
+    const safeStock = Number.isFinite(base) && base > 0 ? base : 0;
+    const newStock = Math.max(0, safeStock - used);
     await updateDoc(doc(db, "ingredients", ingredientId), { current_stock: newStock });
     ingredientsDecremented++;
     if (newStock < Number(row.alert_threshold)) {

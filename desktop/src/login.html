@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SahlDZ - تسجيل الدخول</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+      background:#141210;color:#f0ece6;min-height:100vh;display:flex;align-items:center;
+      justify-content:center;padding:24px;direction:rtl}
+    .wrap{width:100%;max-width:400px;display:flex;flex-direction:column;gap:24px}
+    .brand{text-align:center;display:flex;flex-direction:column;align-items:center;gap:12px}
+    .brand-mark{width:64px;height:64px;border-radius:14px;background:#d4a84a;
+      display:flex;align-items:center;justify-content:center}
+    .brand-mark svg{width:32px;height:32px}
+    .brand h1{font-size:20px;font-weight:700}
+    .brand p{font-size:12px;color:#8a8580}
+    .tabs{display:flex;background:#1e1c18;border:1px solid #2e2a24;border-radius:12px;padding:4px;gap:4px}
+    .tab{flex:1;padding:9px;border:none;border-radius:9px;background:transparent;
+      color:#8a8580;font-size:14px;font-weight:600;cursor:pointer;transition:all .2s}
+    .tab.active{background:#d4a84a;color:#141210}
+    .card{background:#1e1c18;border:1px solid #2e2a24;border-radius:14px;padding:22px}
+    .field{margin-bottom:14px}
+    .field:last-child{margin-bottom:0}
+    .field label{display:block;font-size:13px;font-weight:500;color:#b0aaa0;margin-bottom:6px}
+    .field input,.field select{width:100%;padding:11px 14px;border-radius:10px;border:1px solid #2e2a24;
+      background:#141210;color:#f0ece6;font-size:15px;outline:none;transition:border-color .2s;
+      font-family:inherit}
+    .field input:focus,.field select:focus{border-color:#d4a84a}
+    .field input::placeholder{color:#4a4540}
+    .field input.code{text-align:center;letter-spacing:3px;font-family:monospace;font-size:17px}
+    .field input.pin{text-align:center;letter-spacing:6px;font-family:monospace;font-size:17px}
+    .hint{font-size:11px;color:#4a4540;margin-top:4px;text-align:center}
+    .btn{width:100%;padding:12px;border-radius:10px;border:none;background:#d4a84a;
+      color:#141210;font-size:15px;font-weight:700;cursor:pointer;transition:opacity .2s;
+      font-family:inherit}
+    .btn:hover{opacity:.9}
+    .btn:disabled{opacity:.4;cursor:not-allowed}
+    .alert{padding:10px 14px;border-radius:10px;font-size:13px;text-align:center;margin-bottom:14px}
+    .alert-err{background:rgba(220,38,38,.1);color:#fca5a5;border:1px solid rgba(220,38,38,.2)}
+    .done{text-align:center;display:none;flex-direction:column;align-items:center;gap:14px;padding:26px}
+    .done-icon{width:56px;height:56px;border-radius:14px;background:rgba(22,163,74,.12);
+      display:flex;align-items:center;justify-content:center}
+    .done-icon svg{width:28px;height:28px}
+    .done h2{font-size:17px}
+    .done p{color:#8a8580;font-size:13px}
+    .ver{font-size:10px;color:#2e2a24;text-align:center}
+    .spinner{width:15px;height:15px;border:2px solid transparent;border-top-color:currentColor;
+      border-radius:50%;animation:spin .7s linear infinite;display:inline-block;margin-left:6px;vertical-align:-2px}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .foot{text-align:center;font-size:11px;color:#4a4540;line-height:1.7}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="brand">
+      <div class="brand-mark">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#141210" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 11l19-9-9 19-2-8-8-2z"/>
+        </svg>
+      </div>
+      <h1>SahlDZ</h1>
+      <p>سجّل دخولك للمتابعة</p>
+    </div>
+
+    <div class="tabs">
+      <button id="tab-owner" class="tab active">المدير / المالك</button>
+      <button id="tab-staff" class="tab">موظف</button>
+    </div>
+
+    <!-- Owner login -->
+    <div id="pane-owner">
+      <div class="card">
+        <div id="err-owner" class="alert alert-err" style="display:none"></div>
+        <div class="field">
+          <label>البريد الإلكتروني</label>
+          <input type="email" id="inp-email" placeholder="admin@sahldz.com" autocomplete="username">
+        </div>
+        <div class="field">
+          <label>كلمة المرور</label>
+          <input type="password" id="inp-pass" placeholder="••••••" autocomplete="current-password">
+        </div>
+      </div>
+      <div style="height:10px"></div>
+      <button id="btn-owner" class="btn">دخول</button>
+      <p class="foot" style="margin-top:10px">تسجّل بحسابك المعتاد في الموقع<br>وسيفتح لك التطبيق مباشرة</p>
+    </div>
+
+    <!-- Staff login -->
+    <div id="pane-staff" style="display:none">
+      <div class="card">
+        <div id="err-staff" class="alert alert-err" style="display:none"></div>
+        <div class="field">
+          <label>كود المطعم</label>
+          <input type="text" id="inp-code" class="code" placeholder="REST-XXXX-XXXX" maxlength="14">
+        </div>
+        <div class="field">
+          <label>الوظيفة</label>
+          <select id="sel-role">
+            <option value="مطبخ">المطبخ / شيف</option>
+            <option value="نادل">نادل</option>
+            <option value="كاشير">كاشير</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>رمز PIN</label>
+          <input type="password" id="inp-pin" class="pin" placeholder="••••" maxlength="6" autocomplete="off">
+          <p class="hint">رمز الدخول الشخصي، تحصل عليه من الإدارة</p>
+        </div>
+      </div>
+      <div style="height:10px"></div>
+      <button id="btn-staff" class="btn">دخول</button>
+    </div>
+
+    <!-- Success -->
+    <div id="s-done" class="card done">
+      <div class="done-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="20 6 9 17 4 12"/>
+        </svg>
+      </div>
+      <h2>تم الدخول بنجاح</h2>
+      <p>جاري تحميل التطبيق...</p>
+    </div>
+
+    <div class="ver" id="ver"></div>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <script>
+    // ─── Config (align with web app .env) ─────────────────────
+    const USE_EMULATORS = true;
+    const FB = {
+      apiKey: "demo-key",
+      authDomain: "localhost",
+      projectId: "sahldz-demo",
+      storageBucket: "sahldz-demo.appspot.com",
+      messagingSenderId: "000",
+      appId: "demo",
+    };
+
+    const $=id=>document.getElementById(id);
+    let mode="owner";
+
+    const app = firebase.initializeApp(FB);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+    if (USE_EMULATORS) {
+      auth.useEmulator("http://127.0.0.1:9099");
+      db.useEmulator("127.0.0.1", 8081);
+    }
+
+    // ─── Tabs ─────────────────────────────────────────────────
+    $("tab-owner").onclick=()=>{mode="owner";activate("owner")};
+    $("tab-staff").onclick=()=>{mode="staff";activate("staff")};
+    function activate(m){
+      $("tab-owner").classList.toggle("active",m==="owner");
+      $("tab-staff").classList.toggle("active",m==="staff");
+      $("pane-owner").style.display=m==="owner"?"block":"none";
+      $("pane-staff").style.display=m==="staff"?"block":"none";
+    }
+
+    // Format restaurant code auto-dash
+    $("inp-code").addEventListener("input",function(){
+      let v=this.value.replace(/[^A-Za-z0-9]/g,"").toUpperCase();
+      if(v.length>4)v=v.slice(0,4)+"-"+v.slice(4);
+      if(v.length>9)v=v.slice(0,9)+"-"+v.slice(9);
+      this.value=v;
+      $("err-staff").style.display="none";
+    });
+    $("inp-email").addEventListener("input",()=>$("err-owner").style.display="none");
+    $("inp-pass").addEventListener("input",()=>$("err-owner").style.display="none");
+    $("inp-pin").addEventListener("input",()=>$("err-staff").style.display="none");
+
+    function showErr(id,msg){const e=$(id);e.textContent=msg;e.style.display="block"}
+    function setBtn(btn,text,loading){const b=$(btn);b.disabled=loading;b.innerHTML=loading?'<span class="spinner"></span>'+text:text}
+
+    // ─── Owner login ──────────────────────────────────────────
+    $("btn-owner").onclick=async function(){
+      const email=$("inp-email").value.trim();
+      const pass=$("inp-pass").value;
+      if(!email||!pass){showErr("err-owner","أدخل البريد وكلمة المرور");return}
+      setBtn("btn-owner","جاري الدخول...",true);
+      try{
+        const cred=await auth.signInWithEmailAndPassword(email,pass);
+        const uid=cred.user.uid;
+        // Resolve restaurant owned by this account
+        let restId=null,restName="";
+        try{
+          const snap=await db.collection("restaurants").where("owner_id","==",uid).limit(1).get();
+          if(!snap.empty){const d=snap.docs[0];restId=d.id;restName=d.data().name||""}
+        }catch{}
+        const cfg={role:"owner",email,password:pass,restaurant_id:restId||"",restaurant_name:restName,activated_at:new Date().toISOString()};
+        await window.electronAPI.saveConfig(cfg);
+        finish();
+      }catch(e){
+        const err=e.code||"";
+        let msg="تعذر الدخول، تحقق من البيانات";
+        if(err.includes("user-not-found"))msg="الحساب غير موجود";
+        if(err.includes("wrong-password"))msg="كلمة المرور غير صحيحة";
+        if(err.includes("invalid-email"))msg="البريد الإلكتروني غير صحيح";
+        if(err.includes("network"))msg="تعذر الاتصال بالخادم";
+        showErr("err-owner",msg);
+      }finally{
+        setBtn("btn-owner","دخول",false);
+      }
+    };
+
+    // ─── Staff login ──────────────────────────────────────────
+    $("btn-staff").onclick=async function(){
+      const code=$("inp-code").value.trim();
+      const role=$("sel-role").value;
+      const pin=$("inp-pin").value.trim();
+      if(code.length<14){showErr("err-staff","أدخل كود المطعم كاملاً");return}
+      if(!pin){showErr("err-staff","أدخل رمز PIN");return}
+      setBtn("btn-staff","جاري الدخول...",true);
+      try{
+        // 1. Find restaurant by code
+        const resSnap=await db.collection("restaurants").where("activation_code","==",code).limit(1).get();
+        if(resSnap.empty)throw {msg:"كود المطعم غير صحيح"};
+        const restDoc=resSnap.docs[0];
+        const restId=restDoc.id;
+        const restName=restDoc.data().name||"";
+
+        // Cashier: restaurant-wide PIN (no staff row)
+        if(role==="كاشير"){
+          const data=restDoc.data();
+          if(data.cashier_pin!==pin)throw {msg:"رمز PIN غير صحيح"};
+          const cfg={role,staff_pin:pin,restaurant_id:restId,restaurant_name:restName,
+            code,activated_at:new Date().toISOString()};
+          await window.electronAPI.saveConfig(cfg);
+          finish();
+          return;
+        }
+
+        // 2. Find staff by pin, then filter by restaurant + role
+        const staffSnap=await db.collection("staff").where("pin","==",pin).get();
+        let match=null;
+        if(!staffSnap.empty){
+          staffSnap.docs.forEach(doc=>{
+            if(match)return;
+            const d=doc.data();
+            if(d.restaurant_id===restId&&d.role===role&&!d.frozen)match={id:doc.id,...d};
+          });
+        }
+        if(!match)throw {msg:"رمز PIN غير صحيح أو الحساب غير موجود"};
+
+        const cfg={role,staff_id:match.id,staff_name:match.name||"",staff_pin:pin,
+          restaurant_id:restId,restaurant_name:restName,code,activated_at:new Date().toISOString()};
+        await window.electronAPI.saveConfig(cfg);
+        finish();
+      }catch(e){
+        showErr("err-staff",e.msg||"تعذر الدخول، تحقق من البيانات");
+      }finally{
+        setBtn("btn-staff","دخول",false);
+      }
+    };
+
+    function finish(){
+      $("pane-owner").style.display="none";
+      $("pane-staff").style.display="none";
+      $("s-done").style.display="flex";
+      setTimeout(()=>window.electronAPI.reloadApp(),1200);
+    }
+
+    (async()=>{
+      if(window.electronAPI){const v=await window.electronAPI.getAppVersion();$("ver").textContent="v"+v}
+    })();
+  </script>
+</body>
+</html>

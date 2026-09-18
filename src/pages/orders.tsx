@@ -234,6 +234,7 @@ export default function OrdersPage() {
       next === "paid"
         ? {
             status: next,
+            payment_status: next === "paid" ? "paid" : undefined,
             acknowledged: true,
             served_at: now.toISOString(),
             review_due_at: new Date(now.getTime() + 35 * 60_000).toISOString(),

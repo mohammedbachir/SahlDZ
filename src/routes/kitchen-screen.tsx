@@ -33,7 +33,16 @@ import {
   individualChefStartPreparing,
   individualChefMarkReady,
   individualChefLogout,
+  getPublicChefList,
 } from "@/lib/individual-chef.functions";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { notifyDriversForOrder } from "@/lib/delivery-drivers.functions";
 import { decrementStockForOrder } from "@/lib/stock-consumption";
 import { isPreviewToken, PREVIEW_RESTAURANT } from "@/lib/preview-mode";
@@ -59,6 +68,9 @@ type Order = {
   customer_phone: string | null;
   customer_address: string | null;
   daily_number: number | null;
+  chef_id?: string | null;
+  chef_name?: string | null;
+  started_at?: string | null;
   items: Array<{
     name: string;
     qty: number;
@@ -98,6 +110,9 @@ const MOCK_KITCHEN_ORDERS: Order[] = [
     customer_phone: "0555123456",
     customer_address: "شارع الاستقلال، الجزائر",
     daily_number: 2,
+    chef_id: "mock-chef1",
+    chef_name: "الشيف يوسف",
+    started_at: new Date(Date.now() - 8 * 60 * 1000).toISOString(),
     items: [
       { name: "برغر لحم", qty: 1, image_url: "/food/burger.jpg" },
       { name: "عصير برتقال", qty: 2, image_url: "/food/orange.jpg" },
@@ -127,6 +142,138 @@ function getElapsedMinutes(iso: string) {
     0,
     Math.floor((Date.now() - new Date(iso).getTime()) / 60000),
   );
+}
+
+function printKitchenTicket(order: Order, restaurantName: string) {
+  const date = new Date(order.created_at);
+  const dateStr = date.toLocaleString("ar", {
+    dateStyle: "short",
+    timeStyle: "short",
+  });
+  const orderNo = String(order.daily_number ?? 0).padStart(3, "0");
+  const itemsHtml = order.items
+    .map(
+      (it) => `
+        <tr>
+          <td style="padding:4px 0;">
+            <div style="font-weight:700; font-size:14px;">${escapeHtml(it.name)} ×${it.qty}</div>
+            ${
+              (it.options ?? []).length
+                ? `<div style="font-size:11px;color:#555;">${(it.options ?? [])
+                    .map(
+                      (o) =>
+                        `<div>— ${escapeHtml(o.label)}: ${escapeHtml(o.choice)}</div>`,
+                    )
+                    .join("")}</div>`
+                : ""
+            }
+            ${it.note ? `<div style="font-size:11px;color:#c0392b;">◈ ${escapeHtml(it.note)}</div>` : ""}
+          </td>
+        </tr>`,
+    )
+    .join("");
+  const deliveryHtml =
+    order.order_type === "delivery"
+      ? `
+  <div class="muted">
+    ${
+      order.customer_name
+        ? `<div>العميل: <b>${escapeHtml(order.customer_name)}</b></div>`
+        : ""
+    }
+    ${
+      order.customer_phone
+        ? `<div>الهاتف: <b>${escapeHtml(order.customer_phone)}</b></div>`
+        : ""
+    }
+    ${
+      order.customer_address
+        ? `<div>العنوان: <b>${escapeHtml(order.customer_address)}</b></div>`
+        : ""
+    }
+  </div>`
+      : "";
+  const html = `<!doctype html>
+<html dir="rtl" lang="ar">
+<head>
+<meta charset="utf-8" />
+<title>طلبية مطبخ - ${orderNo}</title>
+<style>
+  @page { size: 80mm auto; margin: 4mm; }
+  body { font-family: 'Cairo', system-ui, sans-serif; width: 72mm; margin: 0 auto; color: #000; }
+  .center { text-align: center; }
+  .name { font-size: 18px; font-weight: 800; }
+  .muted { color: #555; font-size: 12px; }
+  hr { border: none; border-top: 1px dashed #000; margin: 8px 0; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .thanks { margin-top: 10px; font-size: 12px; }
+</style>
+</head>
+<body>
+  <div class="center">
+    <div class="name">${escapeHtml(restaurantName)}</div>
+    <div class="muted">قسيمة الطلبية — المطبخ</div>
+  </div>
+  <hr />
+  <div class="muted">
+    <div style="font-size:16px; font-weight:800; color:#000;">طلبية <b>${orderNo}</b></div>
+    ${
+      order.table_number != null
+        ? `<div>طاولة <b>${order.table_number}</b></div>`
+        : "<div>طلبية توصيل 🛵</div>"
+    }
+    <div>التاريخ: ${dateStr}</div>
+  </div>
+  ${order.order_type === "delivery" ? `<hr />${deliveryHtml}` : ""}
+  <hr />
+  <table>
+    <tbody>${itemsHtml}</tbody>
+  </table>
+  ${order.notes ? `<div style="border:1px dashed #000; padding:6px; font-size:12px; margin:6px 0;">ملاحظات: ${escapeHtml(order.notes)}</div>` : ""}
+  <hr />
+  <div class="center thanks">استعمل دلائل الطاولة/التوصيل أعلاه</div>
+  <script>
+    window.onload = function() {
+      window.focus();
+      window.print();
+      setTimeout(function(){ window.close(); }, 300);
+    };
+  </script>
+</body>
+</html>`;
+  printHtml(html);
+}
+
+function printHtml(html: string) {
+  const iframe = document.createElement("iframe");
+  iframe.style.position = "fixed";
+  iframe.style.right = "0";
+  iframe.style.bottom = "0";
+  iframe.style.width = "0";
+  iframe.style.height = "0";
+  iframe.style.border = "none";
+  iframe.style.opacity = "0";
+  document.body.appendChild(iframe);
+  const doc = iframe.contentDocument;
+  if (!doc) {
+    document.body.removeChild(iframe);
+    return;
+  }
+  doc.open();
+  doc.write(html);
+  doc.close();
+  iframe.contentWindow?.focus();
+  iframe.contentWindow?.print();
+  setTimeout(() => document.body.removeChild(iframe), 500);
+}
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 function getTimerColor(minutes: number) {
@@ -176,6 +323,7 @@ function Page() {
   const iStartFn = useServerFn(individualChefStartPreparing);
   const iReadyFn = useServerFn(individualChefMarkReady);
   const iLogoutFn = useServerFn(individualChefLogout);
+  const chefListFn = useServerFn(getPublicChefList);
 
   const [token, setToken] = useState<string | null>(null);
   const [chefName, setChefName] = useState<string | null>(null);
@@ -194,6 +342,9 @@ function Page() {
   const [pausedOrders, setPausedOrders] = useState<Set<string>>(new Set());
   const [flaggedOrders, setFlaggedOrders] = useState<Set<string>>(new Set());
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [chefs, setChefs] = useState<{ id: string; name: string }[]>([]);
+  const [pendingOrder, setPendingOrder] = useState<Order | null>(null);
+  const [selectedChefId, setSelectedChefId] = useState<string | null>(null);
   const prevOrderCount = useRef(0);
   const skipRefreshUntil = useRef(0);
 
@@ -251,6 +402,86 @@ function Page() {
     const poll = setInterval(refresh, 3000);
     return () => clearInterval(poll);
   }, [token, restaurant, refresh]);
+
+  useEffect(() => {
+    if (!token || !restaurant) return;
+    if (isPreviewToken(token)) {
+      setChefs([{ id: "mock-chef1", name: "الشيف يوسف" }]);
+      return;
+    }
+    chefListFn({ data: { restaurantId: restaurant.id } })
+      .then((res) => {
+        if (res.found) setChefs(res.chefs);
+      })
+      .catch(() => {});
+  }, [token, restaurant, chefListFn]);
+
+  function openChefPicker(o: Order) {
+    setPendingOrder(o);
+    const lastId = localStorage.getItem("kitchen_last_chef_id");
+    const sessionId = localStorage.getItem("individual_chef_id");
+    setSelectedChefId(lastId || sessionId);
+  }
+
+  const selectedChef =
+    chefs.find((c) => c.id === selectedChefId) ??
+    chefs.find((c) => c.id === localStorage.getItem("kitchen_last_chef_id")) ??
+    chefs[0] ??
+    null;
+
+  async function confirmStart() {
+    if (!pendingOrder || !selectedChef) return;
+    if (!token) return;
+    const order = pendingOrder;
+    if (isPreviewToken(token)) {
+      localStorage.setItem("kitchen_last_chef_id", selectedChef.id);
+      setOrders((prev) =>
+        prev.map((x) =>
+          x.id === order.id
+            ? {
+                ...x,
+                status: "preparing",
+                acknowledged: true,
+                chef_id: selectedChef.id,
+                chef_name: selectedChef.name,
+                started_at: new Date().toISOString(),
+              }
+            : x,
+        ),
+      );
+      setPendingOrder(null);
+      return;
+    }
+    setBusy(order.id);
+    skipRefreshUntil.current = Date.now() + 6000;
+    try {
+      await iStartFn({
+        data: { token, orderId: order.id, chefId: selectedChef.id },
+      });
+      void decrementStockForOrder(order.id);
+      localStorage.setItem("kitchen_last_chef_id", selectedChef.id);
+      setOrders((prev) =>
+        prev.map((x) =>
+          x.id === order.id
+            ? {
+                ...x,
+                status: "preparing",
+                acknowledged: true,
+                chef_id: selectedChef.id,
+                chef_name: selectedChef.name,
+                started_at: new Date().toISOString(),
+              }
+            : x,
+        ),
+      );
+    } catch (e) {
+      skipRefreshUntil.current = 0;
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(null);
+      setPendingOrder(null);
+    }
+  }
 
   useEffect(() => {
     if (!token || isPreviewToken(token)) return;
@@ -319,25 +550,30 @@ function Page() {
     prevOrderCount.current = orders.length;
   }, [orders.length]);
 
-  async function onStart(o: Order) {
-    if (!token) return;
-    setBusy(o.id);
-    skipRefreshUntil.current = Date.now() + 6000;
-    try {
-      await iStartFn({ data: { token, orderId: o.id } });
-      void decrementStockForOrder(o.id);
-      setOrders((prev) =>
-        prev.map((x) =>
-          x.id === o.id ? { ...x, status: "preparing", acknowledged: true } : x,
-        ),
-      );
-    } catch (e) {
-      skipRefreshUntil.current = 0;
-      toast.error((e as Error).message);
-    } finally {
-      setBusy(null);
+  const printedOrderIds = useRef<Set<string>>(
+    new Set<string>(
+      JSON.parse(
+        localStorage.getItem("kitchen_printed_order_ids") ?? "[]",
+      ) as string[],
+    ),
+  );
+  useEffect(() => {
+    if (!restaurant) return;
+    let changed = false;
+    for (const o of orders) {
+      if (o.status === "new" && !printedOrderIds.current.has(o.id)) {
+        printedOrderIds.current.add(o.id);
+        changed = true;
+        printKitchenTicket(o, restaurant.name);
+      }
     }
-  }
+    if (changed) {
+      localStorage.setItem(
+        "kitchen_printed_order_ids",
+        JSON.stringify([...printedOrderIds.current]),
+      );
+    }
+  }, [orders, restaurant]);
 
   async function onReady(o: Order) {
     if (!token) return;
@@ -716,7 +952,7 @@ function Page() {
                           {/* Actions */}
                           <div className="flex gap-2">
                             <Button
-                              onClick={() => onStart(o)}
+                              onClick={() => openChefPicker(o)}
                               disabled={busy === o.id || isPaused}
                               className="flex-1 h-12 text-base font-bold bg-[var(--primary)] hover:bg-[var(--primary)]/90 text-[var(--primary-foreground)] rounded-xl"
                             >
@@ -806,6 +1042,12 @@ function Page() {
                               )}
                             </div>
                             <div className="flex items-center gap-2">
+                              {o.chef_name && (
+                                <span className="bg-orange-100 text-orange-800 rounded-lg px-2.5 py-1 text-xs font-bold flex items-center gap-1 dark:bg-orange-900/30 dark:text-orange-300">
+                                  <ChefHat className="w-3.5 h-3.5" />
+                                  {o.chef_name}
+                                </span>
+                              )}
                               <button
                                 onClick={() => {
                                   setPausedOrders((prev) => {
@@ -1058,6 +1300,75 @@ function Page() {
           </aside>
         )}
       </div>
+
+      {/* Chef selection for starting an order on the shared kitchen computer */}
+      <Dialog
+        open={!!pendingOrder}
+        onOpenChange={(open) => !open && setPendingOrder(null)}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-xl">اختر الطاهي المسؤول</DialogTitle>
+            <DialogDescription>
+              {pendingOrder
+                ? `طلبية #${String(pendingOrder.daily_number ?? 0).padStart(3, "0")} — من يبدأ تحضير هذه الطلبية؟`
+                : "من يبدأ تحضير هذه الطلبية؟"}
+            </DialogDescription>
+          </DialogHeader>
+          {chefs.length > 0 ? (
+            <div className="grid grid-cols-2 gap-3 py-2">
+              {chefs.map((c) => {
+                const active = selectedChef?.id === c.id;
+                return (
+                  <button
+                    key={c.id}
+                    onClick={() => setSelectedChefId(c.id)}
+                    className={`flex items-center gap-2.5 rounded-xl border-2 px-4 py-4 text-base font-bold transition-all ${
+                      active
+                        ? "border-[var(--primary)] bg-[var(--primary)]/10 text-[var(--primary)]"
+                        : "border-[var(--border)] bg-[var(--card)] text-[var(--foreground)] hover:border-[var(--primary)]/50"
+                    }`}
+                  >
+                    <ChefHat
+                      className={`w-6 h-6 ${active ? "text-[var(--primary)]" : "text-[var(--muted-foreground)]"}`}
+                    />
+                    {c.name}
+                    {active && (
+                      <span className="ms-auto text-xs font-bold bg-[var(--primary)] text-[var(--primary-foreground)] rounded-md px-2 py-0.5">
+                        مختار
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-sm text-[var(--muted-foreground)] py-4 text-center">
+              لا توجد حسابات طهاة نشطة
+            </p>
+          )}
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setPendingOrder(null)}
+              className="h-12 flex-1 text-base"
+            >
+              إلغاء
+            </Button>
+            <Button
+              onClick={confirmStart}
+              disabled={!selectedChef || busy === pendingOrder?.id}
+              className="h-12 flex-1 text-base font-bold bg-[var(--primary)] hover:bg-[var(--primary)]/90 text-[var(--primary-foreground)]"
+            >
+              {busy === pendingOrder?.id ? (
+                <Loader2 className="w-5 h-5 animate-spin ms-2" />
+              ) : (
+                "تأكيد البدء"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

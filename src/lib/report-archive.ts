@@ -181,7 +181,7 @@ function buildStaffPerformancePDF(opts: {
 
 async function loadReportsData(restaurantId: string, mk: string) {
   const { from, to } = monthRange(mk);
-  const [orders, purchases, salaries, waste] = await Promise.all([
+  const [orders, purchases, salaries, waste, staffTx] = await Promise.all([
     safeFetch<any[]>(() =>
       supabase
         .from("orders")
@@ -215,6 +215,15 @@ async function loadReportsData(restaurantId: string, mk: string) {
         .gte("created_at", from + "T00:00:00")
         .lte("created_at", to + "T23:59:59"),
     ),
+    safeFetch<any[]>(() =>
+      supabase
+        .from("staff_transactions")
+        .select("amount,type")
+        .eq("restaurant_id", restaurantId)
+        .in("type", ["advance", "loan"])
+        .gte("date", from)
+        .lte("date", to),
+    ),
   ]);
 
   const revenue = sum(orders, "total");
@@ -222,7 +231,8 @@ async function loadReportsData(restaurantId: string, mk: string) {
   const purchasesVal = sum(purchases, "total");
   const salariesVal = sum(salaries, "net_salary");
   const wasteVal = sum(waste, "cost");
-  const totalExpenses = purchasesVal + salariesVal + wasteVal;
+  const staffAdvancesVal = sum(staffTx, "amount");
+  const totalExpenses = purchasesVal + salariesVal + wasteVal + staffAdvancesVal;
   const netProfit = revenue - totalExpenses;
   const avgOrder = ordersCount ? Math.round(revenue / ordersCount) : 0;
 
@@ -232,6 +242,7 @@ async function loadReportsData(restaurantId: string, mk: string) {
     purchases: purchasesVal,
     salaries: salariesVal,
     wasteCost: wasteVal,
+    advances: staffAdvancesVal,
     totalExpenses,
     netProfit,
     avgOrder,

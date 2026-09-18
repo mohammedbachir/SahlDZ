@@ -344,6 +344,7 @@ export const PUBLIC_ORDER_STATES = [
   "new",
   "preparing",
   "ready",
+  "served",
   "paid",
 ] as const;
 export type PublicOrderStatus = (typeof PUBLIC_ORDER_STATES)[number];
@@ -391,6 +392,6 @@ export const getPublicOrderStatus = createServerFn({ method: "GET" })
         : null) as PublicOrderStatus | null,
       dailyNumber: (o.daily_number as number) ?? null,
       ready: status === "ready",
-      delivered: status === "paid",
+      delivered: status === "served" || status === "paid",
     } satisfies PublicOrderTrackResult;
   });

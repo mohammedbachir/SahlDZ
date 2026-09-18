@@ -36,11 +36,14 @@ import {
   cashierGetMenu,
   cashierCreateOrder,
   type ZReport,
+  type CashierPaymentMode,
+  type CashierPaymentInput,
   type CashierMenuItem,
   type CashierCategory,
   type CashierTableInfo,
   type CashierNewOrderLine,
   type ReadyOrder,
+  type CashierPaymentOutcome,
 } from "@/lib/cashier.functions";
 import { type MenuOption } from "@/lib/menu-options.functions";
 import { buildDefaultCashierMenu } from "@/lib/default-menu";
@@ -70,6 +73,79 @@ function cashierFailPath(rid: string): {
 
 function fmtOrderNo(n: number | null | undefined): string {
   return n != null ? String(n).padStart(3, "0") : "—";
+}
+
+type LocalSale = {
+  daily_number: number | null;
+  table_number: number | null;
+  order_type: string;
+  mode: string;
+  total: number;
+  paid: number;
+  debt: number;
+  discount: number;
+  at: string;
+};
+
+function localSalesKey(): string {
+  const d = new Date();
+  const k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  return `sahlz_cashier_sales_${k}`;
+}
+
+function loadLocalSales(): LocalSale[] {
+  try {
+    return JSON.parse(
+      localStorage.getItem(localSalesKey()) ?? "[]",
+    ) as LocalSale[];
+  } catch {
+    return [];
+  }
+}
+
+function recordLocalSale(o: ReadyOrder, out: CashierPaymentOutcome) {
+  const arr = loadLocalSales();
+  arr.push({
+    daily_number: o.daily_number,
+    table_number: o.table_number,
+    order_type: o.order_type ?? "dine_in",
+    mode: out.mode,
+    total: o.total,
+    paid: out.paid,
+    debt: out.debt,
+    discount: out.discount,
+    at: new Date().toISOString(),
+  });
+  localStorage.setItem(localSalesKey(), JSON.stringify(arr));
+}
+
+function buildLocalZReport(): ZReport {
+  const sales = loadLocalSales();
+  const byType: ZReport["byType"] = {
+    dine_in: { count: 0, revenue: 0 },
+    takeaway: { count: 0, revenue: 0 },
+    delivery: { count: 0, revenue: 0 },
+  };
+  let totalRevenue = 0;
+  let totalOrders = 0;
+  for (const s of sales) {
+    const t = (s.order_type as keyof ZReport["byType"]) ?? "dine_in";
+    totalRevenue += s.paid;
+    totalOrders++;
+    if (byType[t]) {
+      byType[t].count++;
+      byType[t].revenue += s.paid;
+    }
+  }
+  return {
+    dayKey: localSalesKey().replace("sahlz_cashier_sales_", ""),
+    totalRevenue,
+    totalOrders,
+    avgTicket: totalOrders > 0 ? Math.round(totalRevenue / totalOrders) : 0,
+    byType,
+    unpaidCount: 0,
+    unpaidTotal: 0,
+  };
 }
 
 const MOCK_READY_ORDERS: ReadyOrder[] = [
@@ -108,8 +184,13 @@ function Page() {
   const [success, setSuccess] = useState<{
     amount: number;
     table: number | null;
+    payment?: CashierPaymentOutcome;
   } | null>(null);
   const [lastPaid, setLastPaid] = useState<ReadyOrder | null>(null);
+  const [payTarget, setPayTarget] = useState<ReadyOrder | null>(null);
+  const [payMode, setPayMode] = useState<CashierPaymentMode>("full");
+  const [payAmount, setPayAmount] = useState("");
+  const [payRemainder, setPayRemainder] = useState<"debt" | "discount">("debt");
   const zFn = useServerFn(cashierZReport);
   const [zReport, setZReport] = useState<ZReport | null>(null);
   const [zLoading, setZLoading] = useState(false);
@@ -146,8 +227,12 @@ function Page() {
     if (!token) return;
     setZLoading(true);
     try {
-      const r = await zFn({ data: { token } });
-      setZReport(r);
+      if (isPreviewToken(token)) {
+        setZReport(buildLocalZReport());
+      } else {
+        const r = await zFn({ data: { token } });
+        setZReport(r);
+      }
     } catch (e) {
       toast.error((e as Error).message || tx("cashierScreen.closeDayFailed"));
     } finally {
@@ -261,15 +346,70 @@ function Page() {
     }
   }
 
-  async function onPay(order: ReadyOrder) {
-    if (!token) return;
+  function openPayment(order: ReadyOrder) {
+    setPayTarget(order);
+    setPayMode("full");
+    setPayAmount("");
+    setPayRemainder("debt");
+  }
+
+  async function submitPayment() {
+    if (!payTarget || !token) return;
+    const order = payTarget;
+    const mode = payMode;
+    let payment: CashierPaymentInput = { mode };
+
+    if (mode === "partial") {
+      const amount = Number(payAmount);
+      if (!Number.isFinite(amount) || amount <= 0) {
+        toast.error(tx("cashierScreen.partialAmountInvalid"));
+        return;
+      }
+      if (amount >= order.total) {
+        toast.error(tx("cashierScreen.partialAmountTooHigh"));
+        return;
+      }
+      payment = { mode, paidAmount: amount, remainderKind: payRemainder };
+    }
+
     setPaying(order.id);
     skipRefreshUntil.current = Date.now() + 6000;
     try {
-      await markFn({ data: { token, orderIds: [order.id] } });
-      setSuccess({ amount: order.total, table: order.table_number });
+      let outcome: CashierPaymentOutcome | undefined;
+      if (isPreviewToken(token)) {
+        const total = order.total;
+        let paid = total;
+        let debt = 0;
+        let discount = 0;
+        if (mode === "partial") {
+          paid = Number(payAmount);
+          const remainder = total - paid;
+          if (payRemainder === "debt") debt = remainder;
+          else discount = remainder;
+        } else if (mode === "debt") {
+          paid = 0;
+          debt = total;
+        } else if (mode === "gift") {
+          paid = 0;
+          discount = total;
+        }
+        outcome = { orderId: order.id, mode, paid, debt, discount };
+      } else {
+        const res = await markFn({
+          data: { token, orderIds: [order.id], payment },
+        });
+        outcome = res.outcomes[0];
+      }
+      setSuccess({
+        amount: outcome?.paid ?? order.total,
+        table: order.table_number,
+        payment: outcome,
+      });
       setLastPaid(order);
+      setPayTarget(null);
       setReadyOrders((prev) => prev.filter((o) => o.id !== order.id));
+      if (outcome) recordLocalSale(order, outcome);
+      printReceipt(order, outcome);
       setTimeout(() => setSuccess(null), 1800);
     } catch (e) {
       skipRefreshUntil.current = 0;
@@ -279,7 +419,7 @@ function Page() {
     }
   }
 
-  function printReceipt(order: ReadyOrder) {
+  function printReceipt(order: ReadyOrder, payment?: CashierPaymentOutcome) {
     const date = new Date(order.created_at);
     const dateStr = date.toLocaleString("ar", {
       dateStyle: "short",
@@ -296,6 +436,45 @@ function Page() {
         </tr>`,
       )
       .join("");
+    const modeLabel =
+      payment?.mode === "full"
+        ? tx("cashierScreen.modeFull")
+        : payment?.mode === "partial"
+          ? tx("cashierScreen.modePartial")
+          : payment?.mode === "debt"
+            ? tx("cashierScreen.modeDebt")
+            : payment?.mode === "gift"
+              ? tx("cashierScreen.modeGift")
+              : null;
+    const payHtml = payment
+      ? `
+  <div class="total muted" style="font-size:14px;">
+    <span>${tx("cashierScreen.receiptMode")}</span>
+    <span>${modeLabel}</span>
+  </div>
+  <div class="total" style="font-size:14px;">
+    <span>${tx("cashierScreen.receiptPaid")}</span>
+    <span>${payment.paid.toLocaleString("en-US")} ${tx("cashierScreen.receiptCurrency")}</span>
+  </div>
+  ${
+    payment.debt > 0
+      ? `<div class="total muted" style="font-size:13px;">
+    <span>${tx("cashierScreen.receiptDebt")}</span>
+    <span>${payment.debt.toLocaleString("en-US")} ${tx("cashierScreen.receiptCurrency")}</span>
+  </div>`
+      : ""
+  }
+  ${
+    payment.discount > 0
+      ? `<div class="total muted" style="font-size:13px;">
+    <span>${tx("cashierScreen.receiptDiscount")}</span>
+    <span>${payment.discount.toLocaleString("en-US")} ${tx("cashierScreen.receiptCurrency")}</span>
+  </div>`
+      : ""
+  }
+  ${payment.mode === "gift" ? `<div class="center muted" style="font-size:12px; margin-top:2px;">🎁 ${tx("cashierScreen.giftRecorded")}</div>` : ""}
+`
+      : "";
     const html = `<!doctype html>
 <html dir="rtl" lang="ar">
 <head>
@@ -340,6 +519,7 @@ function Page() {
     <span>${tx("cashierScreen.receiptTotal")}</span>
     <span>${order.total.toLocaleString("en-US")} ${tx("cashierScreen.receiptCurrency")}</span>
   </div>
+  ${payHtml}
   <hr />
   <div class="center thanks">${tx("cashierScreen.receiptThanks")}</div>
   <script>
@@ -596,8 +776,13 @@ function Page() {
                               {tx("cashierScreen.tableLabel")}
                             </span>
                           </div>
-                          <span className="text-xs font-bold bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+                          <span className="text-xs font-bold bg-primary/10 text-primary px-2 py-0.5 rounded-full flex items-center gap-1">
                             {fmtOrderNo(o.daily_number)}
+                            {o.status === "served" && (
+                              <span className="text-[10px] bg-sky-500/15 text-sky-600 dark:text-sky-400 px-1.5 py-0.5 rounded-full">
+                                {tx("cashierScreen.servedBadge")}
+                              </span>
+                            )}
                           </span>
                         </div>
                         <ul className="space-y-0.5 text-xs">
@@ -627,16 +812,11 @@ function Page() {
                               <Printer className="w-3.5 h-3.5" />
                             </Button>
                             <Button
-                              onClick={() => onPay(o)}
-                              disabled={paying === o.id}
+                              onClick={() => openPayment(o)}
                               size="sm"
                               className="h-8 text-xs gap-1"
                             >
-                              {paying === o.id ? (
-                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                              ) : (
-                                <CheckCircle2 className="w-3.5 h-3.5" />
-                              )}
+                              <CheckCircle2 className="w-3.5 h-3.5" />
                               تم الدفع
                             </Button>
                           </div>
@@ -746,6 +926,154 @@ function Page() {
         </div>
       )}
 
+      {/* Payment Options Modal */}
+      <AnimatePresence>
+        {payTarget && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
+            onClick={() => paying === null && setPayTarget(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, y: 8 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-[var(--card)] border border-[var(--border)] rounded-xl w-full max-w-md p-5 space-y-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between">
+                <h2 className="font-bold text-sm flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-[var(--primary)]" />
+                  {tx("cashierScreen.choosePaymentMethod")}
+                </h2>
+                <button
+                  onClick={() => setPayTarget(null)}
+                  className="text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="rounded-lg bg-[var(--primary)]/10 p-3 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-[var(--muted-foreground)]">
+                    #{payTarget.table_number ?? "—"} ·{" "}
+                    {tx("cashierScreen.receiptOrderNumber")}{" "}
+                    {fmtOrderNo(payTarget.daily_number)}
+                  </span>
+                  <span className="font-extrabold text-[var(--primary)] tabular-nums">
+                    {formatDZD(payTarget.total)}
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                {(
+                  [
+                    ["full", tx("cashierScreen.paymentFull")],
+                    ["partial", tx("cashierScreen.paymentPartial")],
+                    ["debt", tx("cashierScreen.paymentDebt")],
+                    ["gift", tx("cashierScreen.paymentGift")],
+                  ] as const
+                ).map(([key, label]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setPayMode(key)}
+                    className={`rounded-lg border p-3 text-start transition ${
+                      payMode === key
+                        ? "border-[var(--primary)] bg-[var(--primary)]/10"
+                        : "border-[var(--border)] hover:border-[var(--primary)]/50"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-xs">{label}</span>
+                      {payMode === key && (
+                        <CheckCircle2 className="w-4 h-4 text-[var(--primary)]" />
+                      )}
+                    </div>
+                    <div className="text-[11px] text-[var(--muted-foreground)] mt-1">
+                      {key === "full" && tx("cashierScreen.paymentFullHint")}
+                      {key === "partial" &&
+                        tx("cashierScreen.paymentPartialHint")}
+                      {key === "debt" && tx("cashierScreen.paymentDebtHint")}
+                      {key === "gift" && tx("cashierScreen.paymentGiftHint")}
+                    </div>
+                  </button>
+                ))}
+              </div>
+
+              {payMode === "partial" && (
+                <div className="space-y-3 rounded-lg border border-[var(--border)] p-3">
+                  <div>
+                    <label className="block text-xs text-[var(--muted-foreground)] mb-1">
+                      {tx("cashierScreen.paymentPaidAmount")}
+                    </label>
+                    <Input
+                      type="number"
+                      inputMode="numeric"
+                      min={0}
+                      className="h-9 text-sm"
+                      placeholder={tx("cashierScreen.paymentPaidPlaceholder")}
+                      value={payAmount}
+                      onChange={(e) => setPayAmount(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-[var(--muted-foreground)] mb-1">
+                      {tx("cashierScreen.paymentRemainderAs")}
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {(["debt", "discount"] as const).map((kind) => (
+                        <button
+                          key={kind}
+                          type="button"
+                          onClick={() => setPayRemainder(kind)}
+                          className={`rounded-lg border px-3 py-2 text-xs font-bold transition ${
+                            payRemainder === kind
+                              ? "border-[var(--primary)] bg-[var(--primary)]/10 text-[var(--primary)]"
+                              : "border-[var(--border)] text-[var(--muted-foreground)]"
+                          }`}
+                        >
+                          {kind === "debt"
+                            ? tx("cashierScreen.remainderDebt")
+                            : tx("cashierScreen.remainderDiscount")}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex gap-2">
+                <Button
+                  onClick={submitPayment}
+                  disabled={paying !== null}
+                  className="flex-1 gap-1.5 h-10 text-sm"
+                >
+                  {paying !== null ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <CheckCircle2 className="w-4 h-4" />
+                  )}
+                  {tx("cashierScreen.paymentConfirm")}
+                </Button>
+                <Button
+                  variant="outline"
+                  className="h-10 text-sm"
+                  onClick={() => setPayTarget(null)}
+                  disabled={paying !== null}
+                >
+                  {tx("cashierScreen.paymentCancel")}
+                </Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Main Content */}
       <main className="flex-1 p-3 md:p-4">
         <div className="max-w-6xl mx-auto">
@@ -785,7 +1113,7 @@ function Page() {
               <h2 className="text-2xl font-bold text-green-700">
                 {tx("cashierScreen.paymentSuccess")}
               </h2>
-              <p className="text-lg">
+              <p className="text-lg font-bold">
                 {success.table != null && (
                   <>
                     {tx("cashierScreen.tableLabel")} {success.table} -{" "}
@@ -793,9 +1121,33 @@ function Page() {
                 )}
                 {formatDZD(success.amount)}
               </p>
+              {success.payment && success.payment.mode !== "full" && (
+                <div className="text-sm font-bold text-[var(--primary)]">
+                  {success.payment.mode === "partial" &&
+                    (success.payment.debt > 0
+                      ? tx("cashierScreen.debtRecorded")
+                      : tx("cashierScreen.discountRecorded"))}
+                  {success.payment.mode === "debt" &&
+                    tx("cashierScreen.debtRecorded")}
+                  {success.payment.mode === "gift" &&
+                    tx("cashierScreen.giftRecorded")}
+                </div>
+              )}
+              {success.payment && success.payment.debt > 0 && (
+                <p className="text-sm text-[var(--muted-foreground)]">
+                  {tx("cashierScreen.receiptDebt")}{" "}
+                  {formatDZD(success.payment.debt)}
+                </p>
+              )}
+              {success.payment && success.payment.discount > 0 && (
+                <p className="text-sm text-[var(--muted-foreground)]">
+                  {tx("cashierScreen.receiptDiscount")}{" "}
+                  {formatDZD(success.payment.discount)}
+                </p>
+              )}
               {lastPaid && (
                 <Button
-                  onClick={() => printReceipt(lastPaid)}
+                  onClick={() => printReceipt(lastPaid, success.payment)}
                   className="w-full h-11 mt-2"
                 >
                   <Printer className="w-4 h-4 ms-2" />
@@ -975,7 +1327,9 @@ function NewOrderView({
         setTables(res.tables);
         setOptionsByItem(res.optionsByItem);
       })
-      .catch((e) => toast.error((e as Error).message || tx("cashierScreen.searchFailed")))
+      .catch((e) =>
+        toast.error((e as Error).message || tx("cashierScreen.searchFailed")),
+      )
       .finally(() => setLoading(false));
   }, [token, isPreview, menuFn]);
 
@@ -1157,11 +1511,6 @@ function NewOrderView({
 
       const ticket: NewOrderTicket = ticketData;
       setLastTicket(ticket);
-      printOrderTicket(
-        ticket,
-        restaurantName,
-        tx("cashierScreen.newOrderKitchenTicket"),
-      );
       toast.success(tx("cashierScreen.newOrderSent"));
       setCart([]);
       setOrderNotes("");
@@ -1638,9 +1987,9 @@ function OrderTrackingView({
   orders: ReadyOrder[];
 }) {
   const [now, setNow] = useState(Date.now());
-  const [filter, setFilter] = useState<"all" | "new" | "preparing" | "ready">(
-    "all",
-  );
+  const [filter, setFilter] = useState<
+    "all" | "new" | "preparing" | "ready" | "served"
+  >("all");
   const [selectedOrder, setSelectedOrder] = useState<ReadyOrder | null>(null);
 
   useEffect(() => {
@@ -1655,6 +2004,7 @@ function OrderTrackingView({
     new: orders.filter((o) => o.status === "new").length,
     preparing: orders.filter((o) => o.status === "preparing").length,
     ready: orders.filter((o) => o.status === "ready").length,
+    served: orders.filter((o) => o.status === "served").length,
   };
 
   function elapsed(createdAt: string): number {
@@ -1688,6 +2038,7 @@ function OrderTrackingView({
     if (s === "new") return "جديد";
     if (s === "preparing") return "جاري التحضير";
     if (s === "ready") return "جاهز";
+    if (s === "served") return "مُسلَّم — بالطاولة";
     return s;
   }
 
@@ -1695,6 +2046,7 @@ function OrderTrackingView({
     if (s === "new") return "bg-blue-100 text-blue-700";
     if (s === "preparing") return "bg-amber-100 text-amber-700";
     if (s === "ready") return "bg-green-100 text-green-700";
+    if (s === "served") return "bg-sky-100 text-sky-700";
     return "bg-gray-100 text-gray-700";
   }
 
@@ -1727,6 +2079,7 @@ function OrderTrackingView({
               ["new", "جديد", stats.new],
               ["preparing", "قيد التحضير", stats.preparing],
               ["ready", "جاهز", stats.ready],
+              ["served", "مُسلَّم", stats.served],
             ] as const
           ).map(([key, label, count]) => (
             <button

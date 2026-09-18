@@ -123,6 +123,9 @@ export async function individualChefListActiveCore(token: string) {
     customer_phone: (o.customer_phone as string) ?? null,
     customer_address: (o.customer_address as string) ?? null,
     daily_number: (o.daily_number as number) ?? null,
+    chef_id: (o.chef_id as string) ?? null,
+    chef_name: (o.chef_name as string) ?? null,
+    started_at: (o.started_at as string) ?? null,
     items: (itemsByOrder.get(o.id) ?? []).map((it: any) => ({
       name: it.name_snapshot as string,
       qty: it.quantity as number,
@@ -141,10 +144,13 @@ export const individualChefListActive = createServerFn({ method: "GET" })
     return individualChefListActiveCore(token);
   });
 
-/** DB logic: chef starts preparing an order. */
+/** DB logic: chef starts preparing an order with the chef selected on the
+ * shared kitchen computer. The chosen chef is verified to belong to the same
+ * restaurant and to have kitchen permission before attribution is written. */
 export async function individualChefStartPreparingCore(
   token: string,
   orderId: string,
+  chefId: string,
 ) {
   const { restaurantId } = await resolveStaffFromToken(token);
   const db = getFirebaseDb();
@@ -159,15 +165,34 @@ export async function individualChefStartPreparingCore(
   if (data.status !== "new")
     throw new Error(`حالة الطلبية "${data.status}" — لا يمكن بدء التحضير`);
 
-  await updateDoc(orderRef, { status: "preparing", acknowledged: true });
+  const chefSnap = await getDoc(doc(db, "staff", chefId));
+  if (!chefSnap.exists()) throw new Error("الطاهي غير موجود");
+  const chefRow = { id: chefSnap.id, ...chefSnap.data() } as any;
+  if (chefRow.restaurant_id !== restaurantId)
+    throw new Error("الطاهي مملوك لمطعم آخر");
+  if (chefRow.frozen) throw new Error("حساب الطاهي مجمّد");
+  if (!effectiveStaffPermissions(chefRow).includes("kitchen"))
+    throw new Error("هذا الحساب ليس له صلاحية المطبخ");
+
+  await updateDoc(orderRef, {
+    status: "preparing",
+    acknowledged: true,
+    chef_id: chefRow.id as string,
+    chef_name: (chefRow.name as string) ?? null,
+    started_at: new Date().toISOString(),
+  });
   return { ok: true };
 }
 
 export const individualChefStartPreparing = createServerFn({ method: "POST" })
-  .validator((d: { token: string; orderId: string }) => d)
+  .validator((d: { token: string; orderId: string; chefId: string }) => d)
   .handler(async ({ data }) => {
-    const { token, orderId } = data as { token: string; orderId: string };
-    return individualChefStartPreparingCore(token, orderId);
+    const { token, orderId, chefId } = data as {
+      token: string;
+      orderId: string;
+      chefId: string;
+    };
+    return individualChefStartPreparingCore(token, orderId, chefId);
   });
 
 /** DB logic: chef marks order as ready. */
@@ -188,7 +213,7 @@ export async function individualChefMarkReadyCore(
   if (data.status !== "preparing")
     throw new Error(`حالة الطلبية "${data.status}" — لا يمكن وضعها كجاهزة`);
 
-  await updateDoc(orderRef, { status: "ready" });
+  await updateDoc(orderRef, { status: "ready", ready_at: new Date().toISOString() });
   return { ok: true };
 }
 
@@ -236,8 +261,8 @@ export async function getPublicChefListCore(restaurantId: string) {
     chefs: staffSnap.docs
       .filter(
         (d) =>
-          (d.data() as any).role === ROLE_KITCHEN &&
-          (d.data() as any).frozen !== true,
+          (d.data() as any).frozen !== true &&
+          effectiveStaffPermissions(d.data() as any).includes("kitchen"),
       )
       .map((d) => ({ id: d.id, name: (d.data() as any).name })),
   };

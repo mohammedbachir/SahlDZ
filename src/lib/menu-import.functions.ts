@@ -1,18 +1,80 @@
 import { createServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
+import { geminiVisionJson } from "@/lib/ai-vision";
+
+type ParsedMenuDish = {
+  name: string;
+  price: number;
+  description?: string | null;
+  bbox?: [number, number, number, number];
+};
+
+type ParsedMenuCategory = {
+  name: string;
+  items: ParsedMenuDish[];
+};
 
 export const parseMenuImage = createServerFn({ method: "POST" })
-  .validator((d: { imageBase64: string }) => d)
-  .handler(async () => ({
-    categories: [] as Array<{
-      name: string;
-      items: Array<{
-        name: string;
-        price: number;
-        description?: string | null;
-      }>;
-    }>,
-  }));
+  .validator((d: { imageBase64: string; mimeType?: string }) => d)
+  .handler(async ({ data }) => {
+    let base64 = data.imageBase64;
+    let mimeType = data.mimeType || "image/jpeg";
+    const comma = base64.indexOf(",");
+    if (base64.startsWith("data:") && comma >= 0) {
+      const meta = base64.slice(5, comma);
+      const m = meta.match(/image\/([\w.+-]+)/i);
+      if (m) mimeType = m[0];
+      base64 = base64.slice(comma + 1);
+    }
+
+    const prompt = `أنت متخصص في استخراج قوائم الطعام من صور المنيو.
+اقرأ الصورة واستخرج كل الفئات والأطباق بنصها العربي كما في المنيو.
+- السعر بالأرقام (وحدة: دينار جزائري دج) اقرأه حرفياً من الصورة.
+- إن بدا المنيو بلا فئات واضحة ضع كل الأطباق في فئة "أخرى".
+- أعط description قصيرة إن كانت موجودة في المنيو.
+- حدد bbox لكل طبق يظهر له صورة الطبق في المنيو بصيغة [ymin, xmin, ymax, xmax] بنسبة 0..1000 (مساحة الصورة الفعلية للطبق فقط، وليس النص) وإلا اجعلها null.
+أعد JSON فقط بهذا الشكل:
+{
+  "categories": [
+    { "name": "اسم الفئة", "items": [
+      { "name": "اسم الطبق", "price": 1200, "description": "وصف أو null", "bbox": [0,0,0,0] }
+    ] }
+  ]
+}`;
+
+    const parsed = await geminiVisionJson<{
+      categories?: ParsedMenuCategory[];
+    }>({ imageBase64: base64, mimeType, prompt, maxOutputTokens: 8192 });
+
+    const categories = (parsed.categories ?? [])
+      .map((c) => ({
+        name: String(c.name || "").trim(),
+        items: (c.items ?? [])
+          .map((it) => ({
+            name: String(it.name || "").trim(),
+            price: Number(it.price) || 0,
+            description:
+              typeof it.description === "string" && it.description.trim()
+                ? it.description.trim()
+                : null,
+            bbox:
+              Array.isArray(it.bbox) &&
+              it.bbox.length === 4 &&
+              it.bbox.every((n) => isFinite(n))
+                ? (it.bbox.map((n) => Number(n)) as [
+                    number,
+                    number,
+                    number,
+                    number,
+                  ])
+                : undefined,
+          }))
+          .filter((it) => it.name && it.price > 0),
+      }))
+      .filter((c) => c.name && c.items.length > 0);
+
+    return { categories };
+  });
 
 export type CsvMenuRow = {
   category: string;
