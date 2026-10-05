@@ -15,7 +15,9 @@ import {
   Home,
   Loader2,
   Smartphone,
+  CalendarDays,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { requireAuth } from "@/lib/auth";
 import { DashboardOnboarding, hasCompletedOnboarding } from "@/components/DashboardOnboarding";
 import { DashboardTour, tourSteps } from "@/components/DashboardTour";
@@ -502,6 +504,22 @@ function DashboardLayout() {
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Direct Daily Report button for restaurant owners */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setActiveTab("analytics");
+                window.history.replaceState(null, "", "/dashboard?tab=analytics&view=daily");
+                window.dispatchEvent(new PopStateEvent("popstate"));
+              }}
+              className="h-8 gap-1.5 text-xs font-bold rounded-xl border-primary/30 text-primary hover:bg-primary/10 shadow-sm"
+              title="عرض التقرير اليومي المفصل للمطعم"
+            >
+              <CalendarDays className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">تقرير اليوم</span>
+            </Button>
+
             <LanguageSwitcher />
             <NotificationsBell restaurantId={restaurantId} />
 

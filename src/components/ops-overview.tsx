@@ -346,10 +346,10 @@ const lowStock = (ingRes.data ?? []).filter(
           </Link>
           <Link
             to="/ops/reports"
-            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-sm text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-sm text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-sm"
           >
             <TrendingUp className="w-3.5 h-3.5" />
-            <span>{tx("كشف الدخل")}</span>
+            <span>{tx("التقرير اليومي والمبيعات")}</span>
           </Link>
         </div>
       </div>

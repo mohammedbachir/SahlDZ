@@ -36,6 +36,7 @@ import {
   cashierZReport,
   cashierGetMenu,
   cashierCreateOrder,
+  cashierCancelOrder,
   type ZReport,
   type CashierPaymentMode,
   type CashierPaymentInput,
@@ -51,6 +52,7 @@ import { type MenuOption } from "@/lib/menu-options.functions";
 import { buildDefaultCashierMenu } from "@/lib/default-menu";
 import { MAIN_HALL_ID, MAIN_HALL_NAME } from "@/lib/halls";
 import { formatDZD } from "@/lib/restaurant";
+import { CancelOrderDialog } from "@/components/CancelOrderDialog";
 import { isPreviewToken, PREVIEW_RESTAURANT } from "@/lib/preview-mode";
 import { tx } from "@/lib/ops-tx";
 import { clearKioskRole } from "@/lib/kiosk-session";
@@ -1187,7 +1189,11 @@ function Page() {
               }}
             />
           ) : (
-            <OrderTrackingView token={token} orders={activeOrders} />
+            <OrderTrackingView
+              token={token}
+              orders={activeOrders}
+              onRefresh={refresh}
+            />
           )}
         </div>
       </main>
@@ -2226,16 +2232,21 @@ function NewOrderView({
    Creative POS monitoring dashboard
    ═══════════════════════════════════════════════════════════════ */
 function OrderTrackingView({
+  token,
   orders,
+  onRefresh,
 }: {
   token: string | null;
   orders: ReadyOrder[];
+  onRefresh?: () => void;
 }) {
+  const cancelOrderFn = useServerFn(cashierCancelOrder);
   const [now, setNow] = useState(Date.now());
   const [filter, setFilter] = useState<
     "all" | "new" | "preparing" | "ready" | "served"
   >("all");
   const [selectedOrder, setSelectedOrder] = useState<ReadyOrder | null>(null);
+  const [cancellingOrder, setCancellingOrder] = useState<ReadyOrder | null>(null);
 
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 1000);
@@ -2527,11 +2538,50 @@ function OrderTrackingView({
                     {selectedOrder.notes}
                   </div>
                 )}
+                <div className="flex items-center justify-between pt-2 border-t border-[var(--border)]">
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => setCancellingOrder(selectedOrder)}
+                    className="h-8 gap-1.5 text-xs font-bold"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    إلغاء الطلب
+                  </Button>
+                  <span className="text-[10px] text-[var(--muted-foreground)]">
+                    تسجيل سبب الإلغاء في التقارير
+                  </span>
+                </div>
               </div>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
+
+      <CancelOrderDialog
+        open={!!cancellingOrder}
+        onOpenChange={(op) => !op && setCancellingOrder(null)}
+        order={cancellingOrder}
+        onConfirm={async (reason) => {
+          if (!token || !cancellingOrder) return;
+          try {
+            await cancelOrderFn({
+              data: {
+                token,
+                orderId: cancellingOrder.id,
+                reason,
+                staffName: "الكاشير",
+              },
+            });
+            toast.success("تم إلغاء الطلب بنجاح");
+            setSelectedOrder(null);
+            setCancellingOrder(null);
+            onRefresh?.();
+          } catch (e: any) {
+            toast.error(e.message || "فشل إلغاء الطلب");
+          }
+        }}
+      />
     </div>
   );
 }

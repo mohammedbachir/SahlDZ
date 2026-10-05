@@ -458,6 +458,58 @@ export const cashierLogout = createServerFn({ method: "POST" })
   .validator((d: { token: string }) => d)
   .handler(async () => ({ ok: true }));
 
+/** DB logic: cancel an order with a reason and record who cancelled it. */
+export async function cashierCancelOrderCore(
+  token: string,
+  orderId: string,
+  reason: string,
+  staffId?: string,
+  staffName?: string,
+) {
+  const restaurantId = await resolveCashierRestaurantId(token);
+  const db = getFirebaseDb();
+  if (!db) throw new Error("Firebase غير متصل");
+
+  const orderRef = doc(db, "orders", orderId);
+  const snap = await getDoc(orderRef);
+  if (!snap.exists()) throw new Error("الطلب غير موجود");
+  const data = snap.data();
+  if (data.restaurant_id !== restaurantId)
+    throw new Error("غير مصرح بإلغاء هذا الطلب");
+
+  const now = new Date().toISOString();
+  await updateDoc(orderRef, {
+    status: "cancelled",
+    cancel_reason: reason?.trim() || "تم الإلغاء بدون سبب محدد",
+    cancelled_at: now,
+    cancelled_by: staffName || "الكاشير",
+    cancelled_by_staff_id: staffId || null,
+  });
+
+  return { ok: true };
+}
+
+export const cashierCancelOrder = createServerFn({ method: "POST" })
+  .validator(
+    (d: {
+      token: string;
+      orderId: string;
+      reason: string;
+      staffId?: string;
+      staffName?: string;
+    }) => d,
+  )
+  .handler(async ({ data }) => {
+    const { token, orderId, reason, staffId, staffName } = data as {
+      token: string;
+      orderId: string;
+      reason: string;
+      staffId?: string;
+      staffName?: string;
+    };
+    return cashierCancelOrderCore(token, orderId, reason, staffId, staffName);
+  });
+
 /** DB logic: generate Z-report (end-of-day) for the cashier's restaurant. */
 export async function cashierZReportCore(token: string): Promise<ZReport> {
   const restaurantId = await resolveCashierRestaurantId(token);

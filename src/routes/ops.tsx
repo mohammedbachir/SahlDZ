@@ -103,7 +103,7 @@ const NAV_ITEM_LABELS: Partial<Record<OpsArea, string>> = {
   employees: "الموظفون والرواتب",
   staffPerformance: "أداء الفريق",
   suppliers: "الموردون وسجل المشتريات",
-  reports: "التقارير وكشف الدخل",
+  reports: "التقرير اليومي والمبيعات",
   reportArchive: "أرشيف السجلات",
   waste: "سجل الهدر والتالف",
   complaints: "شكاوى العملاء",
