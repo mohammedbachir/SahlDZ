@@ -9,10 +9,37 @@ export type AnalyticsExportPayload = {
     salesToday: number;
     avgOrderWeek: number;
     salesMonth: number;
+    cancelledCount?: number;
+    cancelledRevenue?: number;
   };
   daily: { date: string; total: number }[];
   topItems: { name: string; qty: number; revenue: number }[];
   bottomItems: { name: string; qty: number; revenue: number }[];
+  tables?: {
+    tableNumber: number;
+    hallName: string;
+    totalRevenue: number;
+    ordersCount: number;
+    percentage: number;
+  }[];
+  categories?: {
+    categoryName: string;
+    totalRevenue: number;
+    quantitySold: number;
+    percentage: number;
+  }[];
+  cashiers?: {
+    name: string;
+    totalRevenue: number;
+    ordersCount: number;
+    percentage: number;
+  }[];
+  cancellations?: {
+    orderNum: string;
+    reason: string;
+    amount: number;
+    time: string;
+  }[];
 };
 
 const fmt = (n: number) =>
@@ -25,7 +52,7 @@ export async function exportAnalyticsExcel(
   const sheet = workbook.addWorksheet(payload.restaurantName || "تحليلات");
 
   sheet.columns = [
-    { header: "المؤشر", key: "label", width: 24 },
+    { header: "المؤشر", key: "label", width: 28 },
     { header: "القيمة", key: "value", width: 20 },
   ];
 
@@ -37,6 +64,13 @@ export async function exportAnalyticsExcel(
     value: kpis.avgOrderWeek,
   });
   sheet.addRow({ label: "مبيعات الشهر (دج)", value: kpis.salesMonth });
+  if (kpis.cancelledCount != null) {
+    sheet.addRow({ label: "عدد الطلبات الملغاة", value: kpis.cancelledCount });
+    sheet.addRow({
+      label: "إجمالي الخسارة من الإلغاء (دج)",
+      value: kpis.cancelledRevenue ?? 0,
+    });
+  }
   sheet.getRow(1).font = { bold: true };
 
   const dailySheet = workbook.addWorksheet("المبيعات اليومية");
@@ -62,6 +96,84 @@ export async function exportAnalyticsExcel(
     itemsSheet.addRow({ name: i.name, qty: i.qty, revenue: i.revenue }),
   );
   itemsSheet.getRow(1).font = { bold: true };
+
+  if (payload.tables?.length) {
+    const tablesSheet = workbook.addWorksheet("أداء الطاولات");
+    tablesSheet.columns = [
+      { header: "رقم الطاولة", key: "tableNumber", width: 15 },
+      { header: "القاعة", key: "hallName", width: 18 },
+      { header: "إجمالي المبيعات (دج)", key: "totalRevenue", width: 22 },
+      { header: "عدد الطلبات", key: "ordersCount", width: 15 },
+      { header: "النسبة %", key: "percentage", width: 15 },
+    ];
+    payload.tables.forEach((t) =>
+      tablesSheet.addRow({
+        tableNumber: `طاولة ${t.tableNumber}`,
+        hallName: t.hallName || "رئيسية",
+        totalRevenue: t.totalRevenue,
+        ordersCount: t.ordersCount,
+        percentage: `${t.percentage}%`,
+      }),
+    );
+    tablesSheet.getRow(1).font = { bold: true };
+  }
+
+  if (payload.categories?.length) {
+    const catSheet = workbook.addWorksheet("عائلات الأصناف");
+    catSheet.columns = [
+      { header: "العائلة / التصنيف", key: "categoryName", width: 24 },
+      { header: "إجمالي المبيعات (دج)", key: "totalRevenue", width: 22 },
+      { header: "الكمية المباعة", key: "quantitySold", width: 16 },
+      { header: "النسبة %", key: "percentage", width: 15 },
+    ];
+    payload.categories.forEach((c) =>
+      catSheet.addRow({
+        categoryName: c.categoryName,
+        totalRevenue: c.totalRevenue,
+        quantitySold: c.quantitySold,
+        percentage: `${c.percentage}%`,
+      }),
+    );
+    catSheet.getRow(1).font = { bold: true };
+  }
+
+  if (payload.cashiers?.length) {
+    const cashierSheet = workbook.addWorksheet("أداء الكاشير");
+    cashierSheet.columns = [
+      { header: "اسم الموظف / الكاشير", key: "name", width: 24 },
+      { header: "إجمالي التحصيل (دج)", key: "totalRevenue", width: 22 },
+      { header: "عدد الفواتير", key: "ordersCount", width: 15 },
+      { header: "النسبة %", key: "percentage", width: 15 },
+    ];
+    payload.cashiers.forEach((c) =>
+      cashierSheet.addRow({
+        name: c.name,
+        totalRevenue: c.totalRevenue,
+        ordersCount: c.ordersCount,
+        percentage: `${c.percentage}%`,
+      }),
+    );
+    cashierSheet.getRow(1).font = { bold: true };
+  }
+
+  if (payload.cancellations?.length) {
+    const cancelSheet = workbook.addWorksheet("الطلبات الملغاة والمشاكل");
+    cancelSheet.columns = [
+      { header: "رقم الطلب", key: "orderNum", width: 16 },
+      { header: "الوقت", key: "time", width: 20 },
+      { header: "سبب الإلغاء", key: "reason", width: 30 },
+      { header: "المبلغ المفقود (دج)", key: "amount", width: 20 },
+    ];
+    payload.cancellations.forEach((c) =>
+      cancelSheet.addRow({
+        orderNum: c.orderNum,
+        time: c.time,
+        reason: c.reason,
+        amount: c.amount,
+      }),
+    );
+    cancelSheet.getRow(1).font = { bold: true };
+  }
 
   const buffer = await workbook.xlsx.writeBuffer();
   const blob = new Blob([buffer], {

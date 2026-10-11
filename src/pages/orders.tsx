@@ -17,6 +17,9 @@ import {
   Clock,
   ArrowRight,
   Filter,
+  XCircle,
+  Trash2,
+  Ban,
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -26,8 +29,9 @@ import { formatDZD } from "@/lib/restaurant";
 import { useNewOrderNotifications } from "@/hooks/useNewOrderNotifications";
 import { decrementStockForOrder } from "@/lib/stock-consumption";
 import { useTranslation } from "react-i18next";
+import { CancelOrderDialog } from "@/components/CancelOrderDialog";
 
-type OrderStatus = "new" | "preparing" | "ready" | "paid";
+type OrderStatus = "new" | "preparing" | "ready" | "paid" | "cancelled";
 
 type OrderItem = {
   id: string;
@@ -45,11 +49,15 @@ type Order = {
   acknowledged: boolean;
   created_at: string;
   table_number?: number | null;
+  daily_number?: number | null;
   items?: OrderItem[];
   order_type?: string | null;
   customer_name?: string | null;
   customer_phone?: string | null;
   customer_address?: string | null;
+  cancel_reason?: string | null;
+  cancelled_at?: string | null;
+  cancelled_by?: string | null;
 };
 
 type ColumnDef = {
@@ -64,6 +72,7 @@ const COLUMNS: ColumnDef[] = [
   { status: "preparing", label: "قيد التحضير", accent: "#B86D16", icon: ChefHat },
   { status: "ready", label: "جاهزة", accent: "#27734F", icon: CheckCheck },
   { status: "paid", label: "مدفوعة", accent: "#746C61", icon: Wallet },
+  { status: "cancelled", label: "ملغاة", accent: "#DC2626", icon: XCircle },
 ];
 
 function getNextStatus(o: Pick<Order, "status" | "order_type">): { label: string; next: OrderStatus } | null {
@@ -210,8 +219,16 @@ export default function OrdersPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [restaurantId]);
 
+  const [cancellingOrder, setCancellingOrder] = useState<Order | null>(null);
+
   const grouped = useMemo(() => {
-    const g: Record<OrderStatus, Order[]> = { new: [], preparing: [], ready: [], paid: [] };
+    const g: Record<OrderStatus, Order[]> = {
+      new: [],
+      preparing: [],
+      ready: [],
+      paid: [],
+      cancelled: [],
+    };
     for (const o of orders) {
       if (filterType === "all" || o.order_type === filterType) {
         g[o.status]?.push(o);
@@ -219,6 +236,41 @@ export default function OrdersPage() {
     }
     return g;
   }, [orders, filterType]);
+
+  async function handleConfirmCancel(reason: string) {
+    if (!cancellingOrder) return;
+    const target = cancellingOrder;
+    const prev = orders;
+    const now = new Date().toISOString();
+    setOrders((curr) =>
+      curr.map((x) =>
+        x.id === target.id
+          ? {
+              ...x,
+              status: "cancelled",
+              cancel_reason: reason,
+              cancelled_at: now,
+              cancelled_by: "لوحة التحكم",
+            }
+          : x,
+      ),
+    );
+    const { error } = await supabase
+      .from("orders")
+      .update({
+        status: "cancelled",
+        cancel_reason: reason,
+        cancelled_at: now,
+        cancelled_by: "لوحة التحكم",
+      })
+      .eq("id", target.id);
+    if (error) {
+      setOrders(prev);
+      toast.error("فشل إلغاء الطلب");
+    } else {
+      toast.success("تم إلغاء الطلب وتسجيل السبب بنجاح");
+    }
+  }
 
   async function advance(o: Order) {
     const cfg = getNextStatus(o);
@@ -366,15 +418,30 @@ export default function OrdersPage() {
           col={COLUMNS.find((c) => c.status === activeMobileTab)!}
           items={grouped[activeMobileTab]}
           onAdvance={advance}
+          onCancel={(o) => setCancellingOrder(o)}
         />
       </div>
 
-      {/* Desktop 4 columns */}
-      <div data-annotate="orders-columns" className="hidden md:grid grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* Desktop 5 columns */}
+      <div data-annotate="orders-columns" className="hidden md:grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
         {COLUMNS.map((c) => (
-          <Column key={c.status} col={c} items={grouped[c.status]} onAdvance={advance} />
+          <Column
+            key={c.status}
+            col={c}
+            items={grouped[c.status]}
+            onAdvance={advance}
+            onCancel={(o) => setCancellingOrder(o)}
+          />
         ))}
       </div>
+
+      {/* Cancellation Dialog */}
+      <CancelOrderDialog
+        open={!!cancellingOrder}
+        onOpenChange={(op) => !op && setCancellingOrder(null)}
+        order={cancellingOrder}
+        onConfirm={handleConfirmCancel}
+      />
     </div>
   );
 }
@@ -383,10 +450,12 @@ function Column({
   col,
   items,
   onAdvance,
+  onCancel,
 }: {
   col: ColumnDef;
   items: Order[];
   onAdvance: (o: Order) => void;
+  onCancel: (o: Order) => void;
 }) {
   const { t } = useTranslation();
   const Icon = col.icon;
@@ -424,7 +493,12 @@ function Column({
                 exit={{ opacity: 0, scale: 0.9 }}
                 transition={{ type: "spring", stiffness: 400, damping: 30 }}
               >
-                <OrderCard order={o} accent={col.accent} onAdvance={() => onAdvance(o)} />
+                <OrderCard
+                  order={o}
+                  accent={col.accent}
+                  onAdvance={() => onAdvance(o)}
+                  onCancel={() => onCancel(o)}
+                />
               </motion.div>
             ))
           )}
@@ -434,10 +508,22 @@ function Column({
   );
 }
 
-function OrderCard({ order, accent, onAdvance }: { order: Order; accent: string; onAdvance: () => void }) {
+function OrderCard({
+  order,
+  accent,
+  onAdvance,
+  onCancel,
+}: {
+  order: Order;
+  accent: string;
+  onAdvance: () => void;
+  onCancel: () => void;
+}) {
   const { t, i18n } = useTranslation();
   const cfg = getNextStatus(order);
   const isNew = order.status === "new" && !order.acknowledged;
+  const isCancelled = order.status === "cancelled";
+  const isPaid = order.status === "paid";
   const orderNum = order.id.replace(/-/g, "").slice(-6).toUpperCase();
   const base = (i18n.language || "ar").split("-")[0];
   const locale: Locale = base === "en" ? enUS : base === "fr" ? frLocale : ar;
@@ -450,7 +536,7 @@ function OrderCard({ order, accent, onAdvance }: { order: Order; accent: string;
       data-annotate="orders-card"
       className={`bg-card rounded-lg border border-border p-3.5 space-y-2.5 transition-colors hover:border-primary/40 ${
         isNew ? "ring-1 ring-destructive/40" : ""
-      }`}
+      } ${isCancelled ? "opacity-85 border-destructive/30 bg-destructive/5" : ""}`}
     >
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -460,7 +546,11 @@ function OrderCard({ order, accent, onAdvance }: { order: Order; accent: string;
             <span className="w-1.5 h-1.5 rounded-full bg-destructive" />
           )}
         </div>
-        {isDelivery ? (
+        {isCancelled ? (
+          <span className="text-[10px] bg-destructive/15 text-destructive border border-destructive/25 px-2 py-0.5 rounded-md font-bold flex items-center gap-1">
+            <XCircle className="w-3 h-3" /> ملغى
+          </span>
+        ) : isDelivery ? (
           <span className="text-[10px] bg-warning/10 text-warning border border-warning/20 px-2 py-0.5 rounded-md font-medium flex items-center gap-1">
             <Bike className="w-3 h-3" /> توصيل
           </span>
@@ -474,6 +564,24 @@ function OrderCard({ order, accent, onAdvance }: { order: Order; accent: string;
           </span>
         ) : null}
       </div>
+
+      {/* Cancellation Banner */}
+      {isCancelled && (
+        <div className="bg-destructive/10 border border-destructive/20 rounded-md p-2 text-xs text-destructive space-y-0.5">
+          <div className="font-bold flex items-center gap-1">
+            <Ban className="w-3 h-3 shrink-0" />
+            <span>سبب الإلغاء:</span>
+          </div>
+          <p className="text-[11px] font-medium leading-relaxed">
+            {order.cancel_reason || "لم يُحدد سبب"}
+          </p>
+          {order.cancelled_by && (
+            <div className="text-[10px] opacity-70">
+              بواسطة: {order.cancelled_by}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Delivery info */}
       {isDelivery && (
@@ -517,19 +625,34 @@ function OrderCard({ order, accent, onAdvance }: { order: Order; accent: string;
           <Clock className="w-3 h-3" />
           {ago}
         </div>
-        <span className="font-bold text-xs text-foreground tabular-nums">{formatDZD(order.total)}</span>
+        <span className={`font-bold text-xs tabular-nums ${isCancelled ? "text-destructive line-through" : "text-foreground"}`}>
+          {formatDZD(order.total)}
+        </span>
       </div>
 
-      {/* Action button */}
-      {cfg && (
-        <button
-          data-annotate="orders-actions"
-          onClick={onAdvance}
-          className="w-full py-2 rounded-lg font-semibold text-xs transition-colors flex items-center justify-center gap-1.5 bg-primary text-primary-foreground hover:bg-[#8C5921] cursor-pointer"
-        >
-          {cfg.label}
-          <ArrowRight className="w-3.5 h-3.5" />
-        </button>
+      {/* Actions */}
+      {!isPaid && !isCancelled && (
+        <div className="flex items-center gap-2 pt-1">
+          {cfg && (
+            <button
+              data-annotate="orders-actions"
+              onClick={onAdvance}
+              className="flex-1 py-2 rounded-lg font-semibold text-xs transition-colors flex items-center justify-center gap-1.5 bg-primary text-primary-foreground hover:bg-[#8C5921] cursor-pointer"
+            >
+              {cfg.label}
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onCancel}
+            title="إلغاء الطلب"
+            className="px-2.5 py-2 rounded-lg border border-destructive/30 text-destructive hover:bg-destructive/10 text-xs font-semibold flex items-center justify-center gap-1 transition-colors cursor-pointer"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            <span>إلغاء</span>
+          </button>
+        </div>
       )}
     </div>
   );

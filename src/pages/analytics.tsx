@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { motion, useMotionValue, useSpring } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   ShoppingBag,
   DollarSign,
@@ -7,10 +7,19 @@ import {
   TrendingUp,
   ArrowUp,
   ArrowDown,
-  Flame,
-  Snowflake,
   Clock,
   Wallet,
+  Calendar as CalendarIcon,
+  LayoutDashboard,
+  CalendarDays,
+  Utensils,
+  Layers,
+  Users,
+  AlertOctagon,
+  FileSpreadsheet,
+  FileText,
+  UtensilsCrossed,
+  Bike,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -27,7 +36,6 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurantId, formatDZD } from "@/lib/restaurant";
 import { Button } from "@/components/ui/button";
-import { FileSpreadsheet, FileText, CalendarIcon } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -40,796 +48,772 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { cn } from "@/lib/utils";
 import { exportAnalyticsExcel, exportAnalyticsPDF } from "@/lib/exportReports";
 
-type AnalyticsData = {
-  kpis: {
-    ordersToday: number;
-    salesToday: number;
-    avgOrderWeek: number;
-    salesMonth: number;
-    ordersTodayPrev: number;
-    salesTodayPrev: number;
-    avgOrderWeekPrev: number;
-    salesMonthPrev: number;
-  };
-  daily: { date: string; total: number }[];
-  topItems: TopItem[];
-  bottomItems: TopItem[];
-  hourly: { hour: number; count: number }[];
-};
+import type {
+  FullAnalyticsData,
+  DateRangePreset,
+  OrderRecord,
+  OrderItemRecord,
+  TablePerformance,
+  CategoryPerformance,
+  TopItemPerformance,
+  CashierPerformance,
+  CancellationReasonStat,
+  DailyDetailSummary,
+} from "@/components/analytics/types";
 
-type TopItem = {
-  menu_item_id: string | null;
-  name: string;
-  image_url: string | null;
-  qty: number;
-  revenue: number;
-};
+import { DailyReportTab } from "@/components/analytics/DailyReportTab";
+import { TablesReportTab } from "@/components/analytics/TablesReportTab";
+import { CategoriesReportTab } from "@/components/analytics/CategoriesReportTab";
+import { CashierReportTab } from "@/components/analytics/CashierReportTab";
+import { CancellationsReportTab } from "@/components/analytics/CancellationsReportTab";
 
-function startOfDay(d: Date) {
+function startOfDay(d: Date): Date {
   const x = new Date(d);
   x.setHours(0, 0, 0, 0);
   return x;
 }
 
-function pctChange(curr: number, prev: number) {
-  if (!prev) return curr > 0 ? 100 : 0;
-  return Math.round(((curr - prev) / prev) * 100);
+function endOfDay(d: Date): Date {
+  const x = new Date(d);
+  x.setHours(23, 59, 59, 999);
+  return x;
 }
 
-function safeIsoDate(iso: string): Date | null {
-  if (!iso || typeof iso !== "string") return null;
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return null;
-  return d;
-}
-
-async function loadAnalytics(restaurantId: string): Promise<AnalyticsData> {
-  const now = new Date();
-  const today = startOfDay(now);
-  const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
-  const tomorrow = new Date(today);
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  const weekStart = new Date(today);
-  weekStart.setDate(weekStart.getDate() - 6);
-  const prevWeekStart = new Date(weekStart);
-  prevWeekStart.setDate(prevWeekStart.getDate() - 7);
-  const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
-  const prevMonthStart = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-  const thirtyAgo = new Date(today);
-  thirtyAgo.setDate(thirtyAgo.getDate() - 29);
-
-  const fetchSince = new Date(prevMonthStart);
-
-  const { data: ordersRaw, error } = await supabase
-    .from("orders")
-    .select("id, total, created_at, status")
-    .eq("restaurant_id", restaurantId)
-    .eq("status", "paid")
-    .gte("created_at", fetchSince.toISOString())
-    .limit(5000);
-
-  if (error) throw new Error(error.message);
-
-  const paid = (ordersRaw ?? [])
-    .map((o: any) => ({ ...o, _date: safeIsoDate(o.created_at as string) }))
-    .filter((o: any) => o._date !== null) as Array<{
-    id: string;
-    total: number | string;
-    created_at: string;
-    _date: Date;
-  }>;
-
-  const inRange = (d: Date, start: Date, end: Date) =>
-    d.getTime() >= start.getTime() && d.getTime() < end.getTime();
-
-  const ordersToday = paid.filter((o) => inRange(o._date, today, tomorrow));
-  const ordersYesterday = paid.filter((o) => inRange(o._date, yesterday, today));
-  const ordersWeek = paid.filter((o) => inRange(o._date, weekStart, tomorrow));
-  const ordersPrevWeek = paid.filter((o) =>
-    inRange(o._date, prevWeekStart, weekStart)
-  );
-  const ordersMonth = paid.filter((o) => inRange(o._date, monthStart, tomorrow));
-  const ordersPrevMonth = paid.filter((o) =>
-    inRange(o._date, prevMonthStart, monthStart)
-  );
-
-  const sum = (arr: { total: number | string }[]) =>
-    arr.reduce((a, x) => a + Number(x.total || 0), 0);
-
-  const kpis = {
-    ordersToday: ordersToday.length,
-    salesToday: sum(ordersToday),
-    avgOrderWeek: ordersWeek.length ? sum(ordersWeek) / ordersWeek.length : 0,
-    salesMonth: sum(ordersMonth),
-    ordersTodayPrev: ordersYesterday.length,
-    salesTodayPrev: sum(ordersYesterday),
-    avgOrderWeekPrev: ordersPrevWeek.length
-      ? sum(ordersPrevWeek) / ordersPrevWeek.length
-      : 0,
-    salesMonthPrev: sum(ordersPrevMonth),
-  };
-
-  // Daily 30 days
-  const dailyMap = new Map<string, number>();
-  for (let i = 0; i < 30; i++) {
-    const d = new Date(thirtyAgo);
-    d.setDate(d.getDate() + i);
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
-      2,
-      "0"
-    )}-${String(d.getDate()).padStart(2, "0")}`;
-    dailyMap.set(key, 0);
-  }
-  paid
-    .filter((o) => inRange(o._date, thirtyAgo, tomorrow))
-    .forEach((o) => {
-      const d = o._date;
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
-        2,
-        "0"
-      )}-${String(d.getDate()).padStart(2, "0")}`;
-      dailyMap.set(key, (dailyMap.get(key) ?? 0) + Number(o.total || 0));
-    });
-  const daily = Array.from(dailyMap.entries()).map(([date, total]) => ({
-    date,
-    total,
-  }));
-
-  // Hourly this week
-  const hourMap = new Map<number, number>();
-  for (let h = 0; h < 24; h++) hourMap.set(h, 0);
-  paid
-    .filter((o) => inRange(o._date, weekStart, tomorrow))
-    .forEach((o) => {
-      const h = o._date.getHours();
-      hourMap.set(h, (hourMap.get(h) ?? 0) + 1);
-    });
-  const hourly = Array.from(hourMap.entries()).map(([hour, count]) => ({
-    hour,
-    count,
-  }));
-
-  // Items this month
-  let topItems: TopItem[] = [];
-  let bottomItems: TopItem[] = [];
-  const monthOrderIds = ordersMonth.map((o) => o.id);
-  if (monthOrderIds.length) {
-    const { data: items, error: iErr } = await supabase
-      .from("order_items")
-      .select("menu_item_id, name_snapshot, price_snapshot, quantity, order_id")
-      .in("order_id", monthOrderIds)
-      .limit(5000);
-    if (iErr) throw new Error(iErr.message);
-    const agg = new Map<
-      string,
-      { name: string; qty: number; revenue: number; menu_item_id: string | null }
-    >();
-    (items ?? []).forEach((it: any) => {
-      const key = it.menu_item_id ?? `name:${it.name_snapshot}`;
-      const cur = agg.get(key) ?? {
-        name: it.name_snapshot,
-        qty: 0,
-        revenue: 0,
-        menu_item_id: it.menu_item_id,
-      };
-      cur.qty += Number(it.quantity || 0);
-      cur.revenue += Number(it.price_snapshot || 0) * Number(it.quantity || 0);
-      agg.set(key, cur);
-    });
-    const ids = Array.from(agg.values())
-      .map((v) => v.menu_item_id)
-      .filter(Boolean) as string[];
-    let imgs = new Map<string, string | null>();
-    if (ids.length) {
-      const { data: mi } = await supabase
-        .from("menu_items")
-        .select("id, image_url")
-        .in("id", ids);
-      imgs = new Map((mi ?? []).map((m: any) => [m.id, m.image_url]));
-    }
-    const arr: TopItem[] = Array.from(agg.values()).map((v) => ({
-      ...v,
-      image_url: v.menu_item_id ? imgs.get(v.menu_item_id) ?? null : null,
-    }));
-    arr.sort((a, b) => b.qty - a.qty);
-    topItems = arr.slice(0, 10);
-    bottomItems = arr.slice().sort((a, b) => a.qty - b.qty).slice(0, 5);
-  }
-
-  return { kpis, daily, topItems, bottomItems, hourly };
-}
-
-/* ---------------------------------------------------------------------- */
-/* Small shared visual helpers                                            */
-/* ---------------------------------------------------------------------- */
-
-/** requestAnimationFrame-driven count-up between the previous and next value. */
-function useCountUp(target: number, duration = 750) {
-  const [value, setValue] = useState(target);
-  const prevRef = useRef(target);
-  const first = useRef(true);
-
-  useEffect(() => {
-    if (first.current) {
-      first.current = false;
-      prevRef.current = target;
-      setValue(target);
-      return;
-    }
-    const start = prevRef.current;
-    const startTime = performance.now();
-    let raf = 0;
-    const tick = (now: number) => {
-      const t = Math.min(1, (now - startTime) / duration);
-      const eased = 1 - Math.pow(1 - t, 3);
-      setValue(start + (target - start) * eased);
-      if (t < 1) {
-        raf = requestAnimationFrame(tick);
-      } else {
-        prevRef.current = target;
-      }
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [target, duration]);
-
-  return value;
-}
-
-/** Wraps children with a subtle mouse-follow 3D tilt + spring reset. */
-function Tilt3D({
-  children,
-  className,
-}: {
-  children: React.ReactNode;
-  className?: string;
-}) {
-  const ref = useRef<HTMLDivElement>(null);
-  const rotateX = useMotionValue(0);
-  const rotateY = useMotionValue(0);
-  const springX = useSpring(rotateX, { stiffness: 260, damping: 22 });
-  const springY = useSpring(rotateY, { stiffness: 260, damping: 22 });
-
-  const handleMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    const el = ref.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    const px = (e.clientX - rect.left) / rect.width - 0.5;
-    const py = (e.clientY - rect.top) / rect.height - 0.5;
-    rotateY.set(px * 9);
-    rotateX.set(-py * 9);
-  };
-  const handleLeave = () => {
-    rotateX.set(0);
-    rotateY.set(0);
-  };
-
-  return (
-    <motion.div
-      ref={ref}
-      onMouseMove={handleMove}
-      onMouseLeave={handleLeave}
-      style={{ rotateX: springX, rotateY: springY, transformPerspective: 900 }}
-      className={className}
-    >
-      {children}
-    </motion.div>
-  );
-}
-
-function AnimatedBackground() {
-  return null;
-}
-
-function SectionHeader({
-  icon: Icon,
-  title,
-  subtitle,
-  action,
-}: {
-  icon: React.ComponentType<{ className?: string }>;
-  title: string;
-  subtitle?: string;
-  action?: React.ReactNode;
-}) {
-  return (
-    <div className="flex items-center justify-between gap-3 flex-wrap mb-5">
-      <div className="flex items-center gap-3">
-        <div className="w-9 h-9 rounded-lg bg-secondary text-primary flex items-center justify-center shrink-0">
-          <Icon className="w-4 h-4" />
-        </div>
-        <div>
-          <h3 className="text-lg font-semibold text-foreground leading-tight">
-            {title}
-          </h3>
-          {subtitle && (
-            <p className="text-xs text-muted-foreground mt-0.5">{subtitle}</p>
-          )}
-        </div>
-      </div>
-      {action}
-    </div>
-  );
-}
-
-/** Chart tooltip shared by all charts on the page. */
-function ChartTooltip({
-  active,
-  payload,
-  label,
-  labelPrefix,
-  labelFormatter,
-  valueLabel,
-  valueFormatter,
-}: {
-  active?: boolean;
-  payload?: Array<{ value: number }>;
-  label?: string | number;
-  labelPrefix?: string;
-  labelFormatter?: (label: string | number | undefined) => string;
-  valueLabel: string;
-  valueFormatter: (n: number) => string;
-}) {
-  if (!active || !payload || !payload.length) return null;
-  const value = payload[0].value;
-  return (
-    <div className="bg-card rounded-lg px-3 py-2 border border-border text-xs min-w-[120px] shadow-sm">
-      <div className="text-muted-foreground mb-1">
-        {labelFormatter ? labelFormatter(label) : `${labelPrefix ?? ""}${label}`}
-      </div>
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-muted-foreground">{valueLabel}</span>
-        <span className="font-bold text-foreground tabular-nums">
-          {valueFormatter(value)}
-        </span>
-      </div>
-    </div>
-  );
-}
-
-const recessiveGridProps = {
-  strokeDasharray: "4 8",
-  stroke: "var(--border)",
-  strokeOpacity: 0.6,
-  vertical: false,
-};
-
-const axisTickProps = {
-  fontSize: 11,
-  fill: "var(--muted-foreground)",
-};
-
-function KpiCard({
-  title,
-  value,
-  prev,
-  format,
-  Icon,
-  trend,
-  index,
-}: {
-  title: string;
-  value: number;
-  prev: number;
-  format: (n: number) => string;
-  Icon: React.ComponentType<{ className?: string }>;
-  trend?: number[];
-  index: number;
-}) {
-  const diff = pctChange(value, prev);
-  const positive = diff >= 0;
-  const animated = useCountUp(value);
-  const sparkData = (trend ?? []).map((v, i) => ({ i, v }));
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3, delay: index * 0.05 }}
-    >
-      <div className="bg-card border border-border rounded-xl p-5">
-        <div className="flex items-start justify-between mb-3">
-          <div className="w-9 h-9 rounded-lg bg-secondary text-primary flex items-center justify-center">
-            <Icon className="w-4 h-4" />
-          </div>
-          <span className="text-xs font-medium text-muted-foreground">
-            {title}
-          </span>
-        </div>
-        <div className="text-2xl sm:text-3xl font-bold text-foreground mb-2 tabular-nums">
-          {format(Math.round(animated))}
-        </div>
-        <div className="relative flex items-center justify-between gap-2">
-          <div className="flex items-center gap-1.5 text-xs">
-            <span
-              className={`inline-flex items-center gap-0.5 font-semibold px-1.5 py-0.5 rounded-md ${
-                positive
-                  ? "text-emerald-600 bg-emerald-500/10"
-                  : "text-red-500 bg-red-500/10"
-              }`}
-            >
-              {positive ? (
-                <ArrowUp className="w-3 h-3" />
-              ) : (
-                <ArrowDown className="w-3 h-3" />
-              )}
-              {Math.abs(diff)}%
-            </span>
-            <span className="text-muted-foreground">vs الفترة السابقة</span>
-          </div>
-          {sparkData.length > 1 && (
-            <div className="w-16 h-8 opacity-80" dir="ltr">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={sparkData}>
-                  <defs>
-                    <linearGradient id={`sparkGrad-${index}`} x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="var(--primary)" stopOpacity={0.5} />
-                      <stop offset="100%" stopColor="var(--primary)" stopOpacity={0.02} />
-                    </linearGradient>
-                  </defs>
-                  <Area
-                    type="monotone"
-                    dataKey="v"
-                    stroke="var(--primary)"
-                    strokeWidth={1.5}
-                    fill={`url(#sparkGrad-${index})`}
-                    isAnimationActive
-                    animationDuration={900}
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-        </div>
-      </div>
-    </motion.div>
-  );
-}
-
-type RangePreset = "week" | "month" | "year" | "custom";
-
-function fmtKey(d: Date) {
+function fmtDateKey(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
-    d.getDate()
+    d.getDate(),
   ).padStart(2, "0")}`;
 }
 
-function RevenueRangeCard({
-  restaurantId,
-  restaurantCreatedAt,
-}: {
-  restaurantId: string;
-  restaurantCreatedAt: string | null;
-}) {
-  const [preset, setPreset] = useState<RangePreset>("week");
-  const [customDate, setCustomDate] = useState<Date | undefined>(undefined);
-  const [rows, setRows] = useState<{ date: string; total: number }[]>([]);
-  const [total, setTotal] = useState(0);
-  const [count, setCount] = useState(0);
-  const [busy, setBusy] = useState(false);
+async function loadFullAnalyticsReport(
+  restaurantId: string,
+  preset: DateRangePreset,
+  customStart: Date | undefined,
+  dailyDateStr: string,
+): Promise<FullAnalyticsData> {
+  const now = new Date();
+  const todayStart = startOfDay(now);
+  const todayEnd = endOfDay(now);
 
-  const { startDate, endDate, label } = useMemo(() => {
-    const now = new Date();
-    const today = startOfDay(now);
-    const end = new Date(today);
-    end.setDate(end.getDate() + 1);
-    let start = new Date(today);
-    let lbl = "";
-    if (preset === "week") {
-      start.setDate(start.getDate() - 6);
-      lbl = "آخر 7 أيام";
-    } else if (preset === "month") {
-      start.setDate(start.getDate() - 29);
-      lbl = "آخر 30 يوم";
-    } else if (preset === "year") {
-      start.setDate(start.getDate() - 364);
-      lbl = "آخر 12 شهر";
-    } else {
-      const minDate = restaurantCreatedAt
-        ? startOfDay(new Date(restaurantCreatedAt))
-        : today;
-      start = customDate ? startOfDay(customDate) : minDate;
-      if (start.getTime() < minDate.getTime()) start = minDate;
-      lbl = `من ${fmtKey(start)} إلى اليوم`;
-    }
-    return { startDate: start, endDate: end, label: lbl };
-  }, [preset, customDate, restaurantCreatedAt]);
+  let startDate: Date;
+  let endDate: Date;
+  let dateRangeLabel = "";
 
-  useEffect(() => {
-    if (!restaurantId) return;
-    let cancelled = false;
-    setBusy(true);
+  if (preset === "today") {
+    startDate = todayStart;
+    endDate = todayEnd;
+    dateRangeLabel = "اليوم";
+  } else if (preset === "yesterday") {
+    const yStart = new Date(todayStart);
+    yStart.setDate(yStart.getDate() - 1);
+    startDate = yStart;
+    endDate = endOfDay(yStart);
+    dateRangeLabel = "أمس";
+  } else if (preset === "week") {
+    const wStart = new Date(todayStart);
+    wStart.setDate(wStart.getDate() - 6);
+    startDate = wStart;
+    endDate = todayEnd;
+    dateRangeLabel = "آخر 7 أيام";
+  } else if (preset === "month") {
+    const mStart = new Date(todayStart);
+    mStart.setDate(mStart.getDate() - 29);
+    startDate = mStart;
+    endDate = todayEnd;
+    dateRangeLabel = "آخر 30 يوم";
+  } else {
+    startDate = customStart ? startOfDay(customStart) : startOfDay(new Date(Date.now() - 30 * 86400000));
+    endDate = todayEnd;
+    dateRangeLabel = `من ${fmtDateKey(startDate)} إلى اليوم`;
+  }
+
+  // Fetch orders from 30 days before start date for historical comparisons
+  const fetchSince = new Date(startDate);
+  fetchSince.setDate(fetchSince.getDate() - 31);
+
+  const [ordersRes, tablesRes, hallsRes, catsRes, menuRes, staffRes] = await Promise.all([
     supabase
       .from("orders")
-      .select("id, total, created_at")
+      .select("*")
       .eq("restaurant_id", restaurantId)
-      .eq("status", "paid")
-      .gte("created_at", startDate.toISOString())
-      .lt("created_at", endDate.toISOString())
-      .limit(10000)
-      .then(({ data, error }: { data: any; error: any }) => {
-        if (cancelled) return;
-        if (error) {
-          toast.error("فشل تحميل الإيرادات");
-          setRows([]);
-          setTotal(0);
-          setCount(0);
-          setBusy(false);
-          return;
-        }
-        const map = new Map<string, number>();
-        const days =
-          Math.ceil((endDate.getTime() - startDate.getTime()) / 86400000) || 1;
-        for (let i = 0; i < days; i++) {
-          const d = new Date(startDate);
-          d.setDate(d.getDate() + i);
-          map.set(fmtKey(d), 0);
-        }
-        let sum = 0;
-        (data ?? []).forEach((o: any) => {
-          const d = new Date(o.created_at as string);
-          if (isNaN(d.getTime())) return;
-          const k = fmtKey(d);
-          map.set(k, (map.get(k) ?? 0) + Number(o.total || 0));
-          sum += Number(o.total || 0);
+      .gte("created_at", fetchSince.toISOString())
+      .limit(10000),
+    supabase
+      .from("tables")
+      .select("id, table_number, hall_id")
+      .eq("restaurant_id", restaurantId),
+    supabase
+      .from("halls")
+      .select("id, name")
+      .eq("restaurant_id", restaurantId),
+    supabase
+      .from("categories")
+      .select("id, name")
+      .eq("restaurant_id", restaurantId),
+    supabase
+      .from("menu_items")
+      .select("id, name, price, category_id, image_url")
+      .eq("restaurant_id", restaurantId),
+    supabase
+      .from("staff")
+      .select("id, name, role")
+      .eq("restaurant_id", restaurantId),
+  ]);
+
+  const rawOrders = (ordersRes.data ?? []) as any[];
+  const rawTables = (tablesRes.data ?? []) as any[];
+  const rawHalls = (hallsRes.data ?? []) as any[];
+  const rawCats = (catsRes.data ?? []) as any[];
+  const rawMenu = (menuRes.data ?? []) as any[];
+  const rawStaff = (staffRes.data ?? []) as any[];
+
+  // Lookup maps
+  const hallMap = new Map<string, string>(rawHalls.map((h) => [h.id, h.name]));
+  const catMap = new Map<string, string>(rawCats.map((c) => [c.id, c.name]));
+  const itemCatMap = new Map<string, string>();
+  const itemImgMap = new Map<string, string | null>();
+  const itemPriceMap = new Map<string, number>();
+
+  rawMenu.forEach((m) => {
+    if (m.category_id) itemCatMap.set(m.id, m.category_id);
+    itemImgMap.set(m.id, m.image_url ?? null);
+    itemPriceMap.set(m.id, Number(m.price || 0));
+  });
+
+  const staffMap = new Map<string, { name: string; role: string }>();
+  rawStaff.forEach((s) => {
+    staffMap.set(s.id, { name: s.name, role: s.role ?? "كاشير" });
+  });
+
+  const tableInfoMap = new Map<
+    string,
+    { tableNumber: number; hallName: string }
+  >();
+  rawTables.forEach((t) => {
+    tableInfoMap.set(t.id, {
+      tableNumber: Number(t.table_number),
+      hallName: t.hall_id ? hallMap.get(t.hall_id) ?? "رئيسية" : "رئيسية",
+    });
+  });
+
+  // Normalized order objects
+  const allOrders: OrderRecord[] = rawOrders.map((o) => ({
+    id: o.id,
+    restaurant_id: o.restaurant_id,
+    total: Number(o.total || 0),
+    status: o.status ?? "new",
+    created_at: o.created_at,
+    order_type: o.order_type ?? "dine_in",
+    table_id: o.table_id ?? null,
+    daily_number: o.daily_number ?? null,
+    customer_name: o.customer_name ?? null,
+    customer_phone: o.customer_phone ?? null,
+    customer_address: o.customer_address ?? null,
+    cashier_staff_id: o.cashier_staff_id ?? null,
+    payment_mode: o.payment_mode ?? "full",
+    paid_amount: o.paid_amount ? Number(o.paid_amount) : null,
+    debt_amount: o.debt_amount ? Number(o.debt_amount) : null,
+    discount_amount: o.discount_amount ? Number(o.discount_amount) : null,
+    cancel_reason: o.cancel_reason ?? null,
+    cancelled_at: o.cancelled_at ?? null,
+    cancelled_by: o.cancelled_by ?? null,
+  }));
+
+  // Fetch items for in-range orders in chunks
+  const inRangeOrders = allOrders.filter((o) => {
+    const t = new Date(o.created_at).getTime();
+    return t >= startDate.getTime() && t <= endDate.getTime();
+  });
+
+  const inRangeIds = inRangeOrders.map((o) => o.id);
+  const rawItems: OrderItemRecord[] = [];
+  const CHUNK_SIZE = 30;
+
+  for (let i = 0; i < inRangeIds.length; i += CHUNK_SIZE) {
+    const chunk = inRangeIds.slice(i, i + CHUNK_SIZE);
+    const { data: chunkData } = await supabase
+      .from("order_items")
+      .select("id, order_id, menu_item_id, category_id, name_snapshot, price_snapshot, quantity")
+      .in("order_id", chunk);
+
+    if (chunkData?.length) {
+      chunkData.forEach((it: any) => {
+        rawItems.push({
+          id: it.id,
+          order_id: it.order_id,
+          menu_item_id: it.menu_item_id ?? null,
+          category_id: it.category_id ?? (it.menu_item_id ? itemCatMap.get(it.menu_item_id) : null),
+          name_snapshot: it.name_snapshot,
+          price_snapshot: Number(it.price_snapshot || 0),
+          quantity: Number(it.quantity || 1),
         });
-        setRows(Array.from(map.entries()).map(([date, total]) => ({ date, total })));
-        setTotal(sum);
-        setCount((data ?? []).length);
-        setBusy(false);
       });
-    return () => {
-      cancelled = true;
+    }
+  }
+
+  // Items mapped by order_id
+  const itemsByOrder = new Map<string, OrderItemRecord[]>();
+  rawItems.forEach((it) => {
+    const arr = itemsByOrder.get(it.order_id) ?? [];
+    arr.push(it);
+    itemsByOrder.set(it.order_id, arr);
+  });
+
+  // Attach items to inRangeOrders
+  inRangeOrders.forEach((o) => {
+    o.items = itemsByOrder.get(o.id) ?? [];
+  });
+
+  // 1. KPIs
+  const paidOrders = inRangeOrders.filter((o) => o.status === "paid");
+  const cancelledOrders = inRangeOrders.filter((o) => o.status === "cancelled");
+
+  const totalRevenue = paidOrders.reduce((sum, o) => sum + o.total, 0);
+  const ordersCount = paidOrders.length;
+  const avgOrderValue = ordersCount > 0 ? Math.round(totalRevenue / ordersCount) : 0;
+
+  const cancelledCount = cancelledOrders.length;
+  const cancelledRevenue = cancelledOrders.reduce((sum, o) => sum + o.total, 0);
+  const totalIncoming = ordersCount + cancelledCount;
+  const cancellationRate = totalIncoming > 0 ? Math.round((cancelledCount / totalIncoming) * 100) : 0;
+
+  const dineInRevenue = paidOrders
+    .filter((o) => o.order_type === "dine_in")
+    .reduce((sum, o) => sum + o.total, 0);
+
+  const takeawayRevenue = paidOrders
+    .filter((o) => o.order_type === "takeaway")
+    .reduce((sum, o) => sum + o.total, 0);
+
+  const deliveryRevenue = paidOrders
+    .filter((o) => o.order_type === "delivery")
+    .reduce((sum, o) => sum + o.total, 0);
+
+  const kpis = {
+    totalRevenue,
+    ordersCount,
+    avgOrderValue,
+    cancelledCount,
+    cancelledRevenue,
+    cancellationRate,
+    dineInRevenue,
+    takeawayRevenue,
+    deliveryRevenue,
+  };
+
+  // 2. Daily Trend (30 days)
+  const dailyMap = new Map<string, { total: number; count: number }>();
+  const thirtyDaysAgo = new Date(todayStart);
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 29);
+
+  for (let i = 0; i < 30; i++) {
+    const d = new Date(thirtyDaysAgo);
+    d.setDate(d.getDate() + i);
+    dailyMap.set(fmtDateKey(d), { total: 0, count: 0 });
+  }
+
+  allOrders
+    .filter((o) => o.status === "paid")
+    .forEach((o) => {
+      const d = new Date(o.created_at);
+      const key = fmtDateKey(d);
+      if (dailyMap.has(key)) {
+        const cur = dailyMap.get(key)!;
+        cur.total += o.total;
+        cur.count++;
+      }
+    });
+
+  const dailyTrend = Array.from(dailyMap.entries()).map(([date, val]) => ({
+    date,
+    total: val.total,
+    count: val.count,
+  }));
+
+  // 3. Hourly Trend
+  const hourMap = new Map<number, { count: number; revenue: number }>();
+  for (let h = 0; h < 24; h++) hourMap.set(h, { count: 0, revenue: 0 });
+
+  paidOrders.forEach((o) => {
+    const h = new Date(o.created_at).getHours();
+    const cur = hourMap.get(h)!;
+    cur.count++;
+    cur.revenue += o.total;
+  });
+
+  const hourlyTrend = Array.from(hourMap.entries()).map(([hour, val]) => ({
+    hour,
+    count: val.count,
+    revenue: val.revenue,
+  }));
+
+  // 4. Tables Performance & Share
+  const tableAgg = new Map<
+    string,
+    { totalRevenue: number; ordersCount: number }
+  >();
+
+  paidOrders
+    .filter((o) => o.order_type === "dine_in" && o.table_id)
+    .forEach((o) => {
+      const tid = o.table_id!;
+      const cur = tableAgg.get(tid) ?? { totalRevenue: 0, ordersCount: 0 };
+      cur.totalRevenue += o.total;
+      cur.ordersCount++;
+      tableAgg.set(tid, cur);
+    });
+
+  const tables: TablePerformance[] = Array.from(tableInfoMap.entries())
+    .map(([tid, info]) => {
+      const agg = tableAgg.get(tid) ?? { totalRevenue: 0, ordersCount: 0 };
+      const percentage =
+        dineInRevenue > 0
+          ? Math.round((agg.totalRevenue / dineInRevenue) * 1000) / 10
+          : 0;
+      return {
+        tableId: tid,
+        tableNumber: info.tableNumber,
+        hallName: info.hallName,
+        totalRevenue: agg.totalRevenue,
+        ordersCount: agg.ordersCount,
+        avgOrderValue:
+          agg.ordersCount > 0 ? Math.round(agg.totalRevenue / agg.ordersCount) : 0,
+        percentageOfTableSales: percentage,
+        rank: 0,
+      };
+    })
+    .sort((a, b) => b.totalRevenue - a.totalRevenue)
+    .map((t, i) => ({ ...t, rank: i + 1 }));
+
+  // 5. Categories & Dishes Performance
+  const catSalesAgg = new Map<
+    string,
+    { totalRevenue: number; quantitySold: number; items: Map<string, number> }
+  >();
+
+  const itemAgg = new Map<
+    string,
+    {
+      name: string;
+      qty: number;
+      revenue: number;
+      menuItemId: string | null;
+      catId: string | null;
+    }
+  >();
+
+  rawItems.forEach((it) => {
+    const parentOrder = inRangeOrders.find((o) => o.id === it.order_id);
+    if (!parentOrder || parentOrder.status !== "paid") return;
+
+    const catId = it.category_id || "uncategorized";
+    const lineRev = it.price_snapshot * it.quantity;
+
+    // Cat agg
+    const cEntry = catSalesAgg.get(catId) ?? {
+      totalRevenue: 0,
+      quantitySold: 0,
+      items: new Map<string, number>(),
     };
-  }, [restaurantId, startDate, endDate]);
+    cEntry.totalRevenue += lineRev;
+    cEntry.quantitySold += it.quantity;
+    const curItemQty = cEntry.items.get(it.name_snapshot) ?? 0;
+    cEntry.items.set(it.name_snapshot, curItemQty + it.quantity);
+    catSalesAgg.set(catId, cEntry);
 
-  const chart = rows.map((r) => ({ label: r.date.slice(5), total: r.total }));
-  const minDate = restaurantCreatedAt
-    ? startOfDay(new Date(restaurantCreatedAt))
-    : new Date(2000, 0, 1);
-  const maxDate = startOfDay(new Date());
+    // Item agg
+    const iKey = it.menu_item_id ?? it.name_snapshot;
+    const iEntry = itemAgg.get(iKey) ?? {
+      name: it.name_snapshot,
+      qty: 0,
+      revenue: 0,
+      menuItemId: it.menu_item_id,
+      catId: it.category_id ?? null,
+    };
+    iEntry.qty += it.quantity;
+    iEntry.revenue += lineRev;
+    itemAgg.set(iKey, iEntry);
+  });
 
-  const animatedTotal = useCountUp(total);
-  const animatedCount = useCountUp(count);
-  const animatedAvg = useCountUp(count ? Math.round(total / count) : 0);
-
-  return (
-        <motion.div
-          initial={{ opacity: 0, y: 18 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-60px" }}
-          transition={{ duration: 0.55, ease: [0.2, 0.7, 0.2, 1] }}
-          data-annotate="analytics-chart"
-          className="rounded-xl bg-card border border-border p-5 md:p-6"
-        >
-      <SectionHeader
-        icon={Wallet}
-        title="الإيرادات حسب الفترة"
-        action={
-          <div className="flex items-center gap-2 flex-wrap">
-            <Select value={preset} onValueChange={(v) => setPreset(v as RangePreset)}>
-              <SelectTrigger className="w-36 h-9">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="week">أسبوع</SelectItem>
-                <SelectItem value="month">شهر</SelectItem>
-                <SelectItem value="year">سنة</SelectItem>
-                <SelectItem value="custom">مخصص</SelectItem>
-              </SelectContent>
-            </Select>
-            {preset === "custom" && (
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className={cn(
-                      "h-9 gap-2",
-                      !customDate && "text-muted-foreground"
-                    )}
-                  >
-                    <CalendarIcon className="w-4 h-4" />
-                    {customDate ? fmtKey(customDate) : "اختر تاريخ البداية"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="end">
-                  <Calendar
-                    mode="single"
-                    selected={customDate}
-                    onSelect={setCustomDate}
-                    disabled={(d) => d < minDate || d > maxDate}
-                    initialFocus
-                    className={cn("p-3 pointer-events-auto")}
-                  />
-                </PopoverContent>
-              </Popover>
-            )}
-          </div>
+  const categories: CategoryPerformance[] = Array.from(catSalesAgg.entries())
+    .map(([catId, data]) => {
+      const catName = catMap.get(catId) ?? (catId === "uncategorized" ? "أصناف أخرى" : "تصنيف عام");
+      let topItemName: string | null = null;
+      let topQty = 0;
+      data.items.forEach((qty, name) => {
+        if (qty > topQty) {
+          topQty = qty;
+          topItemName = name;
         }
-      />
+      });
+      const percentage =
+        totalRevenue > 0
+          ? Math.round((data.totalRevenue / totalRevenue) * 1000) / 10
+          : 0;
 
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-5">
-        <div className="rounded-xl border border-border/70 bg-muted/40 p-3 transition-colors hover:bg-muted/60">
-          <div className="text-xs text-muted-foreground mb-1">{label}</div>
-          <div className="text-xl font-bold text-foreground tabular-nums">
-            {formatDZD(Math.round(animatedTotal))}
-          </div>
-        </div>
-        <div className="rounded-xl border border-border/70 bg-muted/40 p-3 transition-colors hover:bg-muted/60">
-          <div className="text-xs text-muted-foreground mb-1">عدد الطلبات</div>
-          <div className="text-xl font-bold text-foreground tabular-nums">
-            {Math.round(animatedCount)}
-          </div>
-        </div>
-        <div className="rounded-xl border border-border/70 bg-muted/40 p-3 transition-colors hover:bg-muted/60">
-          <div className="text-xs text-muted-foreground mb-1">متوسط الطلب</div>
-          <div className="text-xl font-bold text-foreground tabular-nums">
-            {formatDZD(Math.round(animatedAvg))}
-          </div>
-        </div>
-      </div>
+      return {
+        categoryId: catId,
+        categoryName: catName,
+        totalRevenue: data.totalRevenue,
+        quantitySold: data.quantitySold,
+        percentageOfFoodSales: percentage,
+        topItemName,
+        itemsCount: data.items.size,
+      };
+    })
+    .sort((a, b) => b.totalRevenue - a.totalRevenue);
 
-      <div className="h-64" dir="ltr">
-        {busy ? (
-          <div className="h-full rounded-xl bg-muted animate-pulse" />
-        ) : chart.length === 0 ? (
-          <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
-            لا توجد بيانات في هذه الفترة
-          </div>
-        ) : (
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chart}>
-              <defs>
-                <linearGradient id="barGradRevenue" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="var(--primary)" stopOpacity={0.95} />
-                  <stop offset="100%" stopColor="var(--primary)" stopOpacity={0.35} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid {...recessiveGridProps} />
-              <XAxis
-                dataKey="label"
-                tick={axisTickProps}
-                axisLine={false}
-                tickLine={false}
-              />
-              <YAxis tick={axisTickProps} axisLine={false} tickLine={false} width={40} />
-              <Tooltip
-                cursor={{ fill: "var(--muted)", opacity: 0.4 }}
-                content={
-                  <ChartTooltip
-                    labelPrefix="التاريخ: "
-                    valueLabel="المبيعات"
-                    valueFormatter={formatDZD}
-                  />
-                }
-              />
-              <Bar
-                dataKey="total"
-                fill="url(#barGradRevenue)"
-                radius={[4, 4, 0, 0]}
-                isAnimationActive
-                animationDuration={900}
-                animationEasing="ease-out"
-              />
-            </BarChart>
-          </ResponsiveContainer>
-        )}
-      </div>
-    </motion.div>
-  );
+  const allItemsSorted: TopItemPerformance[] = Array.from(itemAgg.values())
+    .map((item) => ({
+      menuItemId: item.menuItemId,
+      name: item.name,
+      imageUrl: item.menuItemId ? itemImgMap.get(item.menuItemId) ?? null : null,
+      categoryName: item.catId ? catMap.get(item.catId) ?? "عام" : "عام",
+      quantity: item.qty,
+      revenue: item.revenue,
+      percentageOfSales:
+        totalRevenue > 0
+          ? Math.round((item.revenue / totalRevenue) * 1000) / 10
+          : 0,
+    }))
+    .sort((a, b) => b.quantity - a.quantity);
+
+  const topItems = allItemsSorted.slice(0, 10);
+  const bottomItems = allItemsSorted
+    .slice()
+    .sort((a, b) => a.quantity - b.quantity)
+    .slice(0, 5);
+
+  // 6. Cashier Performance
+  const cashierAgg = new Map<
+    string,
+    {
+      totalRevenue: number;
+      ordersCount: number;
+      fullCount: number;
+      debtCount: number;
+    }
+  >();
+
+  paidOrders.forEach((o) => {
+    const staffId = o.cashier_staff_id || "general";
+    const cur = cashierAgg.get(staffId) ?? {
+      totalRevenue: 0,
+      ordersCount: 0,
+      fullCount: 0,
+      debtCount: 0,
+    };
+    cur.totalRevenue += o.total;
+    cur.ordersCount++;
+    if (o.payment_mode === "debt" || o.payment_mode === "partial") {
+      cur.debtCount++;
+    } else {
+      cur.fullCount++;
+    }
+    cashierAgg.set(staffId, cur);
+  });
+
+  const cashiers: CashierPerformance[] = Array.from(cashierAgg.entries())
+    .map(([staffId, data]) => {
+      const staffInfo = staffMap.get(staffId);
+      const name = staffInfo ? staffInfo.name : "كاشير عام / غير محدد";
+      const role = staffInfo ? staffInfo.role : "صندوق";
+      const pct =
+        totalRevenue > 0
+          ? Math.round((data.totalRevenue / totalRevenue) * 1000) / 10
+          : 0;
+
+      return {
+        staffId,
+        name,
+        role,
+        totalRevenue: data.totalRevenue,
+        ordersCount: data.ordersCount,
+        avgOrderValue:
+          data.ordersCount > 0 ? Math.round(data.totalRevenue / data.ordersCount) : 0,
+        percentageOfTotalSales: pct,
+        fullPaymentsCount: data.fullCount,
+        debtPaymentsCount: data.debtCount,
+      };
+    })
+    .sort((a, b) => b.totalRevenue - a.totalRevenue);
+
+  // 7. Cancellations Analysis
+  const reasonsMap = new Map<string, { count: number; totalAmount: number }>();
+  cancelledOrders.forEach((o) => {
+    const r = o.cancel_reason?.trim() || "غير محدد";
+    const cur = reasonsMap.get(r) ?? { count: 0, totalAmount: 0 };
+    cur.count++;
+    cur.totalAmount += o.total;
+    reasonsMap.set(r, cur);
+  });
+
+  let mostCommonReason: string | null = null;
+  let highestCount = 0;
+
+  const reasons: CancellationReasonStat[] = Array.from(reasonsMap.entries())
+    .map(([reason, val]) => {
+      if (val.count > highestCount) {
+        highestCount = val.count;
+        mostCommonReason = reason;
+      }
+      const pct =
+        cancelledCount > 0
+          ? Math.round((val.count / cancelledCount) * 100)
+          : 0;
+      return {
+        reason,
+        count: val.count,
+        totalAmount: val.totalAmount,
+        percentage: pct,
+      };
+    })
+    .sort((a, b) => b.count - a.count);
+
+  const cancellations = {
+    reasons,
+    cancelledOrders,
+    totalLost: cancelledRevenue,
+    count: cancelledCount,
+    mostCommonReason,
+  };
+
+  // 8. Daily Detail Summary for selected calendar day
+  const targetDayStart = `${dailyDateStr}T00:00:00`;
+  const targetDayEnd = `${dailyDateStr}T23:59:59`;
+
+  const dayOrders = allOrders.filter((o) => {
+    return o.created_at >= targetDayStart && o.created_at <= targetDayEnd;
+  });
+
+  // Attach items if present
+  dayOrders.forEach((o) => {
+    if (!o.items) o.items = itemsByOrder.get(o.id) ?? [];
+  });
+
+  const dayPaid = dayOrders.filter((o) => o.status === "paid");
+  const dayCancelled = dayOrders.filter((o) => o.status === "cancelled");
+  const dayRevenue = dayPaid.reduce((s, o) => s + o.total, 0);
+  const dayLost = dayCancelled.reduce((s, o) => s + o.total, 0);
+
+  const dayDineIn = dayPaid.filter((o) => o.order_type === "dine_in");
+  const dayTakeaway = dayPaid.filter((o) => o.order_type === "takeaway");
+  const dayDelivery = dayPaid.filter((o) => o.order_type === "delivery");
+
+  const dayDineInRev = dayDineIn.reduce((s, o) => s + o.total, 0);
+  const dayTakeawayRev = dayTakeaway.reduce((s, o) => s + o.total, 0);
+  const dayDeliveryRev = dayDelivery.reduce((s, o) => s + o.total, 0);
+
+  const dayHourlyMap = new Map<number, { revenue: number; count: number }>();
+  for (let h = 0; h < 24; h++) dayHourlyMap.set(h, { revenue: 0, count: 0 });
+
+  dayPaid.forEach((o) => {
+    const h = new Date(o.created_at).getHours();
+    const cur = dayHourlyMap.get(h)!;
+    cur.revenue += o.total;
+    cur.count++;
+  });
+
+  const dayDisplayDate = new Date(targetDayStart).toLocaleDateString("ar-DZ", {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+
+  const dailyDetail: DailyDetailSummary = {
+    dateKey: dailyDateStr,
+    displayDate: dayDisplayDate,
+    totalRevenue: dayRevenue,
+    completedCount: dayPaid.length,
+    cancelledCount: dayCancelled.length,
+    cancelledTotal: dayLost,
+    avgTicket: dayPaid.length > 0 ? Math.round(dayRevenue / dayPaid.length) : 0,
+    byType: {
+      dine_in: {
+        count: dayDineIn.length,
+        revenue: dayDineInRev,
+        percentage:
+          dayRevenue > 0 ? Math.round((dayDineInRev / dayRevenue) * 100) : 0,
+      },
+      takeaway: {
+        count: dayTakeaway.length,
+        revenue: dayTakeawayRev,
+        percentage:
+          dayRevenue > 0 ? Math.round((dayTakeawayRev / dayRevenue) * 100) : 0,
+      },
+      delivery: {
+        count: dayDelivery.length,
+        revenue: dayDeliveryRev,
+        percentage:
+          dayRevenue > 0 ? Math.round((dayDeliveryRev / dayRevenue) * 100) : 0,
+      },
+    },
+    hourly: Array.from(dayHourlyMap.entries()).map(([hour, v]) => ({
+      hour,
+      revenue: v.revenue,
+      count: v.count,
+    })),
+    orders: dayOrders,
+  };
+
+  return {
+    dateRangeLabel,
+    kpis,
+    dailyTrend,
+    hourlyTrend,
+    tables,
+    categories,
+    topItems,
+    bottomItems,
+    cashiers,
+    cancellations,
+    dailyDetail,
+  };
 }
+
+/* ---------------------------------------------------------------------- */
+/* Main Analytics Component                                               */
+/* ---------------------------------------------------------------------- */
+
+type AnalyticsTab =
+  | "overview"
+  | "daily"
+  | "tables"
+  | "categories"
+  | "cashier"
+  | "issues";
 
 export default function AnalyticsPage() {
   const { restaurantId, loading: rLoading } = useRestaurantId();
-  const [data, setData] = useState<AnalyticsData | null>(null);
+  const [data, setData] = useState<FullAnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [restaurantName, setRestaurantName] = useState<string>("");
-  const [restaurantCreatedAt, setRestaurantCreatedAt] = useState<string | null>(null);
+
+  const [activeTab, setActiveTab] = useState<AnalyticsTab>(() => {
+    if (typeof window !== "undefined") {
+      const v = new URLSearchParams(window.location.search).get("view");
+      if (
+        v &&
+        [
+          "overview",
+          "daily",
+          "tables",
+          "categories",
+          "cashier",
+          "issues",
+        ].includes(v)
+      ) {
+        return v as AnalyticsTab;
+      }
+    }
+    return "overview";
+  });
+
+  useEffect(() => {
+    const handlePop = () => {
+      const v = new URLSearchParams(window.location.search).get("view");
+      if (
+        v &&
+        [
+          "overview",
+          "daily",
+          "tables",
+          "categories",
+          "cashier",
+          "issues",
+        ].includes(v)
+      ) {
+        setActiveTab(v as AnalyticsTab);
+      }
+    };
+    window.addEventListener("popstate", handlePop);
+    return () => window.removeEventListener("popstate", handlePop);
+  }, []);
+
+  const [preset, setPreset] = useState<DateRangePreset>("month");
+  const [customStart, setCustomStart] = useState<Date | undefined>(undefined);
+  const [dailyDate, setDailyDate] = useState<string>(() =>
+    new Date().toISOString().slice(0, 10),
+  );
 
   useEffect(() => {
     if (!restaurantId) return;
     supabase
       .from("restaurants")
-      .select("name, created_at")
+      .select("name")
       .eq("id", restaurantId)
       .maybeSingle()
-      .then(({ data }: { data: any }) => {
-        setRestaurantName(data?.name ?? "");
-        setRestaurantCreatedAt((data as { created_at?: string } | null)?.created_at ?? null);
-      });
+      .then(({ data }: { data: any }) => setRestaurantName(data?.name ?? ""));
   }, [restaurantId]);
 
-  useEffect(() => {
-    if (!restaurantId) {
-      setLoading(false);
-      return;
-    }
+  const refreshData = () => {
+    if (!restaurantId) return;
     setLoading(true);
-    loadAnalytics(restaurantId)
+    loadFullAnalyticsReport(restaurantId, preset, customStart, dailyDate)
       .then((d) => setData(d))
       .catch((e) => {
-        console.error("[analytics] load error", e);
-        toast.error("فشل تحميل التحليلات");
-        setData({
-          kpis: {
-            ordersToday: 0,
-            salesToday: 0,
-            avgOrderWeek: 0,
-            salesMonth: 0,
-            ordersTodayPrev: 0,
-            salesTodayPrev: 0,
-            avgOrderWeekPrev: 0,
-            salesMonthPrev: 0,
-          },
-          daily: [],
-          topItems: [],
-          bottomItems: [],
-          hourly: [],
-        });
+        console.error("[analytics] error loading reports:", e);
+        toast.error("فشل تحميل بيانات التقارير");
       })
       .finally(() => setLoading(false));
-  }, [restaurantId]);
+  };
 
-  if (rLoading || loading) {
-    return (
-      <div className="space-y-6">
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="h-28 rounded-2xl bg-muted animate-pulse" />
-          ))}
-        </div>
-        <div className="h-72 rounded-2xl bg-muted animate-pulse" />
-        <div className="h-72 rounded-2xl bg-muted animate-pulse" />
-      </div>
-    );
-  }
-
-  if (!data) return null;
-
-  const hasAnyData =
-    data.kpis.salesMonth > 0 ||
-    data.kpis.salesToday > 0 ||
-    data.kpis.ordersToday > 0 ||
-    data.daily.some((d) => d.total > 0);
-
-  if (!hasAnyData) {
-    return (
-      <div className="relative rounded-2xl border bg-background p-12 text-center overflow-hidden">
-        <AnimatedBackground />
-        <div className="relative">
-          <TrendingUp className="w-12 h-12 mx-auto text-muted-foreground mb-3" />
-          <p className="text-muted-foreground">لم تبدأ المبيعات بعد</p>
-        </div>
-      </div>
-    );
-  }
-
-  const dailyChart = data.daily.map((d) => ({
-    label: d.date.slice(5),
-    total: d.total,
-  }));
-
-  // Shared decorative trend used across KPI sparklines (last 7 of the 30-day series).
-  const sparkTrend = data.daily.slice(-7).map((d) => d.total);
-
-  const maxTopQty = data.topItems[0]?.qty ?? 0;
+  useEffect(() => {
+    refreshData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [restaurantId, preset, customStart, dailyDate]);
 
   const handleExport = (kind: "pdf" | "excel") => {
+    if (!data) return;
     const payload = {
       restaurantName,
       kpis: {
-        ordersToday: data.kpis.ordersToday,
-        salesToday: data.kpis.salesToday,
-        avgOrderWeek: data.kpis.avgOrderWeek,
-        salesMonth: data.kpis.salesMonth,
+        ordersToday: data.kpis.ordersCount,
+        salesToday: data.kpis.totalRevenue,
+        avgOrderWeek: data.kpis.avgOrderValue,
+        salesMonth: data.kpis.totalRevenue,
+        cancelledCount: data.kpis.cancelledCount,
+        cancelledRevenue: data.kpis.cancelledRevenue,
       },
-      daily: data.daily,
-      topItems: data.topItems.map((i) => ({ name: i.name, qty: i.qty, revenue: i.revenue })),
-      bottomItems: data.bottomItems.map((i) => ({ name: i.name, qty: i.qty, revenue: i.revenue })),
+      daily: data.dailyTrend.map((d) => ({ date: d.date, total: d.total })),
+      topItems: data.topItems.map((i) => ({
+        name: i.name,
+        qty: i.quantity,
+        revenue: i.revenue,
+      })),
+      bottomItems: data.bottomItems.map((i) => ({
+        name: i.name,
+        qty: i.quantity,
+        revenue: i.revenue,
+      })),
+      tables: data.tables.map((t) => ({
+        tableNumber: t.tableNumber,
+        hallName: t.hallName,
+        totalRevenue: t.totalRevenue,
+        ordersCount: t.ordersCount,
+        percentage: t.percentageOfTableSales,
+      })),
+      categories: data.categories.map((c) => ({
+        categoryName: c.categoryName,
+        totalRevenue: c.totalRevenue,
+        quantitySold: c.quantitySold,
+        percentage: c.percentageOfFoodSales,
+      })),
+      cashiers: data.cashiers.map((c) => ({
+        name: c.name,
+        totalRevenue: c.totalRevenue,
+        ordersCount: c.ordersCount,
+        percentage: c.percentageOfTotalSales,
+      })),
+      cancellations: data.cancellations.cancelledOrders.map((o) => ({
+        orderNum: o.daily_number ? `#${o.daily_number}` : `#${o.id.slice(-5)}`,
+        reason: o.cancel_reason || "غير محدد",
+        amount: o.total,
+        time: new Date(o.cancelled_at || o.created_at).toLocaleDateString("ar"),
+      })),
     };
+
     try {
       if (kind === "pdf") exportAnalyticsPDF(payload);
       else exportAnalyticsExcel(payload);
@@ -840,285 +824,471 @@ export default function AnalyticsPage() {
     }
   };
 
-  return (
-    <div className="relative">
-      <AnimatedBackground />
-      <div className="relative space-y-6">
-        <motion.div
-          initial={{ opacity: 0, y: -8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4 }}
-          className="flex items-center justify-end gap-2 flex-wrap"
-        >
-          <div data-annotate="analytics-export" className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => handleExport("excel")} className="gap-2">
-              <FileSpreadsheet className="w-4 h-4" />
-              Excel
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => handleExport("pdf")} className="gap-2">
-              <FileText className="w-4 h-4" />
-              PDF
-            </Button>
-          </div>
-        </motion.div>
+  if (rLoading || (loading && !data)) {
+    return (
+      <div className="space-y-6">
+        <div className="h-12 rounded-2xl bg-muted animate-pulse" />
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="h-28 rounded-2xl bg-muted animate-pulse" />
+          ))}
+        </div>
+        <div className="h-72 rounded-2xl bg-muted animate-pulse" />
+      </div>
+    );
+  }
 
-        <div data-annotate="analytics-cards" className="grid grid-cols-2 lg:grid-cols-4 gap-4" style={{ perspective: 1200 }}>
-          <KpiCard
-            title="طلبات اليوم"
-            value={data.kpis.ordersToday}
-            prev={data.kpis.ordersTodayPrev}
-            format={(n) => String(n)}
-            Icon={ShoppingBag}
-            trend={sparkTrend}
-            index={0}
-          />
-          <KpiCard
-            title="مبيعات اليوم"
-            value={data.kpis.salesToday}
-            prev={data.kpis.salesTodayPrev}
-            format={formatDZD}
-            Icon={DollarSign}
-            trend={sparkTrend}
-            index={1}
-          />
-          <KpiCard
-            title="متوسط قيمة الطلب (الأسبوع)"
-            value={Math.round(data.kpis.avgOrderWeek)}
-            prev={Math.round(data.kpis.avgOrderWeekPrev)}
-            format={formatDZD}
-            Icon={Receipt}
-            trend={sparkTrend}
-            index={2}
-          />
-          <KpiCard
-            title="مبيعات هذا الشهر"
-            value={data.kpis.salesMonth}
-            prev={data.kpis.salesMonthPrev}
-            format={formatDZD}
-            Icon={TrendingUp}
-            trend={sparkTrend}
-            index={3}
-          />
+  if (!data) return null;
+
+  const TABS: Array<{
+    id: AnalyticsTab;
+    label: string;
+    icon: React.ComponentType<{ className?: string }>;
+    badge?: number | null;
+  }> = [
+    { id: "overview", label: "نظرة عامة", icon: LayoutDashboard },
+    { id: "daily", label: "تقرير اليوم المفصل", icon: CalendarDays },
+    { id: "tables", label: "إحصائيات الطاولات", icon: Utensils },
+    { id: "categories", label: "عائلات الأصناف", icon: Layers },
+    { id: "cashier", label: "أداء الكاشير", icon: Users },
+    {
+      id: "issues",
+      label: "الطلبات الملغاة والمشاكل",
+      icon: AlertOctagon,
+      badge: data.cancellations.count > 0 ? data.cancellations.count : null,
+    },
+  ];
+
+  return (
+    <div className="space-y-6 text-right" dir="rtl">
+      {/* Top Header Bar */}
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 bg-card border border-border rounded-2xl p-4">
+        <div>
+          <h2 className="text-xl font-black text-foreground">
+            التقارير التفصيلية والإحصائيات
+          </h2>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            متابعة شاملة للمبيعات، الطاولات الأكثر طلباً، عائلات الأصناف، أداء الكاشير، وأسباب الإلغاء
+          </p>
         </div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 18 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-60px" }}
-          transition={{ duration: 0.55, ease: [0.2, 0.7, 0.2, 1] }}
-          className="rounded-xl bg-card border border-border p-5 md:p-6"
-        >
-          <SectionHeader
-            icon={TrendingUp}
-            title="المبيعات اليومية"
-            subtitle="آخر 30 يوم"
-          />
-          <div className="h-64" dir="ltr">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={dailyChart}>
-                <defs>
-                  <linearGradient id="areaGradSales" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="var(--primary)" stopOpacity={0.45} />
-                    <stop offset="100%" stopColor="var(--primary)" stopOpacity={0.02} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid {...recessiveGridProps} />
-                <XAxis
-                  dataKey="label"
-                  tick={axisTickProps}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis tick={axisTickProps} axisLine={false} tickLine={false} width={40} />
-                <Tooltip
-                  cursor={{ stroke: "var(--primary)", strokeOpacity: 0.25, strokeWidth: 2 }}
-                  content={
-                    <ChartTooltip
-                      labelPrefix="التاريخ: "
-                      valueLabel="المبيعات"
-                      valueFormatter={formatDZD}
-                    />
-                  }
-                />
-                <Area
-                  type="monotone"
-                  dataKey="total"
-                  stroke="var(--primary)"
-                  strokeWidth={2}
-                  fill="url(#areaGradSales)"
-                  dot={false}
-                  activeDot={{ r: 5, strokeWidth: 0 }}
-                  isAnimationActive
-                  animationDuration={1100}
-                  animationEasing="ease-out"
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </motion.div>
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Preset Selector */}
+          <Select
+            value={preset}
+            onValueChange={(v) => setPreset(v as DateRangePreset)}
+          >
+            <SelectTrigger className="w-36 h-9 rounded-xl text-xs font-bold">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="today">اليوم</SelectItem>
+              <SelectItem value="yesterday">أمس</SelectItem>
+              <SelectItem value="week">آخر 7 أيام</SelectItem>
+              <SelectItem value="month">آخر 30 يوم</SelectItem>
+              <SelectItem value="custom">تاريخ مخصص</SelectItem>
+            </SelectContent>
+          </Select>
 
-        <RevenueRangeCard
-          restaurantId={restaurantId!}
-          restaurantCreatedAt={restaurantCreatedAt}
-        />
-
-        <motion.div
-          initial={{ opacity: 0, y: 18 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-60px" }}
-          transition={{ duration: 0.55, ease: [0.2, 0.7, 0.2, 1] }}
-          className="rounded-xl bg-card border border-border p-5 md:p-6"
-        >
-          <SectionHeader
-            icon={Flame}
-            title="الأصناف الأكثر طلباً"
-            subtitle="هذا الشهر"
-          />
-          {data.topItems.length === 0 ? (
-            <p className="text-sm text-muted-foreground">لا توجد بيانات بعد</p>
-          ) : (
-            <div className="space-y-3">
-              {data.topItems.map((it, idx) => (
-                <motion.div
-                  key={idx}
-                  initial={{ opacity: 0, x: 12 }}
-                  whileInView={{ opacity: 1, x: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ duration: 0.35, delay: idx * 0.03 }}
-                  className="flex items-center gap-3"
-                >
-                  {it.image_url ? (
-                    <img
-                      src={it.image_url}
-                      alt={it.name}
-                      className="w-10 h-10 rounded-lg object-cover"
-                      loading="lazy"
-                    />
-                  ) : (
-                    <div className="w-10 h-10 rounded-lg bg-muted" />
+          {preset === "custom" && (
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className={cn(
+                    "h-9 gap-1.5 text-xs font-bold rounded-xl",
+                    !customStart && "text-muted-foreground",
                   )}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-2 mb-1">
-                      <div className="font-medium truncate">{it.name}</div>
-                      <div className="text-sm text-muted-foreground shrink-0">
-                        {it.qty}× · {formatDZD(it.revenue)}
+                >
+                  <CalendarIcon className="w-3.5 h-3.5" />
+                  {customStart ? fmtDateKey(customStart) : "اختر البداية"}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="end">
+                <Calendar
+                  mode="single"
+                  selected={customStart}
+                  onSelect={setCustomStart}
+                  initialFocus
+                  className="p-3"
+                />
+              </PopoverContent>
+            </Popover>
+          )}
+
+          {/* Export buttons */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handleExport("excel")}
+            className="h-9 gap-1.5 text-xs font-bold rounded-xl"
+          >
+            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+            Excel
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handleExport("pdf")}
+            className="h-9 gap-1.5 text-xs font-bold rounded-xl"
+          >
+            <FileText className="w-3.5 h-3.5 text-rose-600" />
+            PDF
+          </Button>
+        </div>
+      </div>
+
+      {/* Main Navigation Tabs */}
+      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 border-b border-border/80">
+        {TABS.map((tab) => {
+          const Icon = tab.icon;
+          const isActive = activeTab === tab.id;
+          const isDanger = tab.id === "issues";
+
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
+                isActive
+                  ? isDanger
+                    ? "bg-destructive text-destructive-foreground shadow-sm"
+                    : "bg-primary text-primary-foreground shadow-sm"
+                  : isDanger && tab.badge
+                    ? "text-destructive hover:bg-destructive/10"
+                    : "text-muted-foreground hover:text-foreground hover:bg-secondary/70"
+              }`}
+            >
+              <Icon className="w-4 h-4 shrink-0" />
+              <span>{tab.label}</span>
+              {tab.badge != null && (
+                <span
+                  className={`px-1.5 py-0.5 rounded-md text-[10px] font-black ${
+                    isActive
+                      ? "bg-white/20 text-white"
+                      : "bg-destructive/15 text-destructive"
+                  }`}
+                >
+                  {tab.badge}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Tab Contents */}
+      <div className="pt-2">
+        {activeTab === "overview" && (
+          <div className="space-y-6">
+            {/* Overview KPIs */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="bg-card border border-border rounded-2xl p-5 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-muted-foreground">
+                    إجمالي المبيعات ({data.dateRangeLabel})
+                  </span>
+                  <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+                    <DollarSign className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="text-2xl sm:text-3xl font-black text-foreground tabular-nums">
+                  {formatDZD(data.kpis.totalRevenue)}
+                </div>
+                <div className="text-[11px] text-muted-foreground">
+                  المبيعات المدفوعة المحصلة
+                </div>
+              </div>
+
+              <div className="bg-card border border-border rounded-2xl p-5 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-muted-foreground">
+                    الطلبات المكتملة
+                  </span>
+                  <div className="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center">
+                    <ShoppingBag className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="text-2xl sm:text-3xl font-black text-foreground tabular-nums">
+                  {data.kpis.ordersCount}
+                </div>
+                <div className="text-[11px] text-muted-foreground">
+                  طلب ناجح تم تحضيره
+                </div>
+              </div>
+
+              <div className="bg-card border border-border rounded-2xl p-5 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-muted-foreground">
+                    متوسط الفاتورة
+                  </span>
+                  <div className="w-9 h-9 rounded-xl bg-blue-500/10 text-blue-600 flex items-center justify-center">
+                    <Receipt className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="text-2xl sm:text-3xl font-black text-foreground tabular-nums">
+                  {formatDZD(data.kpis.avgOrderValue)}
+                </div>
+                <div className="text-[11px] text-muted-foreground">
+                  متوسط إنفاق الطلب الواحد
+                </div>
+              </div>
+
+              {/* Cancelled Loss in Alert Box */}
+              <div
+                onClick={() => setActiveTab("issues")}
+                className="bg-destructive/10 border border-destructive/25 rounded-2xl p-5 space-y-2 cursor-pointer transition-all hover:bg-destructive/15"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-destructive">
+                    خسائر الإلغاء ({data.kpis.cancelledCount} طلب)
+                  </span>
+                  <div className="w-9 h-9 rounded-xl bg-destructive/20 text-destructive flex items-center justify-center">
+                    <AlertOctagon className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="text-2xl sm:text-3xl font-black text-destructive tabular-nums">
+                  {data.kpis.cancelledCount > 0
+                    ? `-${formatDZD(data.kpis.cancelledRevenue)}`
+                    : "0 دج"}
+                </div>
+                <div className="text-[11px] font-bold text-destructive/80 flex items-center justify-between">
+                  <span>معدل الإلغاء: {data.kpis.cancellationRate}%</span>
+                  <span>عرض التفاصيل ←</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Channels Breakdown */}
+            <div className="bg-card border border-border rounded-2xl p-5 space-y-3">
+              <h3 className="text-sm font-bold text-foreground">
+                توزيع المبيعات حسب القناة
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="p-3.5 rounded-xl border border-border bg-muted/30 flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <UtensilsCrossed className="w-5 h-5 text-primary" />
+                    <div>
+                      <div className="text-xs font-bold text-foreground">
+                        مبيعات الصالة (الطاولات)
+                      </div>
+                      <div className="text-[11px] text-muted-foreground">
+                        {data.kpis.totalRevenue > 0
+                          ? Math.round(
+                              (data.kpis.dineInRevenue /
+                                data.kpis.totalRevenue) *
+                                100,
+                            )
+                          : 0}
+                        % من الإجمالي
                       </div>
                     </div>
-                    <div className="h-2 bg-muted/60 rounded-full overflow-hidden">
-                      <motion.div
-                        initial={{ width: 0 }}
-                        whileInView={{
-                          width: `${maxTopQty ? (it.qty / maxTopQty) * 100 : 0}%`,
-                        }}
-                        viewport={{ once: true }}
-                        transition={{ duration: 0.7, delay: idx * 0.03, ease: [0.2, 0.7, 0.2, 1] }}
-                        className="h-full bg-primary rounded-full"
-                      />
+                  </div>
+                  <div className="text-base font-black text-foreground tabular-nums">
+                    {formatDZD(data.kpis.dineInRevenue)}
+                  </div>
+                </div>
+
+                <div className="p-3.5 rounded-xl border border-border bg-muted/30 flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <ShoppingBag className="w-5 h-5 text-[#3D6F9E]" />
+                    <div>
+                      <div className="text-xs font-bold text-foreground">
+                        طلبات سفري (استلام)
+                      </div>
+                      <div className="text-[11px] text-muted-foreground">
+                        {data.kpis.totalRevenue > 0
+                          ? Math.round(
+                              (data.kpis.takeawayRevenue /
+                                data.kpis.totalRevenue) *
+                                100,
+                            )
+                          : 0}
+                        % من الإجمالي
+                      </div>
                     </div>
                   </div>
-                </motion.div>
-              ))}
-            </div>
-          )}
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 18 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-60px" }}
-          transition={{ duration: 0.55, ease: [0.2, 0.7, 0.2, 1] }}
-          className="rounded-xl bg-card border border-border p-5 md:p-6"
-        >
-          <SectionHeader
-            icon={Snowflake}
-            title="الأصناف الأقل طلباً"
-            subtitle="فكر في تحسين هذه الأصناف أو إزالتها"
-          />
-          {data.bottomItems.length === 0 ? (
-            <p className="text-sm text-muted-foreground">لا توجد بيانات بعد</p>
-          ) : (
-            <div className="space-y-2">
-              {data.bottomItems.map((it, idx) => (
-                <div
-                  key={idx}
-                  className="flex items-center justify-between gap-3 py-2 border-b border-border/60 last:border-0"
-                >
-                  <div className="flex items-center gap-3">
-                    {it.image_url ? (
-                      <img
-                        src={it.image_url}
-                        alt={it.name}
-                        className="w-8 h-8 rounded-lg object-cover"
-                        loading="lazy"
-                      />
-                    ) : (
-                      <div className="w-8 h-8 rounded-lg bg-muted" />
-                    )}
-                    <span className="text-sm font-medium">{it.name}</span>
+                  <div className="text-base font-black text-foreground tabular-nums">
+                    {formatDZD(data.kpis.takeawayRevenue)}
                   </div>
-                  <span className="text-xs text-muted-foreground">
-                    {it.qty}× · {formatDZD(it.revenue)}
-                  </span>
                 </div>
-              ))}
-            </div>
-          )}
-        </motion.div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 18 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-60px" }}
-          transition={{ duration: 0.55, ease: [0.2, 0.7, 0.2, 1] }}
-          className="rounded-xl bg-card border border-border p-5 md:p-6"
-        >
-          <SectionHeader icon={Clock} title="ساعات الذروة" subtitle="هذا الأسبوع" />
-          <div className="h-56" dir="ltr">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={data.hourly}>
-                <defs>
-                  <linearGradient id="barGradHourly" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="var(--primary)" stopOpacity={0.95} />
-                    <stop offset="100%" stopColor="var(--primary)" stopOpacity={0.35} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid {...recessiveGridProps} />
-                <XAxis
-                  dataKey="hour"
-                  tick={axisTickProps}
-                  axisLine={false}
-                  tickLine={false}
-                  tickFormatter={(h) => `${h}:00`}
-                />
-                <YAxis
-                  tick={axisTickProps}
-                  axisLine={false}
-                  tickLine={false}
-                  allowDecimals={false}
-                  width={30}
-                />
-                <Tooltip
-                  cursor={{ fill: "var(--muted)", opacity: 0.4 }}
-                  content={
-                    <ChartTooltip
-                      labelFormatter={(h) => `الساعة ${h}:00`}
-                      valueLabel="طلبات"
-                      valueFormatter={(v) => `${Math.round(v)}`}
+                <div className="p-3.5 rounded-xl border border-border bg-muted/30 flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <Bike className="w-5 h-5 text-amber-500" />
+                    <div>
+                      <div className="text-xs font-bold text-foreground">
+                        طلبات التوصيل
+                      </div>
+                      <div className="text-[11px] text-muted-foreground">
+                        {data.kpis.totalRevenue > 0
+                          ? Math.round(
+                              (data.kpis.deliveryRevenue /
+                                data.kpis.totalRevenue) *
+                                100,
+                            )
+                          : 0}
+                        % من الإجمالي
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-base font-black text-foreground tabular-nums">
+                    {formatDZD(data.kpis.deliveryRevenue)}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Daily Trend Area Chart */}
+            <div className="bg-card border border-border rounded-2xl p-5 md:p-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-base font-bold text-foreground">
+                    تطور المبيعات اليومية
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    آخر 30 يوماً من النشاط
+                  </p>
+                </div>
+              </div>
+
+              <div className="h-64" dir="ltr">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart
+                    data={data.dailyTrend.map((d) => ({
+                      label: d.date.slice(5),
+                      total: d.total,
+                    }))}
+                  >
+                    <defs>
+                      <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="var(--primary)" stopOpacity={0.4} />
+                        <stop offset="100%" stopColor="var(--primary)" stopOpacity={0.02} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="4 8" stroke="var(--border)" strokeOpacity={0.6} vertical={false} />
+                    <XAxis dataKey="label" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} width={45} />
+                    <Tooltip
+                      content={({ active, payload, label }) => {
+                        if (!active || !payload?.length) return null;
+                        const v = payload[0].value as number;
+                        return (
+                          <div className="bg-card border border-border rounded-xl p-3 text-xs shadow-md">
+                            <div className="text-muted-foreground mb-1">
+                              التاريخ: {label}
+                            </div>
+                            <div className="font-bold text-foreground">
+                              المبيعات: {formatDZD(v)}
+                            </div>
+                          </div>
+                        );
+                      }}
                     />
-                  }
-                />
-                <Bar
-                  dataKey="count"
-                  fill="url(#barGradHourly)"
-                  radius={[4, 4, 0, 0]}
-                  isAnimationActive
-                  animationDuration={900}
-                  animationEasing="ease-out"
-                />
-              </BarChart>
-            </ResponsiveContainer>
+                    <Area
+                      type="monotone"
+                      dataKey="total"
+                      stroke="var(--primary)"
+                      strokeWidth={2}
+                      fill="url(#areaGrad)"
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* Peak Hours Chart */}
+            <div className="bg-card border border-border rounded-2xl p-5 md:p-6 space-y-4">
+              <div>
+                <h3 className="text-base font-bold text-foreground">
+                  ساعات الذروة
+                </h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  أوقات الازدحام على مدار الـ 24 ساعة
+                </p>
+              </div>
+
+              <div className="h-56" dir="ltr">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={data.hourlyTrend}>
+                    <CartesianGrid strokeDasharray="4 8" stroke="var(--border)" strokeOpacity={0.6} vertical={false} />
+                    <XAxis
+                      dataKey="hour"
+                      tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
+                      axisLine={false}
+                      tickLine={false}
+                      tickFormatter={(h) => `${h}:00`}
+                    />
+                    <YAxis tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} width={30} />
+                    <Tooltip
+                      content={({ active, payload, label }) => {
+                        if (!active || !payload?.length) return null;
+                        const item = payload[0].payload;
+                        return (
+                          <div className="bg-card border border-border rounded-xl p-3 text-xs shadow-md">
+                            <div className="font-bold text-foreground mb-1">
+                              الساعة {label}:00
+                            </div>
+                            <div className="text-muted-foreground">
+                              الطلبات: {item.count}
+                            </div>
+                            <div className="text-primary font-bold mt-1">
+                              المبيعات: {formatDZD(item.revenue)}
+                            </div>
+                          </div>
+                        );
+                      }}
+                    />
+                    <Bar
+                      dataKey="count"
+                      fill="var(--primary)"
+                      radius={[4, 4, 0, 0]}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
           </div>
-        </motion.div>
+        )}
+
+        {activeTab === "daily" && (
+          <DailyReportTab
+            daily={data.dailyDetail}
+            selectedDate={dailyDate}
+            onDateChange={setDailyDate}
+          />
+        )}
+
+        {activeTab === "tables" && (
+          <TablesReportTab
+            tables={data.tables}
+            totalDineInRevenue={data.kpis.dineInRevenue}
+          />
+        )}
+
+        {activeTab === "categories" && (
+          <CategoriesReportTab
+            categories={data.categories}
+            topItems={data.topItems}
+            bottomItems={data.bottomItems}
+            totalSales={data.kpis.totalRevenue}
+          />
+        )}
+
+        {activeTab === "cashier" && (
+          <CashierReportTab
+            cashiers={data.cashiers}
+            totalSales={data.kpis.totalRevenue}
+          />
+        )}
+
+        {activeTab === "issues" && (
+          <CancellationsReportTab
+            cancellations={data.cancellations}
+            totalOrdersCount={data.kpis.ordersCount + data.kpis.cancelledCount}
+          />
+        )}
       </div>
     </div>
   );
