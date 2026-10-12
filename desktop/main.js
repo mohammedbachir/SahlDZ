@@ -7,6 +7,16 @@ const https = require("https");
 const { spawn } = require("child_process");
 const { autoUpdater } = require("electron-updater");
 
+// ─── Rendering safety ─────────────────────────────────────────
+// The cashier/kitchen terminals are old Windows 7 machines with equally old
+// GPU drivers. Electron's hardware-accelerated compositor frequently paints a
+// fully black window on those drivers even though the page loaded fine. Force
+// software rendering so the UI always appears.
+app.disableHardwareAcceleration();
+app.commandLine.appendSwitch("disable-gpu");
+app.commandLine.appendSwitch("disable-gpu-compositing");
+app.commandLine.appendSwitch("disable-software-rasterizer", "false");
+
 // ─── Configuration ────────────────────────────────────────────
 // The desktop always boots straight into the unified staff login:
 // activation code → employee → PIN.
@@ -81,20 +91,61 @@ function createMainWindow() {
     },
     autoHideMenuBar: true,
     show: false,
-    backgroundColor: "#141210",
+    // Light ivory matches the app theme, so if a page paints slowly the user
+    // sees the brand background instead of a black void.
+    backgroundColor: "#F8F6F1",
   });
 
   mainWindow.once("ready-to-show", () => mainWindow.show());
+
+  // Never let a slow/failed paint leave the terminal on an invisible window.
+  const showFallback = setTimeout(() => {
+    if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) {
+      console.warn("[NAV] forcing window show after ready-to-show timeout");
+      mainWindow.show();
+    }
+  }, 8000);
+  mainWindow.once("closed", () => clearTimeout(showFallback));
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith("http")) shell.openExternal(url);
     return { action: "deny" };
   });
 
-  mainWindow.webContents.on("dom-ready", () => {
+  // Mark the renderer as the desktop shell as early as possible. The page
+  // scripts may run before `dom-ready`, so the flag is also exposed through
+  // the preload bridge (`electronAPI.isElectron`) and both are checked.
+  const markElectron = () => {
     mainWindow.webContents.executeJavaScript(
       `window.__ELECTRON__=true;`
     ).catch(() => {});
+  };
+  mainWindow.webContents.on("dom-ready", markElectron);
+  mainWindow.webContents.on("did-finish-load", markElectron);
+
+  // Surface load failures instead of leaving a black window.
+  mainWindow.webContents.on(
+    "did-fail-load",
+    (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+      if (!isMainFrame) return;
+      // -3 is ERR_ABORTED, emitted for ordinary in-page navigations.
+      if (errorCode === -3) return;
+      console.error("[NAV] did-fail-load", errorCode, errorDescription, validatedURL);
+      loadOfflinePage("error");
+    },
+  );
+
+  // Recover from a crashed renderer (common on old GPUs) by reloading.
+  mainWindow.webContents.on("render-process-gone", (_event, details) => {
+    console.error("[NAV] render-process-gone:", details && details.reason);
+    if (details && details.reason === "clean-exit") return;
+    setTimeout(() => {
+      if (mainWindow && !mainWindow.isDestroyed()) navigateToApp();
+    }, 1000);
+  });
+
+  mainWindow.webContents.on("unresponsive", () => {
+    console.warn("[NAV] renderer unresponsive");
   });
 
   navigateToApp();

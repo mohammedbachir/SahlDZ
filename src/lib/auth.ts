@@ -4,6 +4,7 @@ import { redirect } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { cacheSession, readSessionCache } from "@/lib/session-cache";
 import { getFirebaseDb } from "@/integrations/firebase/config";
+import { fetchWebStaffAccess } from "@/lib/web-staff-permissions";
 
 const IS_PREVIEW = !getFirebaseDb();
 
@@ -19,10 +20,18 @@ export function freshCachedTarget(): string | null {
   return null;
 }
 
+// The desktop shell is detected two ways: the preload bridge (available before
+// any page script runs, so it can never race hydration) and the flag main.js
+// injects. Either one is enough.
+export function isDesktopShell(): boolean {
+  if (typeof window === "undefined") return false;
+  return !!(window.__ELECTRON__ || window.electronAPI?.isElectron);
+}
+
 // Staff login is desktop-only: waiter/kitchen/cashier authenticate from the
 // installed desktop app, never from the public website or mobile.
 export function requireDesktop(): void {
-  if (typeof window !== "undefined" && !window.__ELECTRON__) {
+  if (typeof window !== "undefined" && !isDesktopShell()) {
     throw redirect({ to: "/login" });
   }
 }
@@ -33,7 +42,7 @@ export function requireDesktop(): void {
 export function useDesktopOnly(): void {
   const navigate = useNavigate();
   useEffect(() => {
-    if (typeof window !== "undefined" && !window.__ELECTRON__) {
+    if (typeof window !== "undefined" && !isDesktopShell()) {
       navigate({ to: "/login", replace: true });
     }
   }, [navigate]);
@@ -72,6 +81,13 @@ export async function getPostAuthRedirect(userId: string): Promise<string> {
   if (role?.restaurant_id) {
     // Owner alias (admin role) also lands on operations management
     if (role.role === "admin") {
+      cacheSession(userId, "/ops");
+      return "/ops";
+    }
+    // Web-enabled staff with operations areas granted land on the operations
+    // dashboard so their permission-filtered navigation is shown.
+    const res = await fetchWebStaffAccess(userId, null);
+    if (res.ok && res.access?.hasOpsArea) {
       cacheSession(userId, "/ops");
       return "/ops";
     }

@@ -21,6 +21,7 @@ import {
   LayoutGrid,
   ChevronLeft,
   Bike,
+  ShoppingBag,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -37,6 +38,7 @@ import {
   cashierGetMenu,
   cashierCreateOrder,
   cashierCancelOrder,
+  cashierRecordPrepayment,
   type ZReport,
   type CashierPaymentMode,
   type CashierPaymentInput,
@@ -66,7 +68,13 @@ export const Route = createFileRoute("/cashier")({
   component: Page,
 });
 
-type Restaurant = { id: string; name: string; logo_url: string | null };
+type Restaurant = {
+  id: string;
+  name: string;
+  logo_url: string | null;
+  phone?: string | null;
+  address?: string | null;
+};
 
 /** Bounce target after a failed session check: unified login when a unified
  * session was ever started here, else the legacy cashier login. */
@@ -177,6 +185,7 @@ function Page() {
   const ctxFn = useServerFn(getCashierContext);
   const lookupFn = useServerFn(cashierLookupTable);
   const markFn = useServerFn(cashierMarkPaid);
+  const prepayFn = useServerFn(cashierRecordPrepayment);
   const logoutFn = useServerFn(cashierLogout);
   const listReadyFn = useServerFn(cashierListReady);
   const listActiveFn = useServerFn(cashierListActiveOrders);
@@ -199,6 +208,8 @@ function Page() {
   const [payMode, setPayMode] = useState<CashierPaymentMode>("full");
   const [payAmount, setPayAmount] = useState("");
   const [payRemainder, setPayRemainder] = useState<"debt" | "discount">("debt");
+  const [payCustomerName, setPayCustomerName] = useState("");
+  const [payCustomerPhone, setPayCustomerPhone] = useState("");
   const zFn = useServerFn(cashierZReport);
   const [zReport, setZReport] = useState<ZReport | null>(null);
   const [zLoading, setZLoading] = useState(false);
@@ -212,14 +223,19 @@ function Page() {
   const readyDeliveryCount = readyOrders.filter(
     (o) => o.order_type === "delivery",
   ).length;
+  const readyTakeawayCount = readyOrders.filter(
+    (o) => o.order_type === "takeaway",
+  ).length;
   const filteredPayOrders =
     payScope === "all"
       ? readyOrders
       : payScope === "delivery"
         ? readyOrders.filter((o) => o.order_type === "delivery")
-        : readyOrders.filter(
-            (o) => o.table_number === Number(payScope.replace("table:", "")),
-          );
+        : payScope === "takeaway"
+          ? readyOrders.filter((o) => o.order_type === "takeaway")
+          : readyOrders.filter(
+              (o) => o.table_number === Number(payScope.replace("table:", "")),
+            );
 
   const prevReadyCount = useRef(readyOrders.length);
   const skipRefreshUntil = useRef(0);
@@ -230,12 +246,14 @@ function Page() {
         readyOrders.length - prevReadyCount.current,
       );
       newOrders.forEach((o) => {
+        const where =
+          o.order_type === "delivery"
+            ? o.customer_name || tx("عميل توصيل")
+            : o.order_type === "takeaway"
+              ? tx("cashierScreen.newOrderTakeaway")
+              : `${o.hall_name ? o.hall_name + " / " : ""}${o.table_number ?? "—"}`;
         toast.success(
-          `${o.order_type === "delivery" ? tx("توصيل") : tx("طاولة")} ${
-            o.order_type === "delivery"
-              ? o.customer_name || tx("عميل توصيل")
-              : `${o.hall_name ? o.hall_name + " / " : ""}${o.table_number ?? "—"}`
-          } — ${tx("الطلب")} ${fmtOrderNo(o.daily_number)} ${tx("جاهز للتسليم!")}`,
+          `${o.order_type === "delivery" ? tx("توصيل") : o.order_type === "takeaway" ? tx("cashierScreen.newOrderTakeaway") : tx("طاولة")} ${where} — ${tx("الطلب")} ${fmtOrderNo(o.daily_number)} ${tx("جاهز للتسليم!")}`,
           { duration: 6000 },
         );
       });
@@ -371,6 +389,8 @@ function Page() {
     setPayMode("full");
     setPayAmount("");
     setPayRemainder("debt");
+    setPayCustomerName("");
+    setPayCustomerPhone("");
   }
 
   async function submitPayment() {
@@ -390,6 +410,19 @@ function Page() {
         return;
       }
       payment = { mode, paidAmount: amount, remainderKind: payRemainder };
+    }
+
+    const leavesDebt = mode === "debt" || (mode === "partial" && payRemainder === "debt");
+    if (leavesDebt) {
+      if (!payCustomerName.trim()) {
+        toast.error(tx("cashierScreen.debtCustomerRequired"));
+        return;
+      }
+      payment = {
+        ...payment,
+        customerName: payCustomerName.trim(),
+        customerPhone: payCustomerPhone.trim(),
+      };
     }
 
     setPaying(order.id);
@@ -435,8 +468,58 @@ function Page() {
       setPayTarget(null);
       setReadyOrders((prev) => prev.filter((o) => o.id !== order.id));
       if (outcome) recordLocalSale(order, outcome);
-      printReceipt(order, outcome);
+      const printOrder = leavesDebt
+        ? {
+            ...order,
+            customer_name: payCustomerName.trim() || order.customer_name,
+            customer_phone: payCustomerPhone.trim() || order.customer_phone,
+          }
+        : order;
+      printReceipt(printOrder, outcome);
       setTimeout(() => setSuccess(null), 1800);
+    } catch (e) {
+      skipRefreshUntil.current = 0;
+      toast.error((e as Error).message || tx("cashierScreen.paymentFailed"));
+    } finally {
+      setPaying(null);
+    }
+  }
+
+  async function submitPrepayment() {
+    if (!payTarget || !token) return;
+    const order = payTarget;
+    const amount = Number(payAmount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      toast.error(tx("cashierScreen.partialAmountInvalid"));
+      return;
+    }
+    setPaying(order.id);
+    skipRefreshUntil.current = Date.now() + 6000;
+    try {
+      let outcome: CashierPaymentOutcome;
+      if (isPreviewToken(token)) {
+        outcome = {
+          orderId: order.id,
+          mode: "prepayment",
+          paid: amount,
+          debt: 0,
+          discount: 0,
+        };
+      } else {
+        const staffSession = loadUnifiedStaffSession();
+        const res = await prepayFn({
+          data: {
+            token,
+            orderId: order.id,
+            amount,
+            staffId: staffSession?.staffId || undefined,
+          },
+        });
+        outcome = res.outcome;
+      }
+      printReceipt(order, outcome);
+      toast.success(tx("cashierScreen.prepaymentPrinted"));
+      setPayTarget(null);
     } catch (e) {
       skipRefreshUntil.current = 0;
       toast.error((e as Error).message || tx("cashierScreen.paymentFailed"));
@@ -471,7 +554,9 @@ function Page() {
             ? tx("cashierScreen.modeDebt")
             : payment?.mode === "gift"
               ? tx("cashierScreen.modeGift")
-              : null;
+              : payment?.mode === "prepayment"
+                ? tx("cashierScreen.modePrepayment")
+                : null;
     const payHtml = payment
       ? `
   <div class="total muted" style="font-size:14px;">
@@ -521,12 +606,17 @@ function Page() {
 <body>
   <div class="center">
     <div class="name">${escapeHtml(restaurant?.name ?? "")}</div>
+    ${restaurant?.phone ? `<div class="muted">${escapeHtml(restaurant.phone)}</div>` : ""}
+    ${restaurant?.address ? `<div class="muted">${escapeHtml(restaurant.address)}</div>` : ""}
     <div class="muted">${tx("cashierScreen.receiptPaymentSlip")}</div>
   </div>
   <hr />
   <div class="muted">
     <div>${tx("cashierScreen.receiptOrderNumber")} <b>${orderNo}</b></div>
+    ${order.order_type === "takeaway" ? "<div>سفري</div>" : order.order_type === "delivery" ? "<div>توصيل</div>" : ""}
     ${order.table_number != null ? `<div>${tx("cashierScreen.receiptTable")} <b>${order.table_number}</b></div>` : ""}
+    ${order.customer_name ? `<div>${escapeHtml(order.customer_name)}</div>` : ""}
+    ${order.customer_phone ? `<div>${escapeHtml(order.customer_phone)}</div>` : ""}
     <div>${tx("cashierScreen.receiptDate")} ${dateStr}</div>
   </div>
   <hr />
@@ -780,6 +870,29 @@ function Page() {
                         </span>
                       </button>
                     )}
+                    {readyTakeawayCount > 0 && (
+                      <button
+                        onClick={() => setPayScope("takeaway")}
+                        className={`px-3 py-2 rounded-xl text-sm font-bold border transition-colors flex items-center gap-2 ${
+                          payScope === "takeaway"
+                            ? "bg-[var(--primary)] text-[var(--primary-foreground)] border-[var(--primary)]"
+                            : "bg-[var(--card)] text-[var(--muted-foreground)] border-[var(--border)] hover:border-[var(--primary)]/60"
+                        }`}
+                      >
+                        <ShoppingBag className="w-4 h-4" />
+                        <span>{tx("cashierScreen.newOrderTakeaway")}</span>
+                        <span className="text-[10px] opacity-80">
+                          {readyTakeawayCount}
+                        </span>
+                        <span className="text-[10px] opacity-70 tabular-nums">
+                          {formatDZD(
+                            readyOrders
+                              .filter((o) => o.order_type === "takeaway")
+                              .reduce((s, o) => s + o.total, 0),
+                          )}
+                        </span>
+                      </button>
+                    )}
                     {readyTableNumbers.map((tn) => {
                       const count = readyOrders.filter(
                         (o) => o.table_number === tn,
@@ -829,6 +942,13 @@ function Page() {
                                 <Bike className="w-4 h-4 text-primary" />
                                 <span className="text-sm font-bold text-primary">
                                   {tx("cashierScreen.delivery")}
+                                </span>
+                              </>
+                            ) : o.order_type === "takeaway" ? (
+                              <>
+                                <ShoppingBag className="w-4 h-4 text-primary" />
+                                <span className="text-sm font-bold text-primary">
+                                  {tx("cashierScreen.newOrderTakeaway")}
                                 </span>
                               </>
                             ) : (
@@ -1147,6 +1267,52 @@ function Page() {
                     </div>
                   </div>
                 </div>
+              )}
+
+              {(payMode === "debt" ||
+                (payMode === "partial" && payRemainder === "debt")) && (
+                <div className="space-y-3 rounded-lg border border-[var(--border)] p-3">
+                  <div className="text-xs font-bold text-[var(--muted-foreground)]">
+                    {tx("cashierScreen.paymentDebtCustomer")}
+                  </div>
+                  <div>
+                    <label className="block text-xs text-[var(--muted-foreground)] mb-1">
+                      {tx("cashierScreen.newOrderCustomerName")}
+                    </label>
+                    <Input
+                      type="text"
+                      className="h-9 text-sm"
+                      placeholder={tx("cashierScreen.newOrderCustomerName")}
+                      value={payCustomerName}
+                      onChange={(e) => setPayCustomerName(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-[var(--muted-foreground)] mb-1">
+                      {tx("cashierScreen.newOrderCustomerPhone")}
+                    </label>
+                    <Input
+                      type="tel"
+                      inputMode="tel"
+                      className="h-9 text-sm"
+                      placeholder={tx("cashierScreen.newOrderCustomerPhone")}
+                      value={payCustomerPhone}
+                      onChange={(e) => setPayCustomerPhone(e.target.value)}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {payMode === "partial" && (
+                <Button
+                  onClick={submitPrepayment}
+                  disabled={paying !== null}
+                  variant="outline"
+                  className="w-full h-9 gap-1.5 text-xs"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  {tx("cashierScreen.prepaymentPrint")}
+                </Button>
               )}
 
               <div className="flex gap-2">
@@ -1525,7 +1691,9 @@ function NewOrderView({
   const [loading, setLoading] = useState(true);
   const [activeCat, setActiveCat] = useState<string>("all");
   const [cart, setCart] = useState<CashierNewOrderLine[]>([]);
-  const [orderType, setOrderType] = useState<"dine_in" | "delivery">("dine_in");
+  const [orderType, setOrderType] = useState<
+    "dine_in" | "takeaway" | "delivery"
+  >("dine_in");
   const [tableNo, setTableNo] = useState("");
   const [custName, setCustName] = useState("");
   const [custPhone, setCustPhone] = useState("");
@@ -1739,9 +1907,12 @@ function NewOrderView({
             table_number: orderType === "dine_in" ? Number(tableNo) : undefined,
             // The same number can exist in several halls, so pin the hall.
             hall_id: orderType === "dine_in" ? hallId : undefined,
-            customer_name: orderType === "delivery" ? custName : undefined,
-            customer_phone: orderType === "delivery" ? custPhone : undefined,
-            customer_address: orderType === "delivery" ? custAddr : undefined,
+            customer_name:
+              orderType !== "dine_in" ? custName || undefined : undefined,
+            customer_phone:
+              orderType !== "dine_in" ? custPhone || undefined : undefined,
+            customer_address:
+              orderType === "delivery" ? custAddr || undefined : undefined,
             notes: orderNotes || undefined,
             lines: cart,
           },
@@ -1756,9 +1927,9 @@ function NewOrderView({
         created_at: new Date().toISOString(),
         order_type: orderType,
         table_number: orderType === "dine_in" ? Number(tableNo) : null,
-        customer_name: orderType === "delivery" ? custName : null,
-        customer_phone: orderType === "delivery" ? custPhone : null,
-        customer_address: orderType === "delivery" ? custAddr : null,
+        customer_name: orderType !== "dine_in" ? custName || null : null,
+        customer_phone: orderType !== "dine_in" ? custPhone || null : null,
+        customer_address: orderType === "delivery" ? custAddr || null : null,
         notes: orderNotes || null,
         lines: cart,
       };
@@ -1812,6 +1983,7 @@ function NewOrderView({
               {(
                 [
                   ["dine_in", tx("cashierScreen.newOrderDineIn")],
+                  ["takeaway", tx("cashierScreen.newOrderTakeaway")],
                   ["delivery", tx("cashierScreen.newOrderDelivery")],
                 ] as const
               ).map(([k, label]) => (
@@ -1842,6 +2014,23 @@ function NewOrderView({
                 onChange={setTableNo}
                 tx={tx}
               />
+            )}
+
+            {orderType === "takeaway" && (
+              <div className="flex items-center gap-1.5 flex-1">
+                <Input
+                  value={custName}
+                  onChange={(e) => setCustName(e.target.value)}
+                  placeholder={tx("cashierScreen.newOrderCustomerName")}
+                  className="h-8 text-xs flex-1"
+                />
+                <Input
+                  value={custPhone}
+                  onChange={(e) => setCustPhone(e.target.value)}
+                  placeholder={tx("cashierScreen.newOrderCustomerPhone")}
+                  className="h-8 text-xs flex-1"
+                />
+              </div>
             )}
 
             {orderType === "delivery" && (
@@ -2402,14 +2591,25 @@ function OrderTrackingView({
                 {fmtElapsed(sec)}
               </div>
 
-              {/* Table */}
+              {/* Table / takeaway */}
               <div className="text-center mb-2">
-                <div className="text-3xl font-extrabold text-[var(--foreground)] leading-none">
-                  {order.table_number ?? "—"}
-                </div>
-                <div className="text-[10px] text-[var(--muted-foreground)] mt-0.5">
-                  طاولة
-                </div>
+                {order.order_type === "takeaway" ? (
+                  <>
+                    <ShoppingBag className="w-7 h-7 mx-auto text-[var(--primary)]" />
+                    <div className="text-[10px] text-[var(--muted-foreground)] mt-1">
+                      {tx("cashierScreen.newOrderTakeaway")}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="text-3xl font-extrabold text-[var(--foreground)] leading-none">
+                      {order.table_number ?? "—"}
+                    </div>
+                    <div className="text-[10px] text-[var(--muted-foreground)] mt-0.5">
+                      طاولة
+                    </div>
+                  </>
+                )}
               </div>
 
               {/* Status */}
@@ -2461,8 +2661,12 @@ function OrderTrackingView({
                 <ChevronLeft className="w-5 h-5 rotate-180" />
               </button>
               <h3 className="font-bold text-sm">
-                طاولة {selectedOrder.table_number ?? "—"} — الطلب{" "}
-                {fmtOrderNo(selectedOrder.daily_number)}
+                {selectedOrder.order_type === "takeaway"
+                  ? `${tx("cashierScreen.newOrderTakeaway")} — `
+                  : selectedOrder.order_type === "delivery"
+                    ? `${tx("cashierScreen.newOrderDelivery")} — `
+                    : `طاولة ${selectedOrder.table_number ?? "—"} — `}
+                الطلب {fmtOrderNo(selectedOrder.daily_number)}
               </h3>
               <span
                 className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${statusColor(selectedOrder.status ?? "new")}`}
@@ -2504,7 +2708,9 @@ function OrderTrackingView({
                       ? "inside المطعم"
                       : selectedOrder.order_type === "delivery"
                         ? "توصيل"
-                        : selectedOrder.order_type}
+                        : selectedOrder.order_type === "takeaway"
+                          ? "سفري"
+                          : selectedOrder.order_type}
                   </span>
                 </div>
                 <div className="flex justify-between">

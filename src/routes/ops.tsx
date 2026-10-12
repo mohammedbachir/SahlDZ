@@ -44,6 +44,7 @@ import {
   canViewArea,
   hasStaffOpsSession,
   resolveOpsRole,
+  clearWebStaffPermissions,
   type OpsArea,
   type OpsRole,
 } from "@/lib/permissions";
@@ -259,7 +260,7 @@ function OpsLayout() {
   const searchStr = useRouterState({ select: (s) => s.location.searchStr });
   const tourMode = new URLSearchParams(searchStr).get("tour") === "1";
   const navigate = useNavigate();
-  const [userRole, setUserRole] = useState<OpsRole | null>("admin");
+  const [userRole, setUserRole] = useState<OpsRole | null>(null);
   const [staffMode, setStaffMode] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
@@ -363,6 +364,7 @@ function OpsLayout() {
   const handleLogout = async () => {
     localStorage.removeItem("sahl_dz_preview_role");
     localStorage.removeItem("sahl_dz_auth_cache");
+    clearWebStaffPermissions();
     await supabase.auth.signOut();
     navigate({ to: "/login" });
   };

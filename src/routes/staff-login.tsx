@@ -8,6 +8,10 @@ import {
   verifyStaffPin,
 } from "@/lib/staff-login.functions";
 import { allowedStaffPaths } from "@/lib/staff-permissions";
+import {
+  getAutoScreenPath,
+  getUnifiedAutoScreenPath,
+} from "@/lib/kiosk-session";
 import { getFirebaseDb } from "@/integrations/firebase/config";
 import { requireDesktop, useDesktopOnly } from "@/lib/auth";
 import { RestaurantCodeStep } from "@/components/restaurant-code-step";
@@ -64,6 +68,18 @@ function Page() {
     setRestaurantId(searchRid || null);
     if (!searchRid) setLoadingList(false);
   }, [searchRid]);
+
+  // Kiosk behaviour: the terminal is logged in once. On boot the desktop shell
+  // always opens this page, so if a valid session is cached (localStorage,
+  // 365-day token) jump straight to the last allowed screen instead of asking
+  // for the PIN again. An explicit restaurant code (`?rid=`/`?r=`) still wins.
+  useEffect(() => {
+    if (searchRid) return;
+    const auto = getUnifiedAutoScreenPath() ?? getAutoScreenPath();
+    if (auto && auto !== "/staff-login") {
+      navigate({ to: auto, replace: true });
+    }
+  }, [searchRid, navigate]);
 
   useEffect(() => {
     if (!previewMode) return;

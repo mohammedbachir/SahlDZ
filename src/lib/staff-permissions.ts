@@ -208,9 +208,8 @@ export function canWriteOpsArea(
   permissions: string[],
   area: StaffOpsArea,
 ): boolean {
-  // A granted area always means full control — the read-only `:write` nuance
-  // is legacy. Anything the manager activates, the employee can manage.
-  return permissions.includes(area) || permissions.includes(writeAllowance(area));
+  // Read-only ("إطلاع") is the base `area`; edit ("تعديل") is `area:write`.
+  return permissions.includes(writeAllowance(area));
 }
 
 /**

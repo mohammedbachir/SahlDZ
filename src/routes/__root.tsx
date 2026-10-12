@@ -11,6 +11,7 @@ import {
 import { Toaster } from "sonner";
 import { tx } from "@/lib/ops-tx";
 import { getAutoScreenPath } from "@/lib/kiosk-session";
+import { StaffSessionSync } from "@/components/staff-session-sync";
 
 export const Route = createRootRoute({
   component: RootComponent,
@@ -82,6 +83,7 @@ function RootComponent() {
       </head>
       <body className="min-h-screen bg-background font-sans antialiased">
         <KioskAutoRoute />
+        <StaffSessionSync />
         <Outlet />
         <Toaster position="top-left" richColors dir="rtl" />
         <Scripts />

@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { requireOpsAccess } from "@/lib/permissions";
-import { TrendingUp, Users, UtensilsCrossed, Trash2, Loader2, Filter, CalendarDays } from "lucide-react";
+import { TrendingUp, Users, UtensilsCrossed, Trash2, Loader2, Filter, CalendarDays, Ban } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurantId, formatDZD } from "@/lib/restaurant";
 import { Card } from "@/components/ui/card";
@@ -11,6 +11,31 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { tx } from "@/lib/ops-tx";
+import { cancelReasonLabel } from "@/lib/order-cancel";
+
+/** One row of the `order_cancellations` audit trail, as selected above. */
+type CancellationRow = {
+  id: string;
+  order_id: string;
+  daily_number: number | null;
+  cancelled_from_status: string;
+  reason: string;
+  reason_other: string | null;
+  staff_id: string | null;
+  staff_name: string | null;
+  staff_role: string | null;
+  generated_waste: boolean;
+  estimated_cost: number | null;
+  created_at: string;
+};
+
+/** Arabic stage labels for the "cancelled from" column. */
+const CANCEL_STAGE_LABELS: Record<string, string> = {
+  new: "جديدة",
+  preparing: "قيد التحضير",
+  ready: "جاهزة",
+  served: "مقدّمة",
+};
 
 
 export const Route = createFileRoute("/ops/staff-performance")({
@@ -29,6 +54,9 @@ type StaffPerf = {
   avg_prep_min: number | null;
   waste_logged: number;
   waste_cost: number;
+  /** Orders voided before the dish was ready, i.e. staff-time losses. */
+  orders_cancelled: number;
+  cancellations: CancellationRow[];
 };
 
 const ROLE_COLORS: Record<string, string> = {
@@ -109,7 +137,29 @@ function OpsStaffPerformance() {
         prepByStaff.set(cid, prev);
       }
 
-      // 4. Get waste logged per staff (logged_by field)
+      // 4. Cancellations: the audit trail written by `order-cancel.functions`.
+      //    `generated_waste === false` rows are the ones that cost staff time
+      //    rather than food, so those are the ones reported on this screen.
+      const { data: cancelRows } = await supabase
+        .from("order_cancellations")
+        .select(
+          "id,order_id,daily_number,cancelled_from_status,reason,reason_other,staff_id,staff_name,staff_role,generated_waste,estimated_cost,created_at",
+        )
+        .eq("restaurant_id", restaurantId)
+        .eq("generated_waste", false)
+        .gte("created_at", from + "T00:00:00")
+        .lte("created_at", to + "T23:59:59");
+
+      const cancelsByStaff = new Map<string, { count: number; rows: CancellationRow[] }>();
+      for (const c of (cancelRows ?? []) as unknown as CancellationRow[]) {
+        const key = c.staff_id || c.staff_name || "";
+        const prev = cancelsByStaff.get(key) ?? { count: 0, rows: [] };
+        prev.count++;
+        prev.rows.push(c);
+        cancelsByStaff.set(key, prev);
+      }
+
+      // 5. Get waste logged per staff (logged_by field)
       const { data: wasteRows } = await supabase
         .from("waste_logs")
         .select("logged_by,cost")
@@ -128,7 +178,7 @@ function OpsStaffPerformance() {
         }
       }
 
-      // 5. Get attendance & dishes per staff
+      // 6. Get attendance & dishes per staff
       const { data: attendanceRows } = await supabase
         .from("staff_attendance")
         .select("staff_id, date, status, dishes_count")
@@ -153,12 +203,16 @@ function OpsStaffPerformance() {
         const waste = wasteByStaff.get(name) ?? { count: 0, cost: 0 };
         const prep = prepByStaff.get(s.id as string);
         const att = attendanceByStaff.get(s.id as string) ?? { daysPresent: 0, totalDishes: 0 };
+        const cancels =
+          cancelsByStaff.get(s.id as string) ?? cancelsByStaff.get(name) ?? { count: 0, rows: [] };
         return {
           id: s.id,
           name,
           role: s.role ?? "",
           days_present: att.daysPresent,
           dishes_count: att.totalDishes,
+          orders_cancelled: cancels.count,
+          cancellations: cancels.rows,
           orders_served: servedCounts.get(s.id) ?? 0,
           orders_prepared: prep?.count ?? 0,
           avg_prep_min: prep && prep.count > 0 ? prep.totalSec / prep.count / 60 : null,
@@ -175,6 +229,12 @@ function OpsStaffPerformance() {
   }, [restaurantId, from, to]);
 
   const totalDishes = staff.reduce((s, st) => s + st.dishes_count, 0);
+  const allCancellations = staff
+    .flatMap((st) => st.cancellations)
+    .sort(
+      (a, b) =>
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+    );
 
   return (
     <div className="p-2 space-y-4" dir="rtl">
@@ -239,6 +299,7 @@ function OpsStaffPerformance() {
                   <TableHead className="text-xs text-left">{tx("الأطباق المنجزة")}</TableHead>
                   <TableHead className="text-xs text-left">{tx("طلبات مُقدّمة")}</TableHead>
                   <TableHead className="text-xs text-left">{tx("طلبات حضّرها")}</TableHead>
+                  <TableHead className="text-xs text-left">{tx("طلبات ألغاها")}</TableHead>
                   <TableHead className="text-xs text-left">{tx("متوسط وقت التحضير")}</TableHead>
                   <TableHead className="text-xs text-left">{tx("هدر مسجّل")}</TableHead>
                   <TableHead className="text-xs text-left">{tx("تكلفة الهدر")}</TableHead>
@@ -270,6 +331,13 @@ function OpsStaffPerformance() {
                     <TableCell className="text-xs font-bold text-left tabular-nums">
                       {s.orders_prepared > 0 ? s.orders_prepared : "—"}
                     </TableCell>
+                    <TableCell
+                      className={`text-xs font-bold text-left tabular-nums ${
+                        s.orders_cancelled > 0 ? "text-destructive" : ""
+                      }`}
+                    >
+                      {s.orders_cancelled > 0 ? s.orders_cancelled : "—"}
+                    </TableCell>
                     <TableCell className="text-xs text-left tabular-nums">
                       {s.avg_prep_min !== null
                         ? `${s.avg_prep_min.toFixed(1)} ${tx("دقيقة")}`
@@ -278,6 +346,79 @@ function OpsStaffPerformance() {
                     <TableCell className="text-xs text-left tabular-nums">{s.waste_logged}</TableCell>
                     <TableCell className="text-xs text-left tabular-nums text-red-600">
                       {s.waste_cost > 0 ? formatDZD(s.waste_cost) : "—"}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </Card>
+
+      {/* Cancellations log — who voided which order, from which stage, why. */}
+      <Card>
+        <div className="p-3 border-b border-[var(--border)] flex items-center gap-2">
+          <Ban className="w-4 h-4 text-destructive" />
+          <h2 className="text-sm font-bold">{tx("سجل الطلبات الملغاة")}</h2>
+          <span className="text-[10px] text-[var(--muted-foreground)]">
+            {tx("التي أُلغيت قبل جاهزيتها — تظهر في سجل الهدر غيرها")}
+          </span>
+        </div>
+        {loading ? (
+          <div className="p-8 flex items-center justify-center">
+            <Loader2 className="w-5 h-5 animate-spin text-[var(--muted-foreground)]" />
+          </div>
+        ) : allCancellations.length === 0 ? (
+          <div className="p-8 text-center text-sm text-[var(--muted-foreground)]">
+            {tx("لا توجد طلبات ملغاة في هذه الفترة")}
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="text-xs">{tx("الموظف")}</TableHead>
+                  <TableHead className="text-xs text-left">{tx("رقم الطلبية")}</TableHead>
+                  <TableHead className="text-xs text-left">{tx("أُلغيت من")}</TableHead>
+                  <TableHead className="text-xs text-left">{tx("السبب")}</TableHead>
+                  <TableHead className="text-xs text-left">{tx("التكلفة التقديرية")}</TableHead>
+                  <TableHead className="text-xs text-left">{tx("التاريخ")}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {allCancellations.map((c) => (
+                  <TableRow key={c.id}>
+                    <TableCell className="text-sm font-medium">
+                      {c.staff_name ?? "—"}
+                      {c.staff_role && (
+                        <span className="text-[10px] text-[var(--muted-foreground)]">
+                          {" "}· {c.staff_role}
+                        </span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-xs text-left font-mono tabular-nums">
+                      {c.daily_number != null ? `#${c.daily_number}` : c.order_id.slice(-6)}
+                    </TableCell>
+                    <TableCell className="text-xs text-left">
+                      {CANCEL_STAGE_LABELS[c.cancelled_from_status] ??
+                        c.cancelled_from_status}
+                    </TableCell>
+                    <TableCell className="text-xs text-left">
+                      {cancelReasonLabel(c.reason)}
+                      {c.reason_other ? `: ${c.reason_other}` : ""}
+                    </TableCell>
+                    <TableCell className="text-xs text-left tabular-nums text-muted-foreground">
+                      {Number(c.estimated_cost ?? 0) > 0
+                        ? formatDZD(Number(c.estimated_cost))
+                        : "—"}
+                    </TableCell>
+                    <TableCell className="text-xs text-left tabular-nums text-muted-foreground">
+                      {c.created_at
+                        ? new Date(c.created_at).toLocaleString("ar-DZ", {
+                            dateStyle: "short",
+                            timeStyle: "short",
+                          })
+                        : "—"}
                     </TableCell>
                   </TableRow>
                 ))}

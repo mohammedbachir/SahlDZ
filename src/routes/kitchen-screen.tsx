@@ -24,6 +24,7 @@ import {
   Eye,
   Printer,
   EyeOff,
+  Ban,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -36,6 +37,9 @@ import {
   individualChefLogout,
   getPublicChefList,
 } from "@/lib/individual-chef.functions";
+import { cancelOrderByStaff } from "@/lib/order-cancel.functions";
+import { StaffCancelOrderDialog } from "@/components/staff-cancel-order-dialog";
+import { isCancellableStatus } from "@/lib/order-cancel";
 import {
   loadKitchensSnapshot,
   resolveKitchenId,
@@ -262,6 +266,7 @@ function Page() {
   const iReadyFn = useServerFn(individualChefMarkReady);
   const iLogoutFn = useServerFn(individualChefLogout);
   const chefListFn = useServerFn(getPublicChefList);
+  const cancelFn = useServerFn(cancelOrderByStaff);
 
   const [token, setToken] = useState<string | null>(null);
   const [chefName, setChefName] = useState<string | null>(null);
@@ -288,6 +293,9 @@ function Page() {
   const [chefs, setChefs] = useState<{ id: string; name: string }[]>([]);
   const [pendingOrder, setPendingOrder] = useState<Order | null>(null);
   const [selectedChefId, setSelectedChefId] = useState<string | null>(null);
+  /** Order awaiting a mandatory cancellation reason. */
+  const [cancelTarget, setCancelTarget] = useState<Order | null>(null);
+  const [cancelSaving, setCancelSaving] = useState(false);
   const prevOrderCount = useRef(0);
   const skipRefreshUntil = useRef(0);
 
@@ -571,6 +579,37 @@ function Page() {
       toast.error((e as Error).message);
     } finally {
       setBusy(null);
+    }
+  }
+
+  /**
+   * Voids an order from the kitchen terminal. The reason is mandatory, and the
+   * server decides whether it lands in the waste log (dish already ready) or in
+   * the staff-performance log (still being prepared).
+   */
+  async function onCancel(reason: string, reasonOther: string | null) {
+    if (!token || !cancelTarget) return;
+    setCancelSaving(true);
+    skipRefreshUntil.current = Date.now() + 6000;
+    try {
+      const res = await cancelFn({
+        data: { token, orderId: cancelTarget.id, reason, reasonOther },
+      });
+      setOrders((prev) => prev.filter((x) => x.id !== cancelTarget.id));
+      setCompletedOrders((prev) =>
+        prev.filter((x) => x.id !== cancelTarget.id),
+      );
+      setCancelTarget(null);
+      toast.success(
+        res.loggedTo === "waste"
+          ? "تم إلغاء الطلبية وسُجِّل الهدر"
+          : "تم إلغاء الطلبية وسُجِّل في أداء الفريق",
+      );
+    } catch (e) {
+      skipRefreshUntil.current = 0;
+      toast.error((e as Error).message);
+    } finally {
+      setCancelSaving(false);
     }
   }
 
@@ -1158,6 +1197,17 @@ function Page() {
                                 </span>
                               )}
                             </Button>
+                            {isCancellableStatus(o.status) && (
+                              <Button
+                                onClick={() => setCancelTarget(o)}
+                                disabled={busy === o.id}
+                                variant="outline"
+                                className="h-12 px-4 rounded-xl border-destructive/40 text-destructive hover:bg-destructive/10"
+                                aria-label="إلغاء الطلبية"
+                              >
+                                <Ban className="w-5 h-5" />
+                              </Button>
+                            )}
                           </div>
                         </motion.div>
                       );
@@ -1356,6 +1406,21 @@ function Page() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <StaffCancelOrderDialog
+        open={cancelTarget !== null}
+        onOpenChange={(next) => {
+          if (!next) setCancelTarget(null);
+        }}
+        orderLabel={
+          cancelTarget
+            ? `طلبية #${cancelTarget.daily_number ?? "—"}`
+            : ""
+        }
+        orderStatus={cancelTarget?.status}
+        saving={cancelSaving}
+        onSubmit={onCancel}
+      />
     </div>
   );
 }

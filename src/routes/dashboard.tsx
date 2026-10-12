@@ -33,6 +33,7 @@ import {
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { NotificationsBell } from "@/components/NotificationsBell";
 import { useTranslation } from "react-i18next";
+import { clearWebStaffPermissions } from "@/lib/permissions";
 import { Outlet } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/dashboard")({
@@ -265,6 +266,7 @@ function DashboardLayout() {
   const handleLogout = async () => {
     localStorage.removeItem("sahl_dz_preview_role");
     localStorage.removeItem("sahl_dz_auth_cache");
+    clearWebStaffPermissions();
     await supabase.auth.signOut();
     navigate({ to: "/login" });
   };

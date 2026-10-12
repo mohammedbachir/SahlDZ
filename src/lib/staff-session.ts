@@ -204,6 +204,52 @@ export function hasUnifiedStaffSession(): boolean {
   return loadUnifiedStaffSession() !== null;
 }
 
+/** Update the cached permission set of the active session in place, re-mirroring
+ * the legacy per-role keys (adding newly granted screens, removing revoked
+ * ones) without forcing a re-login. */
+export async function updateUnifiedStaffPermissions(
+  permissions: string[],
+): Promise<void> {
+  const token = read(SESSION_KEY);
+  const expiresAt = read(EXPIRES_KEY);
+  if (!token || !expiresAt) return;
+  let restaurant: UnifiedStaffSession["restaurant"] = {
+    id: "",
+    name: "",
+    logo_url: null,
+  };
+  try {
+    const parsed = JSON.parse(read(RESTAURANT_KEY) ?? "null") as {
+      id?: string;
+      name?: string;
+      logo_url?: string | null;
+    } | null;
+    if (parsed)
+      restaurant = {
+        id: parsed.id ?? "",
+        name: parsed.name ?? "",
+        logo_url: parsed.logo_url ?? null,
+      };
+  } catch {
+    /* ignore */
+  }
+  for (const k of Object.values(LEGACY_KEYS)) {
+    remove(k.token);
+    remove(k.expires);
+    remove(k.name);
+    remove(k.id);
+    remove(k.restaurant);
+  }
+  await saveUnifiedStaffSession({
+    token,
+    expiresAt,
+    staffId: read(ID_KEY) ?? "",
+    staffName: read(NAME_KEY) ?? "",
+    restaurant,
+    permissions: permissions.filter((p): p is StaffPermission => !!p),
+  });
+}
+
 /** True once a unified session has been started here, even if it expired,
  * so screen bounces land back on the unified login page. */
 export function hasUnifiedStaffSessionEver(): boolean {

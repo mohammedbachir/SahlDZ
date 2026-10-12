@@ -51,6 +51,7 @@ type Order = {
   daily_number: number | null;
   notes: string | null;
   table_number: number | null;
+  hall_name?: string | null;
   is_mine: boolean;
   items?: OrderItem[];
 };
@@ -151,18 +152,12 @@ function getTimerColor(minutes: number) {
   };
 }
 
-function getElapsedMinutes(iso: string) {
-  return Math.max(
-    0,
-    Math.floor((Date.now() - new Date(iso).getTime()) / 60000),
-  );
+function getElapsedMinutes(iso: string, now: number) {
+  return Math.max(0, Math.floor((now - new Date(iso).getTime()) / 60000));
 }
 
-function formatElapsed(iso: string) {
-  const sec = Math.max(
-    0,
-    Math.floor((Date.now() - new Date(iso).getTime()) / 1000),
-  );
+function formatElapsed(iso: string, now: number) {
+  const sec = Math.max(0, Math.floor((now - new Date(iso).getTime()) / 1000));
   const m = Math.floor(sec / 60);
   const s = sec % 60;
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
@@ -215,10 +210,10 @@ function Page() {
   const soundEnabledRef = useRef(true);
   const [composerOpen, setComposerOpen] = useState(false);
 
-  const [tick, setTick] = useState(0);
+  const [nowTick, setNowTick] = useState(() => Date.now());
 
   useEffect(() => {
-    const i = setInterval(() => setTick((t) => t + 1), 1000);
+    const i = setInterval(() => setNowTick(Date.now()), 1000);
     return () => clearInterval(i);
   }, []);
 
@@ -535,7 +530,8 @@ function Page() {
         ) : (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {filtered.map((order) => {
-              const mins = getElapsedMinutes(order.created_at);
+              const now = nowTick;
+              const mins = getElapsedMinutes(order.created_at, now);
               const tc =
                 order.status === "ready"
                   ? {
@@ -566,6 +562,7 @@ function Page() {
                       ) : (
                         <span className="bg-[var(--primary)]/10 text-[var(--primary)] rounded-lg px-2.5 py-1 text-sm font-bold">
                           {tx("waiter.table")} {order.table_number ?? "—"}
+                          {order.hall_name ? ` · ${order.hall_name}` : ""}
                         </span>
                       )}
                       {order.daily_number != null && (
@@ -584,7 +581,7 @@ function Page() {
                         className={`flex items-center gap-1.5 ${tc.text} font-mono text-lg font-bold`}
                       >
                         <Clock className="w-4 h-4" />
-                        {formatElapsed(order.created_at)}
+                        {formatElapsed(order.created_at, now)}
                       </div>
                     </div>
                   </div>

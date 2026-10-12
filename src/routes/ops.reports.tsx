@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { requireOpsAccess } from "@/lib/permissions";
 import {
@@ -20,6 +20,9 @@ import {
   UtensilsCrossed,
   Bike,
   ShoppingBag,
+  Search,
+  Wallet,
+  CheckCircle2,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurantId, formatDZD } from "@/lib/restaurant";
@@ -70,7 +73,58 @@ type ReportData = {
   totalExpenses: number;
   netProfit: number;
   avgOrder: number;
+  discounts: number;
+  debts: number;
 };
+
+type PaymentRow = {
+  id: string;
+  order_id: string;
+  daily_number: number | null;
+  table_number: number | null;
+  order_type: string;
+  customer_name: string | null;
+  customer_phone: string | null;
+  mode: string;
+  total: number;
+  paid: number;
+  debt: number;
+  discount: number;
+  settled?: boolean;
+  created_at: string;
+};
+
+type RestaurantInfo = {
+  name: string;
+  phone: string | null;
+  address: string | null;
+};
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function paymentModeLabel(mode: string): string {
+  return mode === "full"
+    ? "دفع كامل"
+    : mode === "partial"
+      ? "دفع جزئي"
+      : mode === "debt"
+        ? "دين"
+        : mode === "gift"
+          ? "إهداء"
+          : mode === "prepayment"
+            ? "دفعة مقدمة"
+            : mode;
+}
+
+function orderTypeLabel(t: string): string {
+  return t === "takeaway" ? "سفري" : t === "delivery" ? "توصيل" : "قاعة";
+}
 
 type OpsReportTab =
   | "daily"
@@ -107,6 +161,51 @@ function OpsReports() {
   const [ledgerLoading, setLedgerLoading] = useState(true);
   const [from, setFrom] = useState(startOfMonth());
   const [to, setTo] = useState(today());
+
+  const [payments, setPayments] = useState<PaymentRow[]>([]);
+  const [paymentsLoading, setPaymentsLoading] = useState(false);
+  const [paySearch, setPaySearch] = useState("");
+  const [settlingId, setSettlingId] = useState<string | null>(null);
+  const [restInfo, setRestInfo] = useState<RestaurantInfo | null>(null);
+
+  const loadPayments = useCallback(async () => {
+    if (!restaurantId) return;
+    setPaymentsLoading(true);
+    try {
+      const { data } = await supabase
+        .from("payments")
+        .select("*")
+        .eq("restaurant_id", restaurantId);
+      const rows = ((data as PaymentRow[]) ?? [])
+        .slice()
+        .sort((a, b) =>
+          String(b.created_at).localeCompare(String(a.created_at)),
+        );
+      setPayments(rows);
+    } catch {
+      setPayments([]);
+    } finally {
+      setPaymentsLoading(false);
+    }
+  }, [restaurantId]);
+
+  useEffect(() => {
+    if (restaurantId === undefined || !restaurantId) return;
+    void loadPayments();
+    (async () => {
+      const { data } = await supabase
+        .from("restaurants")
+        .select("name,phone,address")
+        .eq("id", restaurantId)
+        .maybeSingle();
+      if (data)
+        setRestInfo({
+          name: (data as any).name ?? "",
+          phone: (data as any).phone ?? null,
+          address: (data as any).address ?? null,
+        });
+    })();
+  }, [restaurantId, loadPayments]);
 
   // Restaurant Name
   useEffect(() => {
@@ -150,6 +249,8 @@ function OpsReports() {
         totalExpenses: 0,
         netProfit: 0,
         avgOrder: 0,
+        discounts: 0,
+        debts: 0,
       });
       setLedgerLoading(false);
       return;
@@ -160,7 +261,7 @@ function OpsReports() {
       const [ordersRes, purchasesRes, salariesRes, wasteRes] = await Promise.all([
         supabase
           .from("orders")
-          .select("total")
+          .select("total,paid_amount,debt_amount,discount_amount,payment_mode")
           .eq("restaurant_id", restaurantId)
           .eq("status", "paid")
           .gte("created_at", from + "T00:00:00")
@@ -188,7 +289,20 @@ function OpsReports() {
       if (cancel) return;
 
       const orders = ordersRes.data ?? [];
-      const revenue = orders.reduce((s: number, o: any) => s + Number(o.total ?? 0), 0);
+      // Revenue = cash actually collected (paid_amount), falling back to the
+      // full total for legacy paid orders that predate payment breakdowns.
+      const revenue = orders.reduce(
+        (s: number, o: any) => s + Number(o.paid_amount ?? o.total ?? 0),
+        0,
+      );
+      const discounts = orders.reduce(
+        (s: number, o: any) => s + Number(o.discount_amount ?? 0),
+        0,
+      );
+      const debts = orders.reduce(
+        (s: number, o: any) => s + Number(o.debt_amount ?? 0),
+        0,
+      );
       const ordersCount = orders.length;
       const purchases = (purchasesRes.data ?? []).reduce(
         (s: number, p: any) => s + Number(p.total ?? 0),
@@ -213,6 +327,8 @@ function OpsReports() {
         totalExpenses,
         netProfit: revenue - totalExpenses,
         avgOrder: ordersCount > 0 ? Math.round(revenue / ordersCount) : 0,
+        discounts,
+        debts,
       });
       setLedgerLoading(false);
     })();
@@ -339,6 +455,77 @@ function OpsReports() {
     },
     { id: "financial", label: "كشف الحساب والبيان المالي", icon: Calculator },
   ];
+
+  function printPaymentReceipt(p: PaymentRow) {
+    const w = window.open("", "_blank", "width=420,height=600");
+    if (!w) return;
+    const dateStr = new Date(p.created_at).toLocaleString("ar", {
+      dateStyle: "short",
+      timeStyle: "short",
+    });
+    const orderNo =
+      p.daily_number != null ? String(p.daily_number).padStart(3, "0") : "—";
+    const html = `<!doctype html>
+<html dir="rtl" lang="ar"><head><meta charset="utf-8"/><title>إيصال - ${orderNo}</title>
+<style>
+  @page{size:80mm auto;margin:4mm}body{font-family:'Cairo',system-ui,sans-serif;width:72mm;margin:0 auto;color:#000}
+  .center{text-align:center}.name{font-size:18px;font-weight:800}.muted{color:#555;font-size:12px}
+  hr{border:none;border-top:1px dashed #000;margin:8px 0}
+  .row{font-size:13px;display:flex;justify-content:space-between;padding:3px 0}
+  .total{font-size:15px;font-weight:800;display:flex;justify-content:space-between}
+</style></head><body>
+  <div class="center"><div class="name">${escapeHtml(restInfo?.name ?? "")}</div>
+    ${restInfo?.phone ? `<div class="muted">${escapeHtml(restInfo.phone)}</div>` : ""}
+    ${restInfo?.address ? `<div class="muted">${escapeHtml(restInfo.address)}</div>` : ""}
+    <div class="muted">إيصال دفع</div></div><hr/>
+  <div class="muted">
+    <div>رقم الطلب <b>${orderNo}</b></div>
+    ${p.order_type === "takeaway" ? "<div>سفري</div>" : p.order_type === "delivery" ? "<div>توصيل</div>" : p.table_number != null ? `<div>الطاولة <b>${p.table_number}</b></div>` : ""}
+    ${p.customer_name ? `<div>${escapeHtml(p.customer_name)}</div>` : ""}
+    ${p.customer_phone ? `<div>${escapeHtml(p.customer_phone)}</div>` : ""}
+    <div>${dateStr}</div>
+  </div><hr/>
+  <div class="row"><span>طريقة الدفع</span><span>${paymentModeLabel(p.mode)}</span></div>
+  <div class="row"><span>الإجمالي</span><span>${Number(p.total).toLocaleString("en-US")} دج</span></div>
+  <div class="row"><span>المدفوع</span><span>${Number(p.paid).toLocaleString("en-US")} دج</span></div>
+  ${Number(p.discount) > 0 ? `<div class="row"><span>الخصم</span><span>${Number(p.discount).toLocaleString("en-US")} دج</span></div>` : ""}
+  ${Number(p.debt) > 0 ? `<div class="total"><span>الدين المتبقي</span><span>${Number(p.debt).toLocaleString("en-US")} دج</span></div>` : ""}
+  <hr/><div class="center muted">شكراً لتعاملكم معنا</div>
+  <script>window.onload=function(){window.focus();window.print();setTimeout(function(){window.close()},300)}</script>
+</body></html>`;
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
+  }
+
+  async function settleDebt(p: PaymentRow) {
+    if (!restaurantId) return;
+    setSettlingId(p.id);
+    try {
+      await supabase
+        .from("payments")
+        .update({ debt: 0, settled: true, settled_at: new Date().toISOString() })
+        .eq("id", p.id);
+      setPayments((prev) =>
+        prev.map((x) => (x.id === p.id ? { ...x, debt: 0, settled: true } : x)),
+      );
+    } finally {
+      setSettlingId(null);
+    }
+  }
+
+  const filteredPayments = payments.filter((p) => {
+    const q = paySearch.trim();
+    if (!q) return true;
+    return (
+      String(p.daily_number ?? "").includes(q) ||
+      String(p.table_number ?? "").includes(q) ||
+      (p.customer_name ?? "").includes(q) ||
+      (p.customer_phone ?? "").includes(q)
+    );
+  });
+  const debtPayments = payments.filter((p) => Number(p.debt) > 0);
+  const debtTotal = debtPayments.reduce((s, p) => s + Number(p.debt ?? 0), 0);
 
   return (
     <div className="space-y-4 text-right" dir="rtl">
@@ -687,6 +874,46 @@ function OpsReports() {
                         </TableCell>
                       </TableRow>
 
+                      {/* Discounts (informational — already excluded from collected revenue) */}
+                      {report.discounts > 0 && (
+                        <TableRow>
+                          <TableCell className="font-medium text-xs text-foreground">
+                            {tx("الخصومات الممنوحة")}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="warning" className="text-[10px]">
+                              {tx("خصم")}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground">
+                            {tx("خصومات وإهداءات مسجلة على الطلبات المدفوعة")}
+                          </TableCell>
+                          <TableCell className="font-medium text-xs tabular-nums text-[#B7791F]">
+                            {formatDZD(report.discounts)}
+                          </TableCell>
+                        </TableRow>
+                      )}
+
+                      {/* Outstanding debts (informational — not yet collected) */}
+                      {report.debts > 0 && (
+                        <TableRow>
+                          <TableCell className="font-medium text-xs text-foreground">
+                            {tx("مديونيات غير محصلة")}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="destructive" className="text-[10px]">
+                              {tx("دين")}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground">
+                            {tx("مبالغ متبقية على العملاء لم تُحصّل بعد")}
+                          </TableCell>
+                          <TableCell className="font-medium text-xs tabular-nums text-[#B33F35]">
+                            {formatDZD(report.debts)}
+                          </TableCell>
+                        </TableRow>
+                      )}
+
                       {/* Purchases Row */}
                       <TableRow>
                         <TableCell className="font-medium text-xs text-foreground">
@@ -783,6 +1010,229 @@ function OpsReports() {
                     </TableBody>
                   </Table>
                 </div>
+              </div>
+
+              {/* Debts & Partial Payments */}
+              {debtPayments.length > 0 && (
+                <div className="rounded-md border border-border bg-card overflow-hidden">
+                  <div className="px-4 py-2.5 bg-secondary/30 border-b border-border flex items-center justify-between">
+                    <h2 className="text-xs font-semibold text-foreground flex items-center gap-2">
+                      <Wallet className="w-3.5 h-3.5 text-primary" />
+                      {tx("المديونيات والدفعات الجزئية")}
+                    </h2>
+                    <span className="text-[11px] font-bold text-[#B33F35] tabular-nums">
+                      {formatDZD(debtTotal)}
+                    </span>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="text-right text-xs">
+                            {tx("الطلب")}
+                          </TableHead>
+                          <TableHead className="text-right text-xs">
+                            {tx("العميل")}
+                          </TableHead>
+                          <TableHead className="text-right text-xs">
+                            {tx("الهاتف")}
+                          </TableHead>
+                          <TableHead className="text-right text-xs">
+                            {tx("الدين المتبقي")}
+                          </TableHead>
+                          <TableHead className="text-right text-xs">
+                            {tx("التاريخ")}
+                          </TableHead>
+                          <TableHead className="text-right text-xs">
+                            {tx("إجراء")}
+                          </TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {debtPayments.map((p) => (
+                          <TableRow key={p.id}>
+                            <TableCell className="text-xs">
+                              #
+                              {p.daily_number != null
+                                ? String(p.daily_number).padStart(3, "0")
+                                : "—"}
+                              {" · "}
+                              {orderTypeLabel(p.order_type)}
+                            </TableCell>
+                            <TableCell className="text-xs font-medium">
+                              {p.customer_name || "—"}
+                            </TableCell>
+                            <TableCell
+                              className="text-xs tabular-nums"
+                              dir="ltr"
+                            >
+                              {p.customer_phone || "—"}
+                            </TableCell>
+                            <TableCell className="text-xs font-bold tabular-nums text-[#B33F35]">
+                              {formatDZD(Number(p.debt))}
+                            </TableCell>
+                            <TableCell className="text-xs text-muted-foreground">
+                              {new Date(p.created_at).toLocaleDateString("ar")}
+                            </TableCell>
+                            <TableCell>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7 gap-1.5 rounded-sm text-[11px]"
+                                disabled={settlingId === p.id}
+                                onClick={() => settleDebt(p)}
+                              >
+                                {settlingId === p.id ? (
+                                  <Loader2 className="w-3 h-3 animate-spin" />
+                                ) : (
+                                  <CheckCircle2 className="w-3 h-3" />
+                                )}
+                                {tx("تسوية الدين")}
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              )}
+
+              {/* Payments & Receipts Log */}
+              <div className="rounded-md border border-border bg-card overflow-hidden">
+                <div className="px-4 py-2.5 bg-secondary/30 border-b border-border flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <h2 className="text-xs font-semibold text-foreground flex items-center gap-2">
+                    <Receipt className="w-3.5 h-3.5 text-primary" />
+                    {tx("سجل المدفوعات والإيصالات")}
+                    <span className="text-[11px] font-normal text-muted-foreground">
+                      ({payments.length})
+                    </span>
+                  </h2>
+                  <div className="relative w-full sm:w-64">
+                    <Search className="w-3.5 h-3.5 text-muted-foreground absolute top-1/2 -translate-y-1/2 start-2.5" />
+                    <Input
+                      value={paySearch}
+                      onChange={(e) => setPaySearch(e.target.value)}
+                      placeholder={tx("ابحث برقم الطلب أو اسم العميل أو الهاتف")}
+                      className="h-8 ps-8 text-xs rounded-sm"
+                    />
+                  </div>
+                </div>
+                {paymentsLoading ? (
+                  <div className="p-12 flex items-center justify-center">
+                    <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+                  </div>
+                ) : filteredPayments.length === 0 ? (
+                  <div className="p-8 text-center text-xs text-muted-foreground">
+                    {tx("لا توجد مدفوعات مسجلة بعد")}
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="text-right text-xs">
+                            {tx("الطلب")}
+                          </TableHead>
+                          <TableHead className="text-right text-xs">
+                            {tx("النوع")}
+                          </TableHead>
+                          <TableHead className="text-right text-xs">
+                            {tx("العميل")}
+                          </TableHead>
+                          <TableHead className="text-right text-xs">
+                            {tx("طريقة الدفع")}
+                          </TableHead>
+                          <TableHead className="text-right text-xs">
+                            {tx("الإجمالي")}
+                          </TableHead>
+                          <TableHead className="text-right text-xs">
+                            {tx("المدفوع")}
+                          </TableHead>
+                          <TableHead className="text-right text-xs">
+                            {tx("الدين")}
+                          </TableHead>
+                          <TableHead className="text-right text-xs">
+                            {tx("التاريخ")}
+                          </TableHead>
+                          <TableHead className="text-right text-xs">
+                            {tx("إيصال")}
+                          </TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {filteredPayments.map((p) => (
+                          <TableRow key={p.id}>
+                            <TableCell className="text-xs tabular-nums">
+                              #
+                              {p.daily_number != null
+                                ? String(p.daily_number).padStart(3, "0")
+                                : "—"}
+                            </TableCell>
+                            <TableCell className="text-xs">
+                              {orderTypeLabel(p.order_type)}
+                              {p.table_number != null
+                                ? ` · ${p.table_number}`
+                                : ""}
+                            </TableCell>
+                            <TableCell className="text-xs">
+                              <div className="font-medium">
+                                {p.customer_name || "—"}
+                              </div>
+                              {p.customer_phone ? (
+                                <div
+                                  className="text-[11px] text-muted-foreground tabular-nums"
+                                  dir="ltr"
+                                >
+                                  {p.customer_phone}
+                                </div>
+                              ) : null}
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="secondary" className="text-[10px]">
+                                {paymentModeLabel(p.mode)}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-xs tabular-nums">
+                              {formatDZD(Number(p.total))}
+                            </TableCell>
+                            <TableCell className="text-xs font-medium tabular-nums text-[#27734F]">
+                              {formatDZD(Number(p.paid))}
+                            </TableCell>
+                            <TableCell
+                              className={`text-xs tabular-nums ${
+                                Number(p.debt) > 0
+                                  ? "font-bold text-[#B33F35]"
+                                  : "text-muted-foreground"
+                              }`}
+                            >
+                              {Number(p.debt) > 0
+                                ? formatDZD(Number(p.debt))
+                                : "—"}
+                            </TableCell>
+                            <TableCell className="text-xs text-muted-foreground">
+                              {new Date(p.created_at).toLocaleString("ar", {
+                                dateStyle: "short",
+                                timeStyle: "short",
+                              })}
+                            </TableCell>
+                            <TableCell>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7 gap-1.5 rounded-sm text-[11px]"
+                                onClick={() => printPaymentReceipt(p)}
+                              >
+                                <Printer className="w-3 h-3" />
+                                {tx("طباعة")}
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
               </div>
             </div>
           ) : null}

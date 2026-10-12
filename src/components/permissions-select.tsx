@@ -51,26 +51,12 @@ export function PermissionsSelect({ value, onChange, disabled }: Props) {
     onChange([...set]);
   };
 
-  const toggleArea = (area: StaffOpsArea) => {
+  const setAreaMode = (area: StaffOpsArea, mode: "none" | "view" | "write") => {
     const set = new Set(value);
-    if (set.has(area) || set.has(`${area}:write`)) {
-      set.delete(area);
-      set.delete(`${area}:write`);
-    } else {
-      set.delete(area);
-      set.add(`${area}:write`);
-    }
-    onChange([...set]);
-  };
-
-  const toggleWrite = (area: StaffOpsArea) => {
-    const set = new Set(value);
-    if (set.has(`${area}:write`)) {
-      set.delete(`${area}:write`);
-    } else {
-      set.delete(area);
-      set.add(`${area}:write`);
-    }
+    set.delete(area);
+    set.delete(`${area}:write`);
+    if (mode === "view") set.add(area);
+    else if (mode === "write") set.add(`${area}:write`);
     onChange([...set]);
   };
 
@@ -151,22 +137,33 @@ export function PermissionsSelect({ value, onChange, disabled }: Props) {
                         type="checkbox"
                         className="accent-[var(--primary)]"
                         checked={active}
-                        onChange={() => toggleArea(area)}
+                        onChange={() => setAreaMode(area, active ? "none" : "view")}
                       />
                       <span className="truncate">{OPS_AREA_LABELS[area]}</span>
                     </label>
                     {active && (
-                      <div className="flex shrink-0 items-center gap-1.5">
+                      <div className="flex shrink-0 items-center overflow-hidden rounded-md border text-[11px] font-semibold">
                         <button
                           type="button"
-                          onClick={() => toggleWrite(area)}
-                          className={`rounded-md border px-2 py-0.5 text-[11px] font-semibold transition-colors ${
+                          onClick={() => setAreaMode(area, "view")}
+                          className={`px-2 py-0.5 transition-colors ${
                             write
-                              ? "border-[var(--border)] bg-transparent text-[var(--muted-foreground)] hover:border-[var(--primary)]/40"
-                              : "border-[var(--primary)] bg-[var(--primary)]/10 text-[var(--primary)]"
+                              ? "text-[var(--muted-foreground)] hover:bg-[var(--muted)]"
+                              : "bg-[var(--primary)]/10 text-[var(--primary)]"
                           }`}
                         >
-                          {write ? "إطلاع فقط" : "تعديل"}
+                          إطلاع
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setAreaMode(area, "write")}
+                          className={`px-2 py-0.5 transition-colors ${
+                            write
+                              ? "bg-[var(--primary)]/10 text-[var(--primary)]"
+                              : "text-[var(--muted-foreground)] hover:bg-[var(--muted)]"
+                          }`}
+                        >
+                          تعديل
                         </button>
                       </div>
                     )}

@@ -3,6 +3,7 @@ import { getRequestHeader } from "@tanstack/react-start/server";
 import { supabase } from "@/integrations/supabase/client";
 import { getFirebaseDb } from "@/integrations/firebase/config";
 import {
+  addDoc,
   collection,
   doc,
   getDoc,
@@ -191,11 +192,17 @@ export async function getCashierContextCore(token: string) {
   const restaurantId = await resolveCashierRestaurantId(token);
   const { data: rest } = await supabase
     .from("restaurants")
-    .select("id,name,logo_url")
+    .select("id,name,logo_url,phone,address")
     .eq("id", restaurantId)
     .maybeSingle();
   return {
-    restaurant: (rest as any) ?? { id: restaurantId, name: "", logo_url: null },
+    restaurant: (rest as any) ?? {
+      id: restaurantId,
+      name: "",
+      logo_url: null,
+      phone: null,
+      address: null,
+    },
   };
 }
 
@@ -341,16 +348,24 @@ export const cashierLookupTable = createServerFn({ method: "GET" })
     return cashierLookupTableCore(token, tableNumber, hallId);
   });
 
-export type CashierPaymentMode = "full" | "partial" | "debt" | "gift";
+export type CashierPaymentMode =
+  | "full"
+  | "partial"
+  | "debt"
+  | "gift"
+  | "prepayment";
 
 export type CashierPaymentInput = {
   mode: CashierPaymentMode;
   paidAmount?: number;
   remainderKind?: "debt" | "discount";
+  customerName?: string;
+  customerPhone?: string;
 };
 
 export type CashierPaymentOutcome = {
   orderId?: string;
+  paymentId?: string;
   mode: CashierPaymentMode;
   paid: number;
   debt: number;
@@ -363,6 +378,9 @@ function buildPaymentBreakdown(
 ): CashierPaymentOutcome | null {
   const mode: CashierPaymentMode = payment?.mode ?? "full";
   const fmt = (n: number) => Math.round(n * 100) / 100;
+
+  if (mode === "prepayment")
+    throw new Error("الدفعة المقدمة تُسجَّل عبر زر الطباعة الخاص بها");
 
   if (mode === "full") {
     return { mode, paid: fmt(total), debt: 0, discount: 0 };
@@ -414,7 +432,9 @@ export async function cashierMarkPaidCore(
     if (data.status !== "ready" && data.status !== "served") continue;
     const total = Number(data.total) || 0;
     const breakdown = buildPaymentBreakdown(total, payment);
-    await updateDoc(orderRef, {
+    const resolvedName = payment?.customerName ?? data.customer_name ?? null;
+    const resolvedPhone = payment?.customerPhone ?? data.customer_phone ?? null;
+    const orderPatch: Record<string, unknown> = {
       status: "paid",
       payment_status: "paid",
       served_at: now,
@@ -422,8 +442,31 @@ export async function cashierMarkPaidCore(
       paid_amount: breakdown!.paid,
       debt_amount: breakdown!.debt,
       discount_amount: breakdown!.discount,
+    };
+    if (payment?.customerName !== undefined)
+      orderPatch.customer_name = payment.customerName || null;
+    if (payment?.customerPhone !== undefined)
+      orderPatch.customer_phone = payment.customerPhone || null;
+    await updateDoc(orderRef, orderPatch);
+
+    const payRef = await addDoc(collection(db, "payments"), {
+      restaurant_id: restaurantId,
+      order_id: orderId,
+      daily_number: (data.daily_number as number | null) ?? null,
+      table_number: (data.table_number as number | null) ?? null,
+      hall_id: (data.hall_id as string | null) ?? null,
+      order_type: (data.order_type as string) ?? "dine_in",
+      customer_name: resolvedName,
+      customer_phone: resolvedPhone,
+      mode: breakdown!.mode,
+      total,
+      paid: breakdown!.paid,
+      debt: breakdown!.debt,
+      discount: breakdown!.discount,
+      staff_id: staffId ?? null,
+      created_at: now,
     });
-    outcomes.push({ orderId, ...breakdown! });
+    outcomes.push({ orderId, paymentId: payRef.id, ...breakdown! });
   }
 
   if (staffId && restaurantId && outcomes.length > 0) {
@@ -469,7 +512,6 @@ export async function cashierCancelOrderCore(
   const restaurantId = await resolveCashierRestaurantId(token);
   const db = getFirebaseDb();
   if (!db) throw new Error("Firebase غير متصل");
-
   const orderRef = doc(db, "orders", orderId);
   const snap = await getDoc(orderRef);
   if (!snap.exists()) throw new Error("الطلب غير موجود");
@@ -508,6 +550,153 @@ export const cashierCancelOrder = createServerFn({ method: "POST" })
       staffName?: string;
     };
     return cashierCancelOrderCore(token, orderId, reason, staffId, staffName);
+  });
+
+/** A persisted payment/receipt record (one per finalized order). */
+export type CashierPaymentRecord = {
+  id: string;
+  order_id: string;
+  daily_number: number | null;
+  table_number: number | null;
+  hall_id: string | null;
+  order_type: string;
+  customer_name: string | null;
+  customer_phone: string | null;
+  mode: string;
+  total: number;
+  paid: number;
+  debt: number;
+  discount: number;
+  staff_id: string | null;
+  created_at: string;
+};
+
+/** DB logic: list persisted payment records, newest first. */
+export async function cashierListPaymentsCore(
+  token: string,
+  opts?: { date?: string; mode?: string; onlyDebt?: boolean },
+) {
+  const restaurantId = await resolveCashierRestaurantId(token);
+  const db = getFirebaseDb();
+  if (!db) throw new Error("Firebase غير متصل");
+  const snap = await getDocs(
+    query(collection(db, "payments"), where("restaurant_id", "==", restaurantId)),
+  );
+  let rows = snap.docs.map((d) => ({
+    id: d.id,
+    ...(d.data() as any),
+  })) as CashierPaymentRecord[];
+  if (opts?.date)
+    rows = rows.filter((r) => String(r.created_at ?? "").slice(0, 10) === opts.date);
+  if (opts?.mode) rows = rows.filter((r) => r.mode === opts.mode);
+  if (opts?.onlyDebt) rows = rows.filter((r) => Number(r.debt) > 0);
+  rows.sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
+  return { payments: rows };
+}
+
+export const cashierListPayments = createServerFn({ method: "GET" })
+  .validator(
+    (d: {
+      token: string;
+      date?: string;
+      mode?: string;
+      onlyDebt?: boolean;
+    }) => d,
+  )
+  .handler(async ({ data }) => {
+    const { token, ...opts } = data as {
+      token: string;
+      date?: string;
+      mode?: string;
+      onlyDebt?: boolean;
+    };
+    return cashierListPaymentsCore(token, opts);
+  });
+
+/** DB logic: fetch a single payment record for reprint. */
+export async function cashierGetPaymentCore(token: string, paymentId: string) {
+  const restaurantId = await resolveCashierRestaurantId(token);
+  const db = getFirebaseDb();
+  if (!db) throw new Error("Firebase غير متصل");
+  const snap = await getDoc(doc(db, "payments", paymentId));
+  if (!snap.exists()) throw new Error("الإيصال غير موجود");
+  const data = snap.data() as any;
+  if (data.restaurant_id !== restaurantId) throw new Error("الإيصال غير موجود");
+  return { payment: { id: snap.id, ...data } as CashierPaymentRecord };
+}
+
+export const cashierGetPayment = createServerFn({ method: "GET" })
+  .validator((d: { token: string; paymentId: string }) => d)
+  .handler(async ({ data }) => {
+    const { token, paymentId } = data as { token: string; paymentId: string };
+    return cashierGetPaymentCore(token, paymentId);
+  });
+
+/** DB logic: record a prepayment and print a receipt WITHOUT finalizing the
+ * order — the order stays active so its lifecycle continues. */
+export async function cashierRecordPrepaymentCore(
+  token: string,
+  orderId: string,
+  amount: number,
+  staffId?: string,
+): Promise<{ ok: true; outcome: CashierPaymentOutcome }> {
+  const restaurantId = await resolveCashierRestaurantId(token);
+  const db = getFirebaseDb();
+  if (!db) throw new Error("Firebase غير متصل");
+  const paid = Number(amount);
+  if (!Number.isFinite(paid) || paid <= 0)
+    throw new Error("حدد مبلغ الدفعة المقدمة قبل الطباعة");
+  const orderRef = doc(db, "orders", orderId);
+  const snap = await getDoc(orderRef);
+  if (!snap.exists()) throw new Error("الطلب غير موجود");
+  const data = snap.data();
+  if (data.restaurant_id !== restaurantId) throw new Error("الطلب غير موجود");
+  if (data.status === "paid") throw new Error("الطلب مدفوع بالفعل");
+  const total = Number(data.total) || 0;
+  const now = new Date().toISOString();
+  const payRef = await addDoc(collection(db, "payments"), {
+    restaurant_id: restaurantId,
+    order_id: orderId,
+    daily_number: (data.daily_number as number | null) ?? null,
+    table_number: (data.table_number as number | null) ?? null,
+    hall_id: (data.hall_id as string | null) ?? null,
+    order_type: (data.order_type as string) ?? "dine_in",
+    customer_name: (data.customer_name as string | null) ?? null,
+    customer_phone: (data.customer_phone as string | null) ?? null,
+    mode: "prepayment",
+    total,
+    paid,
+    debt: 0,
+    discount: 0,
+    staff_id: staffId ?? null,
+    created_at: now,
+  });
+  return {
+    ok: true,
+    outcome: {
+      orderId,
+      paymentId: payRef.id,
+      mode: "prepayment",
+      paid,
+      debt: 0,
+      discount: 0,
+    },
+  };
+}
+
+export const cashierRecordPrepayment = createServerFn({ method: "POST" })
+  .validator(
+    (d: { token: string; orderId: string; amount: number; staffId?: string }) =>
+      d,
+  )
+  .handler(async ({ data }) => {
+    const { token, orderId, amount, staffId } = data as {
+      token: string;
+      orderId: string;
+      amount: number;
+      staffId?: string;
+    };
+    return cashierRecordPrepaymentCore(token, orderId, amount, staffId);
   });
 
 /** DB logic: generate Z-report (end-of-day) for the cashier's restaurant. */
@@ -599,7 +788,7 @@ export const cashierZReport = createServerFn({ method: "GET" })
 async function loadCashierConfig(restaurantId: string) {
   const rest = await supabase
     .from("restaurants")
-    .select("id,name,logo_url,cashier_pin,cashier_enabled")
+    .select("id,name,logo_url,phone,address,cashier_pin,cashier_enabled")
     .eq("id", restaurantId)
     .maybeSingle();
   return rest.data as any; // null when not found (also in preview mode)
@@ -645,6 +834,8 @@ export async function verifyCashierPinCore(restaurantId: string, pin: string) {
       id: rest.id as string,
       name: (rest.name as string) ?? "",
       logo_url: (rest.logo_url as string | null) ?? null,
+      phone: (rest.phone as string | null) ?? null,
+      address: (rest.address as string | null) ?? null,
     },
   };
 }

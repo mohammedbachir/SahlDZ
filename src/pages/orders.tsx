@@ -202,7 +202,18 @@ export default function OrdersPage() {
             setOrders((prev) =>
               prev.map((o) =>
                 o.id === updated.id
-                  ? { ...o, status: updated.status, acknowledged: updated.acknowledged, total: Number(updated.total) }
+                  ? {
+                      ...o,
+                      status: updated.status,
+                      acknowledged: updated.acknowledged,
+                      total: Number(updated.total),
+                      // Carry the void metadata too, otherwise a cancellation
+                      // made on another terminal would drop the card into the
+                      // "ملغاة" column with no reason on it.
+                      cancel_reason: updated.cancel_reason ?? o.cancel_reason,
+                      cancelled_at: updated.cancelled_at ?? o.cancelled_at,
+                      cancelled_by: updated.cancelled_by ?? o.cancelled_by,
+                    }
                   : o,
               ),
             );

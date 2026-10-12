@@ -6,10 +6,12 @@ import { requireAuth } from "@/lib/auth";
 import {
   canAccessOpsArea,
   canWriteOpsArea,
+  allowedOpsAreaPaths,
   allowedStaffPaths,
   type StaffOpsArea,
 } from "@/lib/staff-permissions";
 import { loadUnifiedStaffSession } from "@/lib/staff-session";
+import { fetchWebStaffAccess } from "@/lib/web-staff-permissions";
 
 export type OpsRole =
   | "admin"
@@ -147,13 +149,76 @@ export const ROLE_CAPABILITIES: Record<OpsRole, Record<OpsArea, AreaAccess>> = b
 export function canViewArea(role: OpsRole, area: OpsArea): boolean {
   const staff = loadUnifiedStaffSession();
   if (staff) return canAccessOpsArea(staff.permissions, area as StaffOpsArea);
+  const web = currentWebStaffPermissions();
+  if (web) return canAccessOpsArea(web, area as StaffOpsArea);
   return ROLE_CAPABILITIES[role]?.[area]?.view === true;
 }
 
 export function canWriteArea(role: OpsRole, area: OpsArea): boolean {
   const staff = loadUnifiedStaffSession();
   if (staff) return canWriteOpsArea(staff.permissions, area as StaffOpsArea);
+  const web = currentWebStaffPermissions();
+  if (web) return canWriteOpsArea(web, area as StaffOpsArea);
   return ROLE_CAPABILITIES[role]?.[area]?.write === true;
+}
+
+// ─── Web (Firebase Auth) staff permission cache ─────────────────
+// The kiosk path hydrates `loadUnifiedStaffSession` at login; the web path
+// resolves the same `staff.permissions` asynchronously. The resolved set is
+// cached (memory + localStorage, keyed by user id) so the synchronous
+// `canViewArea` / `canWriteArea` helpers can honour it.
+const WEB_PERMS_KEY = "web_staff_permissions";
+
+type WebStaffPermissions = { uid: string; permissions: string[] };
+
+let webPermsCache: WebStaffPermissions | null = null;
+let webPermsLoaded = false;
+
+function readWebStaffPermissions(): string[] | null {
+  if (!webPermsLoaded) {
+    webPermsLoaded = true;
+    if (typeof window !== "undefined") {
+      try {
+        const raw = localStorage.getItem(WEB_PERMS_KEY);
+        webPermsCache = raw
+          ? (JSON.parse(raw) as WebStaffPermissions)
+          : null;
+      } catch {
+        webPermsCache = null;
+      }
+    }
+  }
+  return webPermsCache?.permissions ?? null;
+}
+
+/** Synchronous view of the cached web staff permissions, or null. */
+export function currentWebStaffPermissions(): string[] | null {
+  return readWebStaffPermissions();
+}
+
+function setWebStaffPermissions(uid: string, permissions: string[]): void {
+  webPermsCache = { uid, permissions };
+  webPermsLoaded = true;
+  if (typeof window !== "undefined") {
+    try {
+      localStorage.setItem(WEB_PERMS_KEY, JSON.stringify(webPermsCache));
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+/** Drop the cached web staff permissions (logout / no staff doc). */
+export function clearWebStaffPermissions(): void {
+  webPermsCache = null;
+  webPermsLoaded = true;
+  if (typeof window !== "undefined") {
+    try {
+      localStorage.removeItem(WEB_PERMS_KEY);
+    } catch {
+      /* ignore */
+    }
+  }
 }
 
 /** True when a unified staff session is the active identity (desktop kiosk). */
@@ -177,15 +242,26 @@ export function writeAreasForRole(role: OpsRole): OpsArea[] {
 }
 
 export function firstAllowedPath(role: OpsRole): string {
+  const staff = loadUnifiedStaffSession();
+  if (staff) {
+    if (canAccessOpsArea(staff.permissions, "inventory")) return AREA_PATHS.inventory;
+    if (canAccessOpsArea(staff.permissions, "employees")) return AREA_PATHS.employees;
+    if (canAccessOpsArea(staff.permissions, "overview")) return AREA_PATHS.overview;
+    const allowed = allowedStaffPaths(staff.permissions);
+    if (allowed[0]) return allowed[0];
+    return "/ops";
+  }
+  const web = currentWebStaffPermissions();
+  if (web) {
+    // Web staff live in the operations dashboard — never route them to a
+    // desktop kiosk screen (waiter/kitchen/cashier).
+    const allowed = allowedOpsAreaPaths(web);
+    if (allowed[0]) return allowed[0];
+    return "/ops";
+  }
   if (canViewArea(role, "inventory")) return AREA_PATHS.inventory;
   if (canViewArea(role, "employees")) return AREA_PATHS.employees;
   if (canViewArea(role, "overview")) return AREA_PATHS.overview;
-  // Staff with only operational interfaces fall back to their first screen.
-  const staff = loadUnifiedStaffSession();
-  if (staff) {
-    const allowed = allowedStaffPaths(staff.permissions);
-    if (allowed[0]) return allowed[0];
-  }
   return "/ops";
 }
 
@@ -201,6 +277,18 @@ export async function resolveOpsRole(): Promise<OpsRole> {
   }
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return "admin";
+
+  // Web (Firebase Auth) staff: hydrate the granted permissions from the
+  // matching `staff` document so the ops navigation reflects them.
+  const res = await fetchWebStaffAccess(user.id, user.email);
+  if (res.ok && res.access && res.access.permissions.length > 0) {
+    setWebStaffPermissions(user.id, res.access.permissions);
+    return "staff";
+  }
+  // Only drop the cache when the lookup definitively found no staff document —
+  // a transient read failure must not strip a staff member's navigation.
+  if (res.ok) clearWebStaffPermissions();
+
   const { data } = await supabase
     .from("user_roles")
     .select("role")
@@ -210,10 +298,12 @@ export async function resolveOpsRole(): Promise<OpsRole> {
 }
 
 // beforeLoad guard for the /ops layout: a unified staff session (desktop
-// kiosk) is accepted, otherwise fall back to the normal manager auth guard.
+// kiosk) is accepted; otherwise the web staff permissions are preloaded so the
+// navigation renders correctly on the first paint (no admin-permission flash).
 export function requireOpsLayoutAccess(): () => Promise<void> {
   return async () => {
     if (typeof window !== "undefined" && loadUnifiedStaffSession()) return;
+    await resolveOpsRole();
     await requireAuth();
   };
 }
@@ -225,7 +315,13 @@ export function requireOpsAccess(area: OpsArea | OpsArea[]): () => Promise<void>
     if (typeof window === "undefined") return;
     const role = await resolveOpsRole();
     const ok = areas.some((a) => canViewArea(role, a));
-    if (!ok) throw redirect({ to: firstAllowedPath(role) as "/ops" });
+    if (!ok) {
+      const target = firstAllowedPath(role);
+      // Avoid a redirect loop when no area is allowed (target === current page).
+      if (target !== window.location.pathname) {
+        throw redirect({ to: target as "/ops" });
+      }
+    }
   };
 }
 

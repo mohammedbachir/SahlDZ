@@ -26,6 +26,29 @@ import {
   createOrderForRestaurantCore,
   type NewOrderInput,
 } from "@/lib/order-create";
+import { MAIN_HALL_NAME } from "@/lib/halls";
+
+/** Normalize a Firestore timestamp-or-string into an ISO string so the
+ * waiter's live clock never renders `NaN:NaN` for a Timestamp-typed field. */
+function firestoreDateToIso(v: any): string {
+  if (v == null) return "";
+  if (typeof v === "string") return v;
+  if (typeof v?.toDate === "function") {
+    try {
+      return v.toDate().toISOString();
+    } catch {
+      return "";
+    }
+  }
+  if (typeof v === "number") {
+    try {
+      return new Date(v).toISOString();
+    } catch {
+      return "";
+    }
+  }
+  return "";
+}
 
 /** DB logic: resolve waiter context from session token. */
 export async function getWaiterContextCore(token: string) {
@@ -155,30 +178,57 @@ export async function waiterListOrdersCore(token: string) {
     itemsByOrder.set(it.order_id, arr);
   }
 
-  const tableMap = new Map<string, number>();
+  const tableMap = new Map<
+    string,
+    { table_number: number | null; hall_id: string | null }
+  >();
   for (const d of tablesSnap.docs) {
     const t = d.data() as any;
-    tableMap.set(d.id, t.table_number);
+    tableMap.set(d.id, {
+      table_number: t.table_number ?? null,
+      hall_id: t.hall_id ?? null,
+    });
   }
 
-  const orders = orderRows.map((o: any) => ({
-    id: o.id,
-    total: o.total as number,
-    status: o.status as string,
-    created_at: o.created_at as string,
-    order_type: (o.order_type as string) ?? "dine_in",
-    customer_name: (o.customer_name as string) ?? null,
-    daily_number: (o.daily_number as number) ?? null,
-    notes: (o.notes as string) ?? null,
-    table_number: o.table_id ? (tableMap.get(o.table_id) ?? null) : null,
-    is_mine: o.served_by === staffId,
-    items: (itemsByOrder.get(o.id) ?? []).map((it: any) => ({
-      name: it.name_snapshot as string,
-      qty: it.quantity as number,
-      note: (it.note as string) ?? null,
-      options: it.options_snapshot ? safeParseOptions(it.options_snapshot) : [],
-    })),
-  }));
+  const hallIds = [
+    ...new Set(
+      [...tableMap.values()].map((t) => t.hall_id).filter(Boolean) as string[],
+    ),
+  ];
+  const hallsSnap = hallIds.length
+    ? await getDocs(query(collection(db, "halls"), where("id", "in", hallIds)))
+    : ({ docs: [] } as any);
+  const hallNameMap = new Map<string, string>();
+  for (const d of hallsSnap.docs) {
+    hallNameMap.set(d.id, ((d.data() as any).name as string) ?? MAIN_HALL_NAME);
+  }
+
+  const orders = orderRows.map((o: any) => {
+    const t = o.table_id ? tableMap.get(o.table_id) : undefined;
+    return {
+      id: o.id,
+      total: o.total as number,
+      status: o.status as string,
+      created_at: firestoreDateToIso(o.created_at),
+      order_type: (o.order_type as string) ?? "dine_in",
+      customer_name: (o.customer_name as string) ?? null,
+      daily_number: (o.daily_number as number) ?? null,
+      notes: (o.notes as string) ?? null,
+      table_number: t?.table_number ?? null,
+      hall_name: t
+        ? t.hall_id
+          ? (hallNameMap.get(t.hall_id) ?? MAIN_HALL_NAME)
+          : MAIN_HALL_NAME
+        : null,
+      is_mine: o.served_by === staffId,
+      items: (itemsByOrder.get(o.id) ?? []).map((it: any) => ({
+        name: it.name_snapshot as string,
+        qty: it.quantity as number,
+        note: (it.note as string) ?? null,
+        options: it.options_snapshot ? safeParseOptions(it.options_snapshot) : [],
+      })),
+    };
+  });
 
   return { orders };
 }

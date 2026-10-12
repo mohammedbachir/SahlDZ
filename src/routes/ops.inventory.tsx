@@ -71,7 +71,20 @@ type Ingredient = {
   current_stock: number;
   alert_threshold: number;
   cost_per_unit: number;
+  created_at?: string | null;
 };
+
+/** Formats a Firestore timestamp/string/number as a short Arabic date, or "—". */
+function formatEntryDate(v: unknown): string {
+  if (v == null || v === "") return "—";
+  let d: Date | null = null;
+  if (typeof v === "string" || typeof v === "number") d = new Date(v as any);
+  else if (typeof (v as any)?.toDate === "function") d = (v as any).toDate();
+  else if (typeof (v as any)?.seconds === "number")
+    d = new Date((v as any).seconds * 1000);
+  if (!d || Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString("ar");
+}
 
 type ReceiptMeta = {
   supplierName: string;
@@ -233,6 +246,7 @@ function OpsInventory() {
       current_stock: stock,
       alert_threshold: Number(form.alert_threshold) || 0,
       cost_per_unit: cost,
+      created_at: new Date().toISOString(),
     });
     if (error) {
       console.error("ingredient insert failed", error);
@@ -435,6 +449,7 @@ function OpsInventory() {
               current_stock: qty,
               alert_threshold: 0,
               cost_per_unit: price,
+              created_at: new Date().toISOString(),
             })
             .select("id")
             .single();
@@ -750,7 +765,7 @@ function OpsInventory() {
         className="rounded-md border border-border bg-card overflow-hidden"
         data-annotate="ops-inventory-table"
       >
-        <Table className="min-w-[640px]">
+        <Table className="min-w-[720px]">
           <TableHeader>
             <TableRow>
               <TableHead className="text-right">{tx("الاسم")}</TableHead>
@@ -758,6 +773,7 @@ function OpsInventory() {
               <TableHead className="text-right">{tx("الكمية الحالية")}</TableHead>
               <TableHead className="text-right">{tx("الحد")}</TableHead>
               <TableHead className="text-right">{tx("السعر/وحدة")}</TableHead>
+              <TableHead className="text-right">{tx("تاريخ الإدخال")}</TableHead>
               <TableHead className="text-right">{tx("الحالة")}</TableHead>
               <TableHead className="text-right">{tx("إجراء")}</TableHead>
             </TableRow>
@@ -765,13 +781,13 @@ function OpsInventory() {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
                   {tx("جاري التحميل…")}
                 </TableCell>
               </TableRow>
             ) : items.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
                   {tx("لا توجد مكونات بعد")}
                 </TableCell>
               </TableRow>
@@ -786,6 +802,9 @@ function OpsInventory() {
                     <TableCell className="tabular-nums">{Number(i.alert_threshold)}</TableCell>
                     <TableCell className="tabular-nums">
                       {formatDZD(Number(i.cost_per_unit))}
+                    </TableCell>
+                    <TableCell className="tabular-nums text-muted-foreground">
+                      {formatEntryDate(i.created_at)}
                     </TableCell>
                     <TableCell>
                       {low ? (
