@@ -1,6 +1,12 @@
 import ExcelJS from "exceljs";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
+import {
+  ARABIC_FONT,
+  ARABIC_STYLE,
+  applyArabicFont,
+  ensureArabicFont,
+} from "@/lib/pdf-arabic";
 
 export type AnalyticsExportPayload = {
   restaurantName: string;
@@ -188,6 +194,7 @@ export async function exportAnalyticsExcel(
 
 export function buildAnalyticsPDF(payload: AnalyticsExportPayload): string {
   const doc = new jsPDF();
+  applyArabicFont(doc);
   const { kpis } = payload;
 
   doc.setFontSize(16);
@@ -204,6 +211,8 @@ export function buildAnalyticsPDF(payload: AnalyticsExportPayload): string {
       ["مبيعات الشهر (دج)", fmt(kpis.salesMonth)],
     ],
     startY: 30,
+    styles: ARABIC_STYLE,
+    headStyles: ARABIC_STYLE,
   });
 
   const dailyStartY = (doc as any).lastAutoTable?.finalY ?? 50;
@@ -211,6 +220,8 @@ export function buildAnalyticsPDF(payload: AnalyticsExportPayload): string {
     head: [["التاريخ", "الإجمالي (دج)"]],
     body: payload.daily.map((d) => [d.date, fmt(d.total)]),
     startY: dailyStartY + 8,
+    styles: ARABIC_STYLE,
+    headStyles: ARABIC_STYLE,
   });
 
   const itemsStartY = (doc as any).lastAutoTable?.finalY ?? 90;
@@ -225,16 +236,20 @@ export function buildAnalyticsPDF(payload: AnalyticsExportPayload): string {
       ]),
     ],
     startY: itemsStartY + 8,
+    styles: ARABIC_STYLE,
+    headStyles: ARABIC_STYLE,
   });
 
   return doc.output("dataurlstring");
 }
 
-export function exportAnalyticsPDF(payload: AnalyticsExportPayload): void {
-  downloadDataUrl(
-    buildAnalyticsPDF(payload),
-    `analytics-${payload.restaurantName || "report"}.pdf`,
-  );
+export function exportAnalyticsPDF(payload: AnalyticsExportPayload): Promise<void> {
+  return ensureArabicFont().then(() => {
+    downloadDataUrl(
+      buildAnalyticsPDF(payload),
+      `analytics-${payload.restaurantName || "report"}.pdf`,
+    );
+  });
 }
 
 /* ─────────────────────────────────────────────────────────────────────
@@ -352,6 +367,7 @@ export async function exportAccountingExcel(
 
 export function buildAccountingPDF(payload: AccountingExportPayload): string {
   const doc = new jsPDF();
+  applyArabicFont(doc);
   doc.setFontSize(15);
   doc.text(payload.restaurantName || "تقرير المحاسبة", 105, 18, {
     align: "center",
@@ -382,6 +398,8 @@ export function buildAccountingPDF(payload: AccountingExportPayload): string {
       ["هامش صافي الربح", `${payload.netMarginPct}%`],
     ],
     startY: 32,
+    styles: ARABIC_STYLE,
+    headStyles: ARABIC_STYLE,
   });
 
   const dailyStartY = (doc as any).lastAutoTable?.finalY ?? 80;
@@ -394,17 +412,22 @@ export function buildAccountingPDF(payload: AccountingExportPayload): string {
       fmt(d.net),
     ]),
     startY: dailyStartY + 8,
-    styles: { fontSize: 8 },
+    styles: { ...ARABIC_STYLE, fontSize: 8 },
+    headStyles: ARABIC_STYLE,
   });
 
   return doc.output("dataurlstring");
 }
 
-export function exportAccountingPDF(payload: AccountingExportPayload): void {
-  downloadDataUrl(
-    buildAccountingPDF(payload),
-    `accounting-${payload.restaurantName || "report"}.pdf`,
-  );
+export function exportAccountingPDF(
+  payload: AccountingExportPayload,
+): Promise<void> {
+  return ensureArabicFont().then(() => {
+    downloadDataUrl(
+      buildAccountingPDF(payload),
+      `accounting-${payload.restaurantName || "report"}.pdf`,
+    );
+  });
 }
 
 export function downloadDataUrl(dataUrl: string, filename: string): void {

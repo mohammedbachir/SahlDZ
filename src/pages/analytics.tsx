@@ -815,7 +815,7 @@ export default function AnalyticsPage() {
     };
 
     try {
-      if (kind === "pdf") exportAnalyticsPDF(payload);
+      if (kind === "pdf") void exportAnalyticsPDF(payload);
       else exportAnalyticsExcel(payload);
       toast.success(kind === "pdf" ? "تم تصدير PDF" : "تم تصدير Excel");
     } catch (e) {

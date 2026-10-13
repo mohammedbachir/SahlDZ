@@ -162,7 +162,7 @@ export default function AccountingPage() {
     };
     try {
       if (kind === "excel") await exportAccountingExcel(payload);
-      else exportAccountingPDF(payload);
+      else void exportAccountingPDF(payload);
       toast.success(kind === "excel" ? "تم تصدير Excel" : "تم تصدير PDF");
     } catch (e) {
       console.error(e);

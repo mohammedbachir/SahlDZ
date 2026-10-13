@@ -10,6 +10,11 @@ import {
   downloadDataUrl,
   type AccountingExportPayload,
 } from "@/lib/exportReports";
+import {
+  ARABIC_STYLE,
+  applyArabicFont,
+  ensureArabicFont,
+} from "@/lib/pdf-arabic";
 
 export type ReportType = "accounting" | "reports" | "staff_performance";
 
@@ -107,6 +112,7 @@ function buildReportsPDF(opts: {
   avgOrder: number;
 }): string {
   const doc = new jsPDF();
+  applyArabicFont(doc);
   doc.setFontSize(16);
   doc.text(opts.restaurantName || "تقرير الفترة", 105, 18, { align: "center" });
   doc.setFontSize(11);
@@ -125,6 +131,8 @@ function buildReportsPDF(opts: {
       ["صافي الربح", fmt(opts.netProfit)],
     ],
     startY: 34,
+    styles: ARABIC_STYLE,
+    headStyles: ARABIC_STYLE,
   });
 
   return doc.output("dataurlstring");
@@ -142,6 +150,7 @@ function buildStaffPerformancePDF(opts: {
   }[];
 }): string {
   const doc = new jsPDF();
+  applyArabicFont(doc);
   doc.setFontSize(16);
   doc.text(opts.restaurantName || "أداء الموظفين", 105, 18, {
     align: "center",
@@ -171,7 +180,8 @@ function buildStaffPerformancePDF(opts: {
       ],
     ],
     startY: 34,
-    styles: { fontSize: 9 },
+    styles: { ...ARABIC_STYLE, fontSize: 9 },
+    headStyles: ARABIC_STYLE,
   });
 
   return doc.output("dataurlstring");
@@ -345,6 +355,7 @@ export async function generateAccountingReport(
       net: d.net,
     })),
   };
+  await ensureArabicFont();
   const pdf = buildAccountingPDF(payload);
   return saveReport({
     restaurant_id: restaurantId,
@@ -377,6 +388,7 @@ export async function generateReportsReport(
     netProfit,
     avgOrder,
   } = data;
+  await ensureArabicFont();
   const pdf = buildReportsPDF({
     restaurantName: restaurantName || "تقرير الفترة",
     month: mk,
@@ -406,6 +418,7 @@ export async function generateStaffPerformanceReport(
   mk: string,
 ): Promise<ArchivedReport | null> {
   const rows = await loadStaffPerformanceData(restaurantId, mk);
+  await ensureArabicFont();
   const pdf = buildStaffPerformancePDF({
     restaurantName: restaurantName || "أداء الموظفين",
     month: mk,
