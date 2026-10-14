@@ -18,6 +18,7 @@ import { resolveKitchenId } from "@/lib/kitchens";
 import {
   CancelOrderError,
   isCancellableStatus,
+  isRefundableStatus,
   cancellationGeneratesWaste,
   normalizeCancelReason,
   wasteReasonForCancelReason,
@@ -35,6 +36,7 @@ type OrderRow = {
   customer_name?: string | null;
   created_at?: string;
   table_id?: string | null;
+  payment_status?: string | null;
 };
 
 async function assertKitchenOwnsOrder(
@@ -80,6 +82,8 @@ export async function cancelOrderCore(input: {
   reasonOther?: string | null;
   actor: CancelActor;
   kitchenId?: string | null;
+  allowRefund?: boolean;
+  refundAmount?: number | null;
 }): Promise<CancelOrderResult> {
   const db = getFirebaseDb();
   if (!db) throw new CancelOrderError("Firebase غير متصل");
@@ -100,18 +104,34 @@ export async function cancelOrderCore(input: {
   const cancelledFrom = String(order.status ?? "");
   if (cancelledFrom === "cancelled")
     throw new CancelOrderError("الطلبية ملغاة مسبقاً");
-  if (!isCancellableStatus(cancelledFrom))
+
+  // A paid order is reversed as a refund by the owner/manager only; everything
+  // else uses the normal, staff-reachable cancellation path.
+  const isRefund = isRefundableStatus(cancelledFrom);
+  if (isRefund) {
+    if (!input.allowRefund)
+      throw new CancelOrderError("استرجاع الطلبيات المدفوعة متاح للمدير فقط");
+  } else if (!isCancellableStatus(cancelledFrom)) {
     throw new CancelOrderError(
       `لا يمكن إلغاء طلبية في حالة "${cancelledFrom}"`,
     );
+  }
 
   // A kitchen terminal may only void orders carrying one of its own lines.
   if (input.kitchenId)
     await assertKitchenOwnsOrder(orderId, resolveKitchenId(input.kitchenId));
 
   const now = new Date().toISOString();
-  const generatesWaste = cancellationGeneratesWaste(cancelledFrom);
-  const usage = await resolveOrderIngredientUsage(restaurantId, orderId);
+  const total = Number(order.total ?? 0);
+  const refundAmount = isRefund
+    ? Math.max(0, Math.min(Number(input.refundAmount ?? total) || 0, total))
+    : 0;
+  // A refund is a money decision on food the customer already received, so it
+  // is never logged as kitchen waste.
+  const generatesWaste = !isRefund && cancellationGeneratesWaste(cancelledFrom);
+  const usage = isRefund
+    ? []
+    : await resolveOrderIngredientUsage(restaurantId, orderId);
   const estimatedCost = usage.reduce((s, u) => s + u.cost, 0);
 
   // 1. Flip the order itself. Done first so the order leaves every active
@@ -125,6 +145,9 @@ export async function cancelOrderCore(input: {
     cancelled_by: actor.id,
     cancelled_by_name: actor.name,
     cancelled_by_role: actor.role,
+    refunded: isRefund,
+    refund_amount: isRefund ? refundAmount : null,
+    refunded_at: isRefund ? now : null,
   });
 
   // 2. Waste rows for a finished dish. `reason` is the waste vocabulary the
@@ -161,7 +184,7 @@ export async function cancelOrderCore(input: {
       order_id: orderId,
       daily_number: order.daily_number ?? null,
       order_type: order.order_type ?? null,
-      total: Number(order.total ?? 0),
+      total,
       cancelled_from_status: cancelledFrom,
       reason,
       reason_other: reasonOther,
@@ -171,6 +194,8 @@ export async function cancelOrderCore(input: {
       generated_waste: generatesWaste,
       estimated_cost: estimatedCost,
       waste_rows: wasteRows,
+      refunded: isRefund,
+      refund_amount: isRefund ? refundAmount : 0,
       created_at: now,
     });
   if (auditErr)
@@ -183,6 +208,8 @@ export async function cancelOrderCore(input: {
     loggedTo: generatesWaste ? "waste" : "performance",
     wasteRows,
     estimatedCost,
+    refunded: isRefund,
+    refundAmount,
   };
 }
 
@@ -229,24 +256,33 @@ export const cancelOrderByStaff = createServerFn({ method: "POST" })
 /** Manager surfaces (dashboard): authenticated by a Firebase ID token. */
 export const cancelOrderByManager = createServerFn({ method: "POST" })
   .validator(
-    (d: { orderId: string; reason: string; reasonOther?: string | null }) => d,
+    (d: {
+      orderId: string;
+      reason: string;
+      reasonOther?: string | null;
+      refundAmount?: number | null;
+    }) => d,
   )
   .handler(async ({ data }) => {
     const restaurantId = await requireRestaurantId(
       getRequestHeader("authorization"),
     );
-    const { orderId, reason, reasonOther } = data as {
+    const { orderId, reason, reasonOther, refundAmount } = data as {
       orderId: string;
       reason: string;
       reasonOther?: string | null;
+      refundAmount?: number | null;
     };
     // The manager is not a `staff` row, so attribution comes from the signed-in
-    // account rather than a staff id.
+    // account rather than a staff id. `allowRefund` is what lets a paid order be
+    // reversed here — staff terminals cannot reach this path.
     return cancelOrderCore({
       restaurantId,
       orderId,
       reason,
       reasonOther,
+      refundAmount,
+      allowRefund: true,
       actor: { id: null, name: "المدير", role: "manager" },
     });
   });

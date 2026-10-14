@@ -17,7 +17,6 @@ import {
   PackageX,
   UserX,
   CreditCard,
-  FlaskConical,
   XCircle,
   Loader2,
 } from "lucide-react";
@@ -29,16 +28,27 @@ export type CancelReasonPreset = {
   color: string;
 };
 
+/**
+ * Reason presets. `id` is the stable code stored on the order and consumed by
+ * `@/lib/order-cancel` (`normalizeCancelReason`); `label` is only for display.
+ * Codes must stay in sync with `CANCEL_REASONS` in `@/lib/order-cancel`.
+ */
 export const CANCEL_REASONS: CancelReasonPreset[] = [
   {
-    id: "customer_change",
+    id: "customer_changed_mind",
     label: "العميل غيّر رأيه / ألغى",
     icon: UserX,
     color: "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100",
   },
   {
-    id: "kitchen_delay",
-    label: "تأخر التحضير في المطبخ",
+    id: "customer_left",
+    label: "العميل غادر المطعم",
+    icon: UserX,
+    color: "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100",
+  },
+  {
+    id: "long_wait",
+    label: "تأخر التحضير / انتظار طويل",
     icon: Clock,
     color: "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100",
   },
@@ -49,22 +59,22 @@ export const CANCEL_REASONS: CancelReasonPreset[] = [
     color: "bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100",
   },
   {
-    id: "payment_issue",
-    label: "مشكلة في الدفع / لم يدفع",
-    icon: CreditCard,
-    color: "bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100",
-  },
-  {
-    id: "order_mistake",
+    id: "wrong_order",
     label: "خطأ في تسجيل الطلب",
     icon: AlertTriangle,
     color: "bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100",
   },
   {
-    id: "test_order",
-    label: "طلب تجريبي / فحص نظام",
-    icon: FlaskConical,
-    color: "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100",
+    id: "quality_issue",
+    label: "عيب في الجودة أو التحضير",
+    icon: AlertTriangle,
+    color: "bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100",
+  },
+  {
+    id: "manager_decision",
+    label: "قرار الإدارة",
+    icon: CreditCard,
+    color: "bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100",
   },
   {
     id: "other",
@@ -73,6 +83,14 @@ export const CANCEL_REASONS: CancelReasonPreset[] = [
     color: "bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100",
   },
 ];
+
+/** Payload handed back to the caller once the reason is validated. */
+export type CancelOrderReason = {
+  /** Stable reason code (see `@/lib/order-cancel`). */
+  reason: string;
+  /** Free-text note; mandatory for the `other` code. */
+  reasonOther: string | null;
+};
 
 interface CancelOrderDialogProps {
   open: boolean;
@@ -84,8 +102,10 @@ interface CancelOrderDialogProps {
     total: number;
     order_type?: string | null;
   } | null;
-  onConfirm: (reason: string) => Promise<void>;
+  onConfirm: (payload: CancelOrderReason) => Promise<void>;
   loading?: boolean;
+  /** Refund mode: the order is already paid and money is returned. */
+  refund?: boolean;
 }
 
 export function CancelOrderDialog({
@@ -94,8 +114,9 @@ export function CancelOrderDialog({
   order,
   onConfirm,
   loading = false,
+  refund = false,
 }: CancelOrderDialogProps) {
-  const [selectedPreset, setSelectedPreset] = useState<string>("customer_change");
+  const [selectedPreset, setSelectedPreset] = useState<string>("customer_changed_mind");
   const [customReason, setCustomReason] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -114,18 +135,13 @@ export function CancelOrderDialog({
           : "طلب محلي";
 
   const handleConfirm = async () => {
-    const preset = CANCEL_REASONS.find((r) => r.id === selectedPreset);
-    let finalReason = preset?.label ?? "غير محدد";
-    if (customReason.trim()) {
-      finalReason =
-        selectedPreset === "other"
-          ? customReason.trim()
-          : `${finalReason} (${customReason.trim()})`;
-    }
-
+    const reasonOther = customReason.trim();
     try {
       setBusy(true);
-      await onConfirm(finalReason);
+      await onConfirm({
+        reason: selectedPreset,
+        reasonOther: reasonOther || null,
+      });
       setCustomReason("");
       onOpenChange(false);
     } finally {
@@ -145,10 +161,12 @@ export function CancelOrderDialog({
             </div>
             <div>
               <DialogTitle className="text-base font-bold text-foreground">
-                إلغاء الطلب {orderNumStr} ({tableStr})
+                {refund ? "استرجاع مبلغ الطلب" : "إلغاء الطلب"} {orderNumStr} ({tableStr})
               </DialogTitle>
               <DialogDescription className="text-xs text-muted-foreground mt-0.5">
-                حدد سبب الإلغاء ليتم تسجيله في التقارير التشغيلية والإحصائيات
+                {refund
+                  ? "سيتم تسجيل عملية الاسترجاع بسببها ومَن نفّذها في تقرير الإلغاء"
+                  : "حدد سبب الإلغاء ليتم تسجيله في التقارير التشغيلية والإحصائيات"}
               </DialogDescription>
             </div>
           </div>
@@ -159,7 +177,11 @@ export function CancelOrderDialog({
           <div className="rounded-xl border border-destructive/20 bg-destructive/5 p-3 flex items-center justify-between text-xs">
             <div className="flex items-center gap-2 text-destructive font-semibold">
               <AlertTriangle className="w-4 h-4 shrink-0" />
-              <span>سيتم إلغاء الطلب وتحويله لسجل الملغيات</span>
+              <span>
+                {refund
+                  ? "سيتم إرجاع المبلغ للعميل وتسجيل العملية"
+                  : "سيتم إلغاء الطلب وتحويله لسجل الملغيات"}
+              </span>
             </div>
             <span className="font-extrabold text-destructive tabular-nums text-sm">
               {formatDZD(order.total)}
@@ -226,7 +248,7 @@ export function CancelOrderDialog({
             className="text-xs gap-1.5 font-bold"
           >
             {isWorking && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-            تأكيد إلغاء الطلب
+            {refund ? "تأكيد استرجاع المبلغ" : "تأكيد إلغاء الطلب"}
           </Button>
         </DialogFooter>
       </DialogContent>

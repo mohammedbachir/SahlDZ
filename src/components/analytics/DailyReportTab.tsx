@@ -17,6 +17,7 @@ import {
   XCircle,
   Ban,
   CheckCircle2,
+  RotateCcw,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -30,7 +31,24 @@ import {
 import { formatDZD } from "@/lib/restaurant";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { cancelReasonLabel } from "@/lib/order-cancel";
 import type { DailyDetailSummary, OrderRecord } from "./types";
+
+/** Localised HH:MM label, or a dash when the timestamp is missing. */
+function fmtTime(value?: string | null): string {
+  if (!value) return "—";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleTimeString("ar", { hour: "2-digit", minute: "2-digit" });
+}
+
+/** Arabic label for a stored cancellation reason (with free-text fallback). */
+function reasonLabel(o: OrderRecord): string {
+  if (!o.cancel_reason) return "ملغى بدون سبب";
+  if (o.cancel_reason === "other" && o.cancel_reason_other)
+    return `أخرى: ${o.cancel_reason_other}`;
+  return cancelReasonLabel(o.cancel_reason);
+}
 
 interface DailyReportTabProps {
   daily: DailyDetailSummary;
@@ -377,7 +395,8 @@ export function DailyReportTab({
               <thead>
                 <tr className="border-b border-border text-muted-foreground bg-secondary/15">
                   <th className="py-2 px-3 font-semibold">رقم الطلب</th>
-                  <th className="py-2 px-3 font-semibold">الوقت</th>
+                  <th className="py-2 px-3 font-semibold">وقت الطلب</th>
+                  <th className="py-2 px-3 font-semibold">وقت الدفع</th>
                   <th className="py-2 px-3 font-semibold">النوع / الطاولة</th>
                   <th className="py-2 px-3 font-semibold">العميل</th>
                   <th className="py-2 px-3 font-semibold">الحالة / سبب الإلغاء</th>
@@ -390,10 +409,12 @@ export function DailyReportTab({
                   const orderNum = o.daily_number
                     ? `#${String(o.daily_number).padStart(3, "0")}`
                     : `#${o.id.slice(-5)}`;
-                  const time = new Date(o.created_at).toLocaleTimeString("ar", {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  });
+                  const time = fmtTime(o.created_at);
+                  const paidTime = fmtTime(o.served_at);
+                  const tableLabel =
+                    o.order_type === "dine_in" && o.table_number != null
+                      ? `طاولة ${o.table_number}`
+                      : null;
 
                   return (
                     <tr
@@ -409,6 +430,9 @@ export function DailyReportTab({
                       <td className="py-2.5 px-3 text-muted-foreground tabular-nums">
                         {time}
                       </td>
+                      <td className="py-2.5 px-3 text-muted-foreground tabular-nums">
+                        {paidTime}
+                      </td>
                       <td className="py-2.5 px-3">
                         {o.order_type === "delivery" ? (
                           <span className="inline-flex items-center gap-1 text-[11px] font-medium text-[#B86D16] bg-[#B86D16]/10 px-1.5 py-0.5 rounded-sm">
@@ -420,7 +444,7 @@ export function DailyReportTab({
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1 text-[11px] font-medium text-foreground bg-secondary px-1.5 py-0.5 rounded-sm">
-                            <UtensilsCrossed className="w-3 h-3" /> طاولة
+                            <UtensilsCrossed className="w-3 h-3" /> {tableLabel ?? "طاولة"}
                           </span>
                         )}
                       </td>
@@ -433,9 +457,19 @@ export function DailyReportTab({
                       </td>
                       <td className="py-2.5 px-3">
                         {isCancelled ? (
-                          <div className="inline-flex items-center gap-1.5 text-[11px] font-medium text-[#B33F35] bg-[#B33F35]/10 px-2 py-0.5 rounded-sm border border-[#B33F35]/20">
-                            <Ban className="w-3 h-3 shrink-0" />
-                            <span>{o.cancel_reason || "ملغى بدون سبب"}</span>
+                          <div className="flex flex-col items-start gap-1">
+                            <div className="inline-flex items-center gap-1.5 text-[11px] font-medium text-[#B33F35] bg-[#B33F35]/10 px-2 py-0.5 rounded-sm border border-[#B33F35]/20">
+                              <Ban className="w-3 h-3 shrink-0" />
+                              <span>{reasonLabel(o)}</span>
+                            </div>
+                            {o.refunded && (
+                              <div className="inline-flex items-center gap-1 text-[11px] font-medium text-[#B86D16] bg-[#B86D16]/10 px-2 py-0.5 rounded-sm border border-[#B86D16]/20">
+                                <RotateCcw className="w-3 h-3 shrink-0" />
+                                <span>
+                                  مُسترجَع: {formatDZD(o.refund_amount ?? o.total)}
+                                </span>
+                              </div>
+                            )}
                           </div>
                         ) : (
                           <span className="inline-flex items-center gap-1 text-[11px] font-medium text-[#27734F] bg-[#27734F]/10 px-1.5 py-0.5 rounded-sm">

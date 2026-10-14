@@ -10,9 +10,19 @@ import {
   UtensilsCrossed,
   Bike,
   ShoppingBag,
+  RotateCcw,
 } from "lucide-react";
 import { formatDZD } from "@/lib/restaurant";
+import { cancelReasonLabel } from "@/lib/order-cancel";
 import type { FullAnalyticsData, OrderRecord } from "./types";
+
+/** Arabic label for a stored cancellation reason (with free-text fallback). */
+function reasonLabel(o: OrderRecord): string {
+  if (!o.cancel_reason) return "غير محدد";
+  if (o.cancel_reason === "other" && o.cancel_reason_other)
+    return `أخرى: ${o.cancel_reason_other}`;
+  return cancelReasonLabel(o.cancel_reason);
+}
 
 interface CancellationsReportTabProps {
   cancellations: FullAnalyticsData["cancellations"];
@@ -202,6 +212,10 @@ export function CancellationsReportTab({
                     hour: "2-digit",
                     minute: "2-digit",
                   });
+                  const tableLabel =
+                    o.order_type === "dine_in" && o.table_number != null
+                      ? `طاولة ${o.table_number}`
+                      : null;
 
                   return (
                     <tr
@@ -225,18 +239,28 @@ export function CancellationsReportTab({
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1 text-[11px] font-medium text-foreground bg-secondary px-1.5 py-0.5 rounded-sm">
-                            <UtensilsCrossed className="w-3 h-3" /> طاولة
+                            <UtensilsCrossed className="w-3 h-3" /> {tableLabel ?? "طاولة"}
                           </span>
                         )}
                       </td>
                       <td className="py-2.5 px-3">
-                        <div className="inline-flex items-center gap-1.5 text-xs font-medium text-[#B33F35] bg-[#B33F35]/10 px-2 py-0.5 rounded-sm border border-[#B33F35]/25">
-                          <Ban className="w-3 h-3 shrink-0" />
-                          <span>{o.cancel_reason || "غير محدد"}</span>
+                        <div className="flex flex-col items-start gap-1">
+                          <div className="inline-flex items-center gap-1.5 text-xs font-medium text-[#B33F35] bg-[#B33F35]/10 px-2 py-0.5 rounded-sm border border-[#B33F35]/25">
+                            <Ban className="w-3 h-3 shrink-0" />
+                            <span>{reasonLabel(o)}</span>
+                          </div>
+                          {o.refunded && (
+                            <div className="inline-flex items-center gap-1 text-[11px] font-medium text-[#B86D16] bg-[#B86D16]/10 px-2 py-0.5 rounded-sm border border-[#B86D16]/25">
+                              <RotateCcw className="w-3 h-3 shrink-0" />
+                              <span>
+                                مُسترجَع: {formatDZD(o.refund_amount ?? o.total)}
+                              </span>
+                            </div>
+                          )}
                         </div>
                       </td>
                       <td className="py-2.5 px-3 text-muted-foreground">
-                        {o.cancelled_by || "الإدارة"}
+                        {o.cancelled_by_name || o.cancelled_by || "الإدارة"}
                       </td>
                       <td className="py-2.5 px-3 text-left font-bold text-[#B33F35] tabular-nums text-xs">
                         -{formatDZD(o.total)}

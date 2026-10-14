@@ -8,6 +8,8 @@ export type OrderRecord = {
   created_at: string;
   order_type: "dine_in" | "takeaway" | "delivery";
   table_id: string | null;
+  table_number?: number | null;
+  hall_name?: string | null;
   daily_number?: number | null;
   customer_name?: string | null;
   customer_phone?: string | null;
@@ -18,8 +20,13 @@ export type OrderRecord = {
   debt_amount?: number | null;
   discount_amount?: number | null;
   cancel_reason?: string | null;
+  cancel_reason_other?: string | null;
   cancelled_at?: string | null;
   cancelled_by?: string | null;
+  cancelled_by_name?: string | null;
+  served_at?: string | null;
+  refunded?: boolean | null;
+  refund_amount?: number | null;
   items?: OrderItemRecord[];
 };
 

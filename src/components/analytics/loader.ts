@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { cancelReasonLabel } from "@/lib/order-cancel";
 import type {
   FullAnalyticsData,
   DateRangePreset,
@@ -145,27 +146,38 @@ export async function loadFullAnalyticsReport(
   });
 
   // Normalized order objects
-  const allOrders: OrderRecord[] = rawOrders.map((o) => ({
-    id: o.id,
-    restaurant_id: o.restaurant_id,
-    total: Number(o.total || 0),
-    status: o.status ?? "new",
-    created_at: o.created_at,
-    order_type: o.order_type ?? "dine_in",
-    table_id: o.table_id ?? null,
-    daily_number: o.daily_number ?? null,
-    customer_name: o.customer_name ?? null,
-    customer_phone: o.customer_phone ?? null,
-    customer_address: o.customer_address ?? null,
-    cashier_staff_id: o.cashier_staff_id ?? null,
-    payment_mode: o.payment_mode ?? "full",
-    paid_amount: o.paid_amount ? Number(o.paid_amount) : null,
-    debt_amount: o.debt_amount ? Number(o.debt_amount) : null,
-    discount_amount: o.discount_amount ? Number(o.discount_amount) : null,
-    cancel_reason: o.cancel_reason ?? null,
-    cancelled_at: o.cancelled_at ?? null,
-    cancelled_by: o.cancelled_by ?? null,
-  }));
+  const allOrders: OrderRecord[] = rawOrders.map((o) => {
+    const info = o.table_id ? tableInfoMap.get(o.table_id) : undefined;
+    return {
+      id: o.id,
+      restaurant_id: o.restaurant_id,
+      total: Number(o.total || 0),
+      status: o.status ?? "new",
+      created_at: o.created_at,
+      order_type: o.order_type ?? "dine_in",
+      table_id: o.table_id ?? null,
+      table_number: info?.tableNumber ?? null,
+      hall_name: info?.hallName ?? null,
+      daily_number: o.daily_number ?? null,
+      customer_name: o.customer_name ?? null,
+      customer_phone: o.customer_phone ?? null,
+      customer_address: o.customer_address ?? null,
+      cashier_staff_id: o.cashier_staff_id ?? null,
+      payment_mode: o.payment_mode ?? "full",
+      paid_amount: o.paid_amount ? Number(o.paid_amount) : null,
+      debt_amount: o.debt_amount ? Number(o.debt_amount) : null,
+      discount_amount: o.discount_amount ? Number(o.discount_amount) : null,
+      cancel_reason: o.cancel_reason ?? null,
+      cancel_reason_other: o.cancel_reason_other ?? null,
+      cancelled_at: o.cancelled_at ?? null,
+      cancelled_by: o.cancelled_by ?? null,
+      cancelled_by_name: o.cancelled_by_name ?? null,
+      served_at: o.served_at ?? null,
+      refunded: o.refunded ?? (o.refund === true ? true : false),
+      refund_amount:
+        o.refund_amount != null ? Number(o.refund_amount) : null,
+    };
+  });
 
   // Fetch items for in-range orders in chunks
   const inRangeOrders = allOrders.filter((o) => {
@@ -503,7 +515,11 @@ export async function loadFullAnalyticsReport(
   // 7. Cancellations Analysis
   const reasonsMap = new Map<string, { count: number; totalAmount: number }>();
   cancelledOrders.forEach((o) => {
-    const r = o.cancel_reason?.trim() || "غير محدد";
+    const r = o.cancel_reason
+      ? o.cancel_reason === "other" && o.cancel_reason_other
+        ? `أخرى: ${o.cancel_reason_other}`
+        : cancelReasonLabel(o.cancel_reason)
+      : "غير محدد";
     const cur = reasonsMap.get(r) ?? { count: 0, totalAmount: 0 };
     cur.count++;
     cur.totalAmount += o.total;

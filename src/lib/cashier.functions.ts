@@ -508,6 +508,7 @@ export async function cashierCancelOrderCore(
   reason: string,
   staffId?: string,
   staffName?: string,
+  reasonOther?: string | null,
 ) {
   const restaurantId = await resolveCashierRestaurantId(token);
   const db = getFirebaseDb();
@@ -519,12 +520,17 @@ export async function cashierCancelOrderCore(
   if (data.restaurant_id !== restaurantId)
     throw new Error("غير مصرح بإلغاء هذا الطلب");
 
+  const cleanReason = reason?.trim();
+  if (!cleanReason) throw new Error("سبب الإلغاء إجباري");
+
   const now = new Date().toISOString();
   await updateDoc(orderRef, {
     status: "cancelled",
-    cancel_reason: reason?.trim() || "تم الإلغاء بدون سبب محدد",
+    cancel_reason: cleanReason,
+    cancel_reason_other: reasonOther?.trim() || null,
     cancelled_at: now,
     cancelled_by: staffName || "الكاشير",
+    cancelled_by_name: staffName || "الكاشير",
     cancelled_by_staff_id: staffId || null,
   });
 
@@ -537,19 +543,29 @@ export const cashierCancelOrder = createServerFn({ method: "POST" })
       token: string;
       orderId: string;
       reason: string;
+      reasonOther?: string | null;
       staffId?: string;
       staffName?: string;
     }) => d,
   )
   .handler(async ({ data }) => {
-    const { token, orderId, reason, staffId, staffName } = data as {
-      token: string;
-      orderId: string;
-      reason: string;
-      staffId?: string;
-      staffName?: string;
-    };
-    return cashierCancelOrderCore(token, orderId, reason, staffId, staffName);
+    const { token, orderId, reason, reasonOther, staffId, staffName } =
+      data as {
+        token: string;
+        orderId: string;
+        reason: string;
+        reasonOther?: string | null;
+        staffId?: string;
+        staffName?: string;
+      };
+    return cashierCancelOrderCore(
+      token,
+      orderId,
+      reason,
+      staffId,
+      staffName,
+      reasonOther,
+    );
   });
 
 /** A persisted payment/receipt record (one per finalized order). */

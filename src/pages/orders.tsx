@@ -20,6 +20,7 @@ import {
   XCircle,
   Trash2,
   Ban,
+  RotateCcw,
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -30,6 +31,9 @@ import { useNewOrderNotifications } from "@/hooks/useNewOrderNotifications";
 import { decrementStockForOrder } from "@/lib/stock-consumption";
 import { useTranslation } from "react-i18next";
 import { CancelOrderDialog } from "@/components/CancelOrderDialog";
+import type { CancelOrderReason } from "@/components/CancelOrderDialog";
+import { cancelReasonLabel } from "@/lib/order-cancel";
+import { cancelOrderByManager } from "@/lib/order-cancel.functions";
 
 type OrderStatus = "new" | "preparing" | "ready" | "paid" | "cancelled";
 
@@ -56,18 +60,36 @@ type Order = {
   customer_phone?: string | null;
   customer_address?: string | null;
   cancel_reason?: string | null;
+  cancel_reason_other?: string | null;
   cancelled_at?: string | null;
   cancelled_by?: string | null;
+  cancelled_by_name?: string | null;
+  refunded?: boolean | null;
+  refund_amount?: number | null;
 };
+
+async function authHeaders(): Promise<Record<string, string>> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  return token ? { authorization: `Bearer ${token}` } : {};
+}
+
+/** Human label for a stored cancellation reason (with free-text fallback). */
+function cancelReasonText(
+  o: Pick<Order, "cancel_reason" | "cancel_reason_other">,
+): string {
+  if (!o.cancel_reason) return "لم يُحدد سبب";
+  if (o.cancel_reason === "other" && o.cancel_reason_other)
+    return `أخرى: ${o.cancel_reason_other}`;
+  return cancelReasonLabel(o.cancel_reason);
+}
 
 type ColumnDef = {
   status: OrderStatus;
   label: string;
   accent: string;
   icon: React.ComponentType<{ className?: string }>;
-};
-
-const COLUMNS: ColumnDef[] = [
+};const COLUMNS: ColumnDef[] = [
   { status: "new", label: "جديدة", accent: "#B33F35", icon: Inbox },
   { status: "preparing", label: "قيد التحضير", accent: "#B86D16", icon: ChefHat },
   { status: "ready", label: "جاهزة", accent: "#27734F", icon: CheckCheck },
@@ -248,38 +270,48 @@ export default function OrdersPage() {
     return g;
   }, [orders, filterType]);
 
-  async function handleConfirmCancel(reason: string) {
+  async function handleConfirmCancel({ reason, reasonOther }: CancelOrderReason) {
     if (!cancellingOrder) return;
     const target = cancellingOrder;
     const prev = orders;
+    const isRefund = target.status === "paid";
     const now = new Date().toISOString();
-    setOrders((curr) =>
-      curr.map((x) =>
-        x.id === target.id
-          ? {
-              ...x,
-              status: "cancelled",
-              cancel_reason: reason,
-              cancelled_at: now,
-              cancelled_by: "لوحة التحكم",
-            }
-          : x,
-      ),
-    );
-    const { error } = await supabase
-      .from("orders")
-      .update({
-        status: "cancelled",
-        cancel_reason: reason,
-        cancelled_at: now,
-        cancelled_by: "لوحة التحكم",
-      })
-      .eq("id", target.id);
-    if (error) {
+    try {
+      const headers = await authHeaders();
+      await cancelOrderByManager({
+        data: {
+          orderId: target.id,
+          reason,
+          reasonOther,
+          refundAmount: isRefund ? target.total : null,
+        },
+        headers,
+      });
+      setOrders((curr) =>
+        curr.map((x) =>
+          x.id === target.id
+            ? {
+                ...x,
+                status: "cancelled",
+                cancel_reason: reason,
+                cancel_reason_other: reasonOther,
+                cancelled_at: now,
+                cancelled_by: "المدير",
+                cancelled_by_name: "المدير",
+                refunded: isRefund,
+                refund_amount: isRefund ? target.total : null,
+              }
+            : x,
+        ),
+      );
+      toast.success(
+        isRefund
+          ? "تم استرجاع المبلغ للعميل وتسجيل العملية"
+          : "تم إلغاء الطلب وتسجيل السبب بنجاح",
+      );
+    } catch (e) {
       setOrders(prev);
-      toast.error("فشل إلغاء الطلب");
-    } else {
-      toast.success("تم إلغاء الطلب وتسجيل السبب بنجاح");
+      toast.error((e as Error).message || "فشل إلغاء الطلب");
     }
   }
 
@@ -452,6 +484,7 @@ export default function OrdersPage() {
         onOpenChange={(op) => !op && setCancellingOrder(null)}
         order={cancellingOrder}
         onConfirm={handleConfirmCancel}
+        refund={cancellingOrder?.status === "paid"}
       />
     </div>
   );
@@ -584,11 +617,16 @@ function OrderCard({
             <span>سبب الإلغاء:</span>
           </div>
           <p className="text-[11px] font-medium leading-relaxed">
-            {order.cancel_reason || "لم يُحدد سبب"}
+            {cancelReasonText(order)}
           </p>
-          {order.cancelled_by && (
+          {(order.cancelled_by_name || order.cancelled_by) && (
             <div className="text-[10px] opacity-70">
-              بواسطة: {order.cancelled_by}
+              بواسطة: {order.cancelled_by_name || order.cancelled_by}
+            </div>
+          )}
+          {order.refunded && (
+            <div className="text-[10px] font-bold text-[#B86D16]">
+              مُسترجَع للعميل: {formatDZD(order.refund_amount ?? order.total)}
             </div>
           )}
         </div>
@@ -642,7 +680,7 @@ function OrderCard({
       </div>
 
       {/* Actions */}
-      {!isPaid && !isCancelled && (
+      {!isCancelled && (
         <div className="flex items-center gap-2 pt-1">
           {cfg && (
             <button
@@ -657,11 +695,15 @@ function OrderCard({
           <button
             type="button"
             onClick={onCancel}
-            title="إلغاء الطلب"
+            title={isPaid ? "استرجاع المبلغ للعميل" : "إلغاء الطلب"}
             className="px-2.5 py-2 rounded-lg border border-destructive/30 text-destructive hover:bg-destructive/10 text-xs font-semibold flex items-center justify-center gap-1 transition-colors cursor-pointer"
           >
-            <Trash2 className="w-3.5 h-3.5" />
-            <span>إلغاء</span>
+            {isPaid ? (
+              <RotateCcw className="w-3.5 h-3.5" />
+            ) : (
+              <Trash2 className="w-3.5 h-3.5" />
+            )}
+            <span>{isPaid ? "استرجاع" : "إلغاء"}</span>
           </button>
         </div>
       )}

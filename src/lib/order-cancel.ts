@@ -1,6 +1,8 @@
 // ─── Order cancellation (إلغاء الطلبية) ─────────────────────────
 //
-// A staff member can void an order from any stage, but never from a paid one.
+// A staff member can void an order from any active stage, but never from a paid
+// one. A paid order can only be reversed by the owner/manager as a **refund**,
+// which additionally records that the money was returned to the customer.
 // The reason is mandatory, and the audit trail is split by how much the
 // restaurant actually lost:
 //
@@ -23,6 +25,14 @@ export const CANCELLABLE_STATUSES = [
   "ready",
   "served",
 ] as const;
+
+/**
+ * `paid` orders cannot be voided by staff — they are reversed as a refund by
+ * the owner/manager only, which is why they live in a separate set.
+ */
+export const REFUNDABLE_STATUSES = ["paid"] as const;
+
+export type RefundableStatus = (typeof REFUNDABLE_STATUSES)[number];
 
 /**
  * A cancellation at or past `ready` means the kitchen had already produced the
@@ -55,6 +65,11 @@ export function cancelReasonLabel(value: unknown): string {
 /** True when a status may be voided. */
 export function isCancellableStatus(status: unknown): boolean {
   return CANCELLABLE_STATUSES.includes(String(status) as CancellableStatus);
+}
+
+/** True when a paid order may be reversed as a refund (owner/manager only). */
+export function isRefundableStatus(status: unknown): boolean {
+  return REFUNDABLE_STATUSES.includes(String(status) as RefundableStatus);
 }
 
 /** True when cancelling at this status should be logged as food waste. */
@@ -103,6 +118,13 @@ export type CancelOrderInput = {
    * void a whole order that includes the pizzeria's dishes.
    */
   kitchenId?: string | null;
+  /**
+   * Owner/manager only: reverse a `paid` order as a refund. Staff terminals
+   * never pass this, so a cashier can never rewind money by themselves.
+   */
+  allowRefund?: boolean;
+  /** Amount returned to the customer; defaults to the full order total. */
+  refundAmount?: number | null;
 };
 
 export type CancelOrderResult = {
@@ -115,6 +137,10 @@ export type CancelOrderResult = {
   wasteRows: number;
   /** Total food cost of the voided order, in DZD. */
   estimatedCost: number;
+  /** True when this was a paid-order refund. */
+  refunded: boolean;
+  /** Amount returned to the customer (0 when not a refund). */
+  refundAmount: number;
 };
 
 export class CancelOrderError extends Error {}

@@ -130,20 +130,27 @@ export async function loadHallsSnapshot(
   return { halls, tables: rawTables };
 }
 
-/** Table numbers already used inside a given hall (null hall = legacy/main). */
+/**
+ * Table numbers already used anywhere in the restaurant.
+ *
+ * Numbers are unique across the whole restaurant (not per hall) so a QR code
+ * can never resolve to an ambiguous "table 1", and the cashier/report screens
+ * always show a single unambiguous number. `hallId` is kept for signature
+ * compatibility but no longer narrows the set.
+ */
 export async function usedTableNumbers(
   restaurantId: string,
-  hallId: string | null,
+  _hallId?: string | null,
 ): Promise<Set<number>> {
   const { data, error } = await supabase
     .from("tables")
-    .select("table_number,hall_id")
+    .select("table_number")
     .eq("restaurant_id", restaurantId);
   if (error) throw new Error(error.message);
   const used = new Set<number>();
   for (const row of (data ?? []) as Table[]) {
-    const rowHall = row.hall_id ?? null;
-    if (rowHall === hallId) used.add(Number(row.table_number));
+    const n = Number(row.table_number);
+    if (Number.isFinite(n) && n > 0) used.add(n);
   }
   return used;
 }

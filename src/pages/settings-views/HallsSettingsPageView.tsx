@@ -117,14 +117,24 @@ export function HallsSettingsPageView() {
       setLoading(true);
       try {
         const headers = await authHeaders();
-        setSnap((await loadFn({ headers })) as Snapshot);
+        let next = (await loadFn({ headers })) as Snapshot;
+        // Self-heal tables created before QR tokens existed, so printing a
+        // sheet never silently produces a code-less card.
+        if (next.tables.some((t) => !t.qr_token)) {
+          try {
+            next = (await backfillFn({ headers })) as Snapshot;
+          } catch {
+            /* keep the first snapshot if the backfill fails */
+          }
+        }
+        setSnap(next);
       } catch (e) {
         setError((e as Error).message);
       } finally {
         setLoading(false);
       }
     })();
-  }, [loadFn]);
+  }, [loadFn, backfillFn]);
 
   /** Runs a mutation, then refreshes the whole snapshot. */
   async function mutate(fn: () => Promise<Snapshot>, okMsg?: string) {
@@ -269,8 +279,9 @@ export function HallsSettingsPageView() {
   function openAddTables(h: HallWithTables) {
     setAddingTo(h);
     setAddCount("1");
-    // Continue from the highest number already in the hall.
-    const max = h.tables.reduce((m, t) => Math.max(m, t.table_number ?? 0), 0);
+    // Continue from the highest number already used in the restaurant, since
+    // numbering is unique across all halls.
+    const max = snap.tables.reduce((m, t) => Math.max(m, t.table_number ?? 0), 0);
     setAddStart(String(max + 1));
   }
 
@@ -429,7 +440,7 @@ export function HallsSettingsPageView() {
             </div>
             <p className="text-xs text-muted-foreground">
               يمكنك وضع 0 الآن وإضافة الطاولات لاحقاً بأي عدد تريده. الأرقام لا
-              تتكرر داخل نفس القاعة.
+              تتكرر على مستوى المطعم كامل.
             </p>
             <DialogFooter>
               <Button
@@ -852,8 +863,26 @@ function QrSheet({
   }
 
   /** Opens a print-ready sheet with every code for the current filter. */
-  function printAll() {
-    const html = `<!doctype html><html dir="rtl"><head><meta charset="utf-8">
+  async function printAll() {
+    try {
+      // Render each table's code to a real PNG first — the sheet must embed
+      // actual QR images, not the target URL in an <img> tag.
+      const cards = await Promise.all(
+        halls.map(async (h) => ({
+          hallName: h.name,
+          tables: await Promise.all(
+            h.tables.map(async (t) => ({
+              table: t,
+              src: await QRCode.toDataURL(tableQrUrl(t), {
+                width: 460,
+                margin: 1,
+                color: { dark: "#000000", light: "#ffffff" },
+              }),
+            })),
+          ),
+        })),
+      );
+      const html = `<!doctype html><html dir="rtl"><head><meta charset="utf-8">
       <title>رموز QR للطاولات</title><style>
         @page { size: A4; margin: 10mm; }
         body { font-family: sans-serif; margin: 0; }
@@ -866,26 +895,29 @@ function QrSheet({
         img { width: 100%; }
       </style></head><body>
       <h1>${escapeHtml(restaurantName || "مطعم")} — رموز QR للطاولات</h1>
-      ${halls
+      ${cards
         .map(
           (h) =>
-            `<h2>${escapeHtml(h.name)} (${h.tables.length})</h2><div class="g">${h.tables
+            `<h2>${escapeHtml(h.hallName)} (${h.tables.length})</h2><div class="g">${h.tables
               .map(
-                (t) =>
-                  `<div class="c"><div class="n">طاولة ${t.table_number}</div><div class="h">${escapeHtml(h.name)}</div><img src="${tableQrUrl(t)}" /></div>`,
+                (c) =>
+                  `<div class="c"><div class="n">طاولة ${c.table.table_number}</div><div class="h">${escapeHtml(h.hallName)}</div><img src="${c.src}" /></div>`,
               )
               .join("")}</div>`,
         )
         .join("")}
       <script>window.onload=()=>setTimeout(()=>window.print(),400)</script>
       </body></html>`;
-    const w = window.open("", "_blank");
-    if (!w) {
-      toast.error("الرجاء السماح بالنوافذ المنبثقة");
-      return;
+      const w = window.open("", "_blank");
+      if (!w) {
+        toast.error("الرجاء السماح بالنوافذ المنبثقة");
+        return;
+      }
+      w.document.write(html);
+      w.document.close();
+    } catch {
+      toast.error("تعذر إنشاء رموز QR");
     }
-    w.document.write(html);
-    w.document.close();
   }
 
   return (

@@ -2768,7 +2768,7 @@ function OrderTrackingView({
         open={!!cancellingOrder}
         onOpenChange={(op) => !op && setCancellingOrder(null)}
         order={cancellingOrder}
-        onConfirm={async (reason) => {
+        onConfirm={async ({ reason, reasonOther }) => {
           if (!token || !cancellingOrder) return;
           try {
             await cancelOrderFn({
@@ -2776,6 +2776,7 @@ function OrderTrackingView({
                 token,
                 orderId: cancellingOrder.id,
                 reason,
+                reasonOther,
                 staffName: "الكاشير",
               },
             });
